@@ -4,6 +4,7 @@
     ["/*__SCORE__*/", "src/engine.js"],
     ["/*__TIMECODE__*/", "src/timecode.js"],
     ["/*__TIMELINE__*/", "src/timeline.js"],
-    ["/*__OUTPUT__*/", "src/output.js"]
+    ["/*__OUTPUT__*/", "src/output.js"],
+    ["/*__RING__*/", "src/ring.js"]
   ]
 }

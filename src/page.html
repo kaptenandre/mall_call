@@ -34,7 +34,8 @@ h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase
 .stage.wide canvas{width:auto;height:auto;max-width:100%;max-height:44vh}
 .stage.panel canvas{height:min(44vh,640px);width:auto;max-width:100%}
 .stage.ring{justify-content:flex-start}
-.stage.ring canvas{height:240px;width:auto;max-width:none}
+.stage.ring canvas{height:150px;width:auto;max-width:none}
+.ring3d{display:block;width:100%;height:40vh;background:#000;border:1px solid var(--rule);border-bottom:0;cursor:grab;touch-action:none}
 .tlbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid var(--rule);border-top:0;background:var(--panel);padding:6px}
 .tlbar button,.tlinsp button,.tlhead button{appearance:none;border:1px solid var(--rule);background:#000;color:var(--ink);padding:6px 8px;font:500 10px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-radius:0}
 .tlbar button:hover,.tlinsp button:hover,.tlhead button:hover{border-color:var(--ink)}
@@ -132,6 +133,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 
 <main class="app">
   <section class="stagecol">
+    <canvas id="ring3d" class="ring3d" aria-label="The ring in 3D. Drag to turn, scroll to move in and out." hidden></canvas>
     <div class="stage wide" id="stageWrap"><canvas id="stage" width="1920" height="1080" aria-label="Preview"></canvas></div>
     <div class="tlbar">
       <button type="button" id="tlPlay">Pause</button>
@@ -258,7 +260,16 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
       <label class="row" for="shape" id="shapeRow" hidden><span>Panel shape</span><select id="shape"><option value="2">1 × 2</option><option value="3" selected>1 × 3</option><option value="4">1 × 4</option></select></label>
       <p class="note" id="fmtNote"></p>
       <div id="ringOpts" class="stack" hidden>
-        <label class="row" for="panels"><span>Panels in ring</span><input type="number" id="panels" min="4" max="64" value="30"></label>
+        <label class="row" for="panels"><span>Panels in ring</span><input type="number" id="panels" min="4" max="240" value="30"></label>
+        <label class="row" for="faces"><span>Faces</span><select id="faces"><option value="1">Outside only</option><option value="2">Outside and inside</option></select></label>
+        <label class="row" for="panelsIn" id="panelsInRow"><span>Panels inside</span><input type="number" id="panelsIn" min="4" max="240" value="30"></label>
+        <label class="row" for="inner" id="innerRow"><span>Inside shows</span><select id="inner"><option value="same">The same</option><option value="mirror">The same, mirrored</option><option value="own">Its own look</option><option value="off">Nothing</option></select></label>
+        <div class="seg" id="faceSeg" role="radiogroup" aria-label="Which face the controls edit" style="grid-template-columns:1fr 1fr">
+          <label><input type="radio" name="face" id="faceOut" value="0" checked><span>Edit outside</span></label>
+          <label><input type="radio" name="face" id="faceIn" value="1"><span>Edit inside</span></label>
+        </div>
+        <label class="row" for="panelPx"><span>Panel pixels</span><input type="number" id="panelPx" min="0" max="512" value="0"></label>
+        <label class="check" for="view3d"><input type="checkbox" id="view3d" checked> Show the ring in 3D</label>
         <label class="row" for="repeats"><span>Logos in ring</span><input type="number" id="repeats" min="1" max="12" value="3"></label>
         <label class="check" for="orbit"><input type="checkbox" id="orbit" checked> Logos travel around the ring</label>
       </div>
@@ -333,15 +344,27 @@ const S = { format: 'wide', shape: 3, panels: 30, repeats: 3, orbit: true, tint:
   glitch: 0.7, lines: 0.8, lineMode: 1, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxAmt: 0.4, fxStyle: 'rods', fxDen: 0.784,
   logoMode: 0, loader: 0, presence: 0.5, eq: 1, logoStyle: 'dither', logoDen: 0.64,
   chaos: 0.6, trail: 0, mix: false, pshape: 0, pfill: 0.78, dither: 'bayer4', wob: 0.5, wobSize: 0.5, eqAmt: 0.6, ease: 0.85, range: 'all',
-  tcRate: '25', tcStart: 0, tcShow: false, outFit: 'contain' };
+  tcRate: '25', tcStart: 0, tcShow: false, outFit: 'contain',
+  faces: 1, panelsIn: 30, panelPx: 0, view3d: true, inner: 'same' };
 // The piece can be split into parts. Everything from the three layers down to the look is kept per part; S holds the part being edited.
 const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'glitch', 'lines', 'lineMode', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxAmt', 'fxStyle', 'fxDen',
-  'logoMode', 'loader', 'presence', 'eq', 'logoStyle', 'logoDen', 'chaos', 'trail', 'mix', 'pshape', 'pfill', 'dither', 'wob', 'wobSize', 'eqAmt', 'ease'];
+  'logoMode', 'loader', 'presence', 'eq', 'logoStyle', 'logoDen', 'chaos', 'trail', 'mix', 'pshape', 'pfill', 'dither', 'wob', 'wobSize', 'eqAmt', 'ease', 'inner'];
 const snap = () => { const o = {}; for (const k of PART_KEYS) o[k] = S[k]; return o; };
 let parts = [{ t: 0, P: snap() }], sel = 0, loopPart = false;
 const partIdx = t => { let i = 0; while (i + 1 < parts.length && parts[i + 1].t <= t) i++; return i; };
 const partEnd = i => i + 1 < parts.length ? parts[i + 1].t : score.D;
-const savePart = () => { parts[sel].P = snap(); };
+// A ring can have two faces. Each part says what the inside shows (P.inner): the same picture, the same mirrored, nothing,
+// or a look of its own. Its own look is a second set of settings, Q, beside P. face is the one the controls are editing.
+let face = 0;
+const savePart = () => { if (face) { S.inner = 'own'; parts[sel].Q = snap(); parts[sel].P.inner = 'own'; } else parts[sel].P = snap(); };
+const loadPart = () => { face = 0; Object.assign(S, parts[sel].P); };
+function setFace(n) {
+  savePart();
+  if (n && S.inner !== 'own') n = 0;
+  if (n && !parts[sel].Q) parts[sel].Q = Object.assign({}, parts[sel].P);
+  face = n; Object.assign(S, face ? parts[sel].Q : parts[sel].P); S.inner = parts[sel].P.inner;
+  pushAll(); syncUI();
+}
 // Animated settings: keys per setting, { glitch: [{ t, v, c }] }. autoCut: whether the engine schedules its own clips on a layer.
 let auto = {};
 const autoCut = { base: true, fx: true, logo: true };
@@ -456,7 +479,24 @@ function baseField(W, H, st) {
           b = pat === 0 ? 1 : pat === 1 ? ((u < 0.5) === ((fr >> 1 & 1) === 0) ? 1 : 0) : (hash(Math.floor(u * 6), Math.floor(v * 3) + fr * 7, sd) < 0.5 ? 1 : 0);
           b *= 1 - 0.5 * x;
         }
-      } else b = Math.pow(1 - x, 2.2);
+      } else if (st.bt[i] === 2) b = Math.pow(1 - x, 2.2);
+      else {                                              // the three that only make sense on a ring: they travel round it, and the frame's left and right edges are the same place
+        const dir = sd & 1 ? 1 : -1, u0 = hash(sd, 3, 183);
+        let a = u * dir + u0; a -= Math.floor(a);
+        if (st.bt[i] === 14) {                              // orbit: one wall of light runs a lap and a bit, surging off and settling in
+          const w = 0.1 + 0.14 * hash(sd, 1, 184), head = ioExpo(x) * (1 + w + 0.2), d = head - a, d2 = d - 1;
+          b = d >= 0 && d < w ? 1 - 0.8 * d / w : d2 >= 0 && d2 < w ? 1 - 0.8 * d2 / w : 0;
+        } else if (st.bt[i] === 15) {                       // spokes: a few bars turning together, winding up and running down
+          const n = 2 + (sd % 5), turn = (0.6 + 1.2 * hash(sd, 1, 185)) * ioQuint(x), w = 0.1 + 0.2 * hash(sd, 2, 186);
+          let q = a * n - turn * n; q -= Math.floor(q);
+          b = q < w ? (1 - 0.5 * q / w) * (x < 0.08 ? x / 0.08 : 1 - x * x * x) : 0;
+        } else {                                            // meet: two fronts leave one point, go opposite ways and close on the far side
+          const d = Math.abs(a - 0.5) * 2, w = 0.16, head = ioExpo(x) * (1 + w);
+          const g = head - (1 - d);
+          b = g >= 0 && g < w ? 1 - 0.8 * g / w : 0;
+          if (x > 0.82 && d < 0.06) b = Math.max(b, 1 - (x - 0.82) / 0.18);       // and flash where they meet
+        }
+      }
       if (b > val) val = b;
     }
     return val;
@@ -894,8 +934,10 @@ audio.loop = true; audio.preload = 'auto';
 function dims() {
   if (S.format === 'wide') return { W: 1920, H: 1080 };
   if (S.format === 'panel') return { W: 360, H: 360 * S.shape };
-  const pw = Math.max(16, Math.floor(Math.min(128, 4096 / S.panels) / 2) * 2);
-  return { W: pw * S.panels, H: pw * S.shape, pw };
+  const two = S.faces === 2, n = Math.max(S.panels, two ? S.panelsIn : 0);
+  const pw = S.panelPx >= 8 ? S.panelPx : Math.max(16, Math.floor(Math.min(128, 4096 / n) / 2) * 2), Hs = pw * S.shape;
+  // two faces go out as one frame: the outside strip on top, the inside strip under it, both starting at the left
+  return { W: pw * n, H: two ? Hs * 2 : Hs, pw, two, Hs, Wo: pw * S.panels, Wi: pw * (two ? S.panelsIn : S.panels) };
 }
 function layerOpts(fps, P) {
   const ring = S.format === 'ring', loop = track ? 8 : S.loop;
@@ -915,7 +957,7 @@ function rebuildScore() {
   const chAt = t => parts[partIdx(t)].P.chaos;
   score = track ? buildTrackScore(track.an, S.seed, chAt) : buildLoopScore(S.loop, S.seed, chAt);
   autoEv = [];
-  parts.forEach((p, i) => { for (const e of makeEvents(score, { base: p.P.baseAmt, fx: p.P.fxAmt, mode: p.P.logoMode, presence: p.P.presence }, p.t, partEnd(i), i)) if (e.k < 4 ? autoCut.base : e.k < 10 ? autoCut.fx : autoCut.logo) autoEv.push(e); });
+  parts.forEach((p, i) => { for (const e of makeEvents(score, { base: p.P.baseAmt, fx: p.P.fxAmt, mode: p.P.logoMode, presence: p.P.presence, ring: S.format === 'ring' }, p.t, partEnd(i), i)) if (isBase(e.k) ? autoCut.base : e.k < 10 ? autoCut.fx : autoCut.logo) autoEv.push(e); });
   mergeEv();
   if (tau >= score.D) tau = 0;
 }
@@ -927,17 +969,40 @@ function sizeStage() {
   const w = Math.max(2, Math.round(W * pscale)), h = Math.max(2, Math.round(H * pscale));
   if (stage.width !== w || stage.height !== h) { stage.width = w; stage.height = h; }
 }
+// One face of the piece into a renderer. face is undefined when the format has a single face.
+function renderOne(R, st, P, tf, fps, fc) {
+  const tw = warp(tf, P), LO = layerOpts(fps, P), mo = motion(P, tw);
+  LO[1].tw = tw; mo.face = fc;
+  stateAt(score, tf, mo, st);
+  R.draw(phase(tw), LO, st);
+}
+const mkRig = (cv, st) => ({ cv, g: cv.getContext('2d', { alpha: false }), a: new Renderer(document.createElement('canvas')), b: new Renderer(document.createElement('canvas')), stA: st || newState(), stB: newState() });
+// Both faces of a ring into one frame.
+function drawFaces(rig, tf, fps) {
+  const d = dims(), k = rig.cv.width / d.W, hs = Math.round(d.Hs * k), wo = Math.round(d.Wo * k), wi = Math.round(d.Wi * k), g = rig.g;
+  const size = (c, w, h) => { if (c.width !== w || c.height !== h) { c.width = w; c.height = h; } };
+  const P = PAt(tf, 0), mode = P.inner;
+  size(rig.a.cv, wo, hs); renderOne(rig.a, rig.stA, P, tf, fps, 0);
+  g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.fillStyle = '#000'; g.fillRect(0, 0, rig.cv.width, rig.cv.height);
+  g.drawImage(rig.a.cv, 0, 0);
+  if (mode === 'off') return;
+  let src = rig.a.cv;
+  if (mode === 'own' || userEv.some(e => e.face)) { size(rig.b.cv, wi, hs); renderOne(rig.b, rig.stB, mode === 'own' ? PAt(tf, 1) : P, tf, fps, 1); src = rig.b.cv; }   // only drawn twice when the faces really differ
+  if (mode === 'mirror') { g.save(); g.translate(wi, hs); g.scale(-1, 1); g.drawImage(src, 0, 0, wi, hs); g.restore(); }
+  else g.drawImage(src, 0, hs, wi, hs);
+}
+let mainRig = null;
 function paint() {
-  const P = PAt(tau), tw = warp(tau, P), LO = layerOpts(fpsNow, P);
-  LO[1].tw = tw;
-  stateAt(score, tau, motion(P, tw), ST);
-  main.draw(phase(tw), LO, ST);
-  outFrame();
+  const two = S.format === 'ring' && S.faces === 2, P = PAt(tau, face);
+  if (two) { if (!mainRig) mainRig = mkRig(stage, ST); drawFaces(mainRig, tau, fpsNow); }
+  else renderOne(main, ST, PAt(tau, 0), tau, fpsNow);
+  outFrame(); ringFrame();
   for (const k in auto) if (auto[k].length) { const R = aRange(k), v = String(Math.round(R.back(P[k]) * 100)); if (R.el.value !== v && document.activeElement !== R.el) R.el.value = v; }   // animated sliders follow their keys
   if (S.format === 'ring') {
-    const g = main.g, pw = stage.width / S.panels, gw = Math.max(1, Math.round(stage.height / 200));
-    g.globalAlpha = 1; g.fillStyle = '#3a3947';
-    for (let i = 1; i < S.panels; i++) g.fillRect(Math.round(i * pw - gw / 2), 0, gw, stage.height);
+    const d = dims(), g = main.g, k = stage.width / d.W, pw = d.pw * k, hs = d.Hs * k, gw = Math.max(1, Math.round(hs / 200));
+    g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.fillStyle = '#3a3947';
+    for (let i = 1; i < S.panels; i++) g.fillRect(Math.round(i * pw - gw / 2), 0, gw, hs);
+    if (two) { for (let i = 1; i < S.panelsIn; i++) g.fillRect(Math.round(i * pw - gw / 2), hs, gw, hs); g.fillRect(0, Math.round(hs - gw / 2), stage.width, gw); }
   }
   $('hudTime').textContent = tau.toFixed(2) + ' / ' + (Math.round(score.D * 10) / 10) + ' s';
   $('hudState').textContent = (parts.length > 1 ? 'Part ' + (partIdx(tau) + 1) + ' · ' : '') + (ST.lv === 1 ? 'Logo loading ' + Math.round(ST.lp * 100) + ' %' : ST.lv === 2 ? 'Logo up' : 'Logo out');
@@ -965,7 +1030,7 @@ function frame(now) {
 function followPart() {
   const i = partIdx(tau);
   if (i === sel) return;
-  sel = i; Object.assign(S, parts[i].P); pushAll(); syncUI();
+  sel = i; loadPart(); pushAll(); syncUI();
 }
 let partsSig = '';
 function renderParts() {
@@ -986,7 +1051,8 @@ function syncUI() {
   $('hudRes').textContent = W + ' × ' + H + ' · ' + S.fps + ' fps';
   $('fmtNote').textContent = S.format === 'wide' ? 'One 16:9 screen, ' + W + ' × ' + H + '.'
     : S.format === 'panel' ? 'One tall panel, 1 × ' + S.shape + ', ' + W + ' × ' + H + '.'
-    : 'All ' + S.panels + ' panels side by side as one strip, ' + W + ' × ' + H + '. Each panel is 1 × ' + S.shape + ', ' + pw + ' × ' + H + '. Scroll sideways to see all of it. The thin lines mark the panel edges and are not in the export.';
+    : (S.faces === 2 ? 'Two strips in one frame, ' + W + ' × ' + H + ': the ' + S.panels + ' outside panels on top, the ' + S.panelsIn + ' inside panels under them.' : 'All ' + S.panels + ' panels side by side as one strip, ' + W + ' × ' + H + '.') + ' Each panel is 1 × ' + S.shape + ', ' + pw + ' × ' + (pw * S.shape) + ' pixels. Panel pixels 0 picks a size by itself. The thin lines mark the panel edges and are not in the export. What the inside shows is set per part.';
+  { const two = S.format === 'ring' && S.faces === 2; $('panelsInRow').hidden = $('innerRow').hidden = !two; $('faceSeg').hidden = !two || S.inner !== 'own'; if (face && (!two || S.inner !== 'own')) face = 0; setRadio('face', face); $('inner').value = S.inner; $('ring3d').hidden = !(S.format === 'ring' && S.view3d); }
   $('modeNote').textContent = S.logoMode === 0 ? 'The logo builds like a loading screen with a progress bar, lands on a hit, holds, then drops out.'
     : S.logoMode === 1 ? 'The logo stays out and cuts in on some of the hits.' : 'The logo is up the whole time and cuts between poses on the hits.';
   $('loader').disabled = S.logoMode !== 0;
@@ -1018,7 +1084,7 @@ function seek(x) {
 
 /* ---------- trigger pad ---------- */
 const PAD = [
-  ['Base', [['sweep', 'Sweep', '1'], ['strobe', 'Strobe', '2'], ['flood', 'Flood', '3'], ['blackout', 'Blackout', '4']]],
+  ['Base', [['sweep', 'Sweep', '1'], ['strobe', 'Strobe', '2'], ['flood', 'Flood', '3'], ['blackout', 'Blackout', '4'], ['orbit', 'Orbit', '5'], ['spokes', 'Spokes', '6'], ['meet', 'Meet', '7']]],
   ['Glitch', [['glitch', 'Glitch', 'Q'], ['chase', 'Chase', 'W'], ['lines', 'Lines', 'E'], ['sparks', 'Sparks', 'R'], ['bars', 'Bars', 'T'], ['blocks', 'Blocks', 'Y']]],
   ['Logo', [['load', 'Loader', 'A'], ['show', 'Show', 'S'], ['hide', 'Hide', 'D']]],
   ['Type', [['type', 'Words', 'F']]]
@@ -1139,7 +1205,7 @@ async function loadSound(file, quiet, knownPath) {
     track = { name: file.name, ab, an };
     soundPath = knownPath || (window.nativeApp ? window.nativeApp.pathFor(file) : '');
     tau = 0; userEv = []; auto = {}; tlSel = null; tlv.z = 1; tlv.x0 = 0; resetParts(); rebuildScore(); undoReset(); tlInsp();
-    note.textContent = file.name + ', ' + ab.duration.toFixed(1) + ' s. ' + score.moves.length + ' cuts land on its hits, ' + autoEv.filter(e => e.k < 4).length + ' base moments on the biggest ones.';
+    note.textContent = file.name + ', ' + ab.duration.toFixed(1) + ' s. ' + score.moves.length + ' cuts land on its hits, ' + autoEv.filter(e => isBase(e.k)).length + ' base moments on the biggest ones.';
     if (quiet) { S.playing = false; syncUI(); return; }
     await setPlaying(true);
     if (!S.playing) note.textContent += ' Press Play to hear it.';
@@ -1189,7 +1255,7 @@ function setTint(hex, fromPreset) {
 }
 const radios = (name, fn) => document.querySelectorAll('input[name=' + name + ']').forEach(r => r.addEventListener('change', () => { if (r.checked) fn(r.value); }));
 const setRadio = (name, v) => document.querySelectorAll('input[name=' + name + ']').forEach(r => { r.checked = r.value === String(v); });
-radios('format', v => { S.format = v; pscale = 1; slowFrames = 0; syncUI(); });
+radios('format', v => { S.format = v; pscale = 1; slowFrames = 0; rebuildScore(); syncUI(); });
 radios('tint', v => setTint(v, true));
 radios('eq', v => { S.eq = Number(v); syncUI(); });
 radios('logoMode', v => { S.logoMode = Number(v); rebuildScore(); syncUI(); });
@@ -1207,9 +1273,15 @@ $('tintHex').addEventListener('change', e => {
 });
 $('hot').addEventListener('change', e => { S.hot = e.target.checked; syncUI(); });
 $('shape').addEventListener('change', e => { S.shape = Number(e.target.value); pscale = 1; slowFrames = 0; syncUI(); });
-$('panels').addEventListener('change', e => { S.panels = clampInt(e.target, 4, 64, 30); e.target.value = S.panels; syncUI(); });
+$('panels').addEventListener('change', e => { S.panels = clampInt(e.target, 4, 240, 30); e.target.value = S.panels; syncUI(); });
 $('repeats').addEventListener('change', e => { S.repeats = clampInt(e.target, 1, 12, 3); e.target.value = S.repeats; syncUI(); });
 $('orbit').addEventListener('change', e => { S.orbit = e.target.checked; syncUI(); });
+$('faces').addEventListener('change', e => { if (face) setFace(0); S.faces = Number(e.target.value); pscale = 1; slowFrames = 0; syncUI(); });
+$('panelsIn').addEventListener('change', e => { S.panelsIn = clampInt(e.target, 4, 240, 30); e.target.value = S.panelsIn; syncUI(); });
+$('panelPx').addEventListener('change', e => { const n = clampInt(e.target, 0, 512, 0); S.panelPx = n < 8 ? 0 : n; e.target.value = S.panelPx; syncUI(); });
+$('view3d').addEventListener('change', e => { S.view3d = e.target.checked; syncUI(); });
+$('inner').addEventListener('change', e => { const v = e.target.value; if (face) setFace(0); S.inner = v; savePart(); if (v === 'own' && !parts[sel].Q) parts[sel].Q = Object.assign({}, parts[sel].P); syncUI(); });
+radios('face', v => setFace(Number(v)));
 $('seed').addEventListener('change', e => { S.seed = clampInt(e.target, 1, 9999, 1); rebuildScore(); syncUI(); });
 $('shuffle').addEventListener('click', () => { S.seed = 1 + Math.floor(Math.random() * 9999); rebuildScore(); syncUI(); });
 $('randAll').addEventListener('click', () => {
@@ -1225,16 +1297,16 @@ $('randAll').addEventListener('click', () => {
 });
 $('loop').addEventListener('change', e => { S.loop = Number(e.target.value); if (!track) { userEv = []; auto = {}; tlSel = null; resetParts(); rebuildScore(); } syncUI(); tlInsp(); });
 $('range').addEventListener('change', e => { S.range = e.target.value; });
-function resetParts() { parts = [{ t: 0, P: snap() }]; sel = 0; loopPart = false; $('loopPart').setAttribute('aria-pressed', 'false'); }
+function resetParts() { face = 0; S.inner = 'same'; parts = [{ t: 0, P: snap() }]; sel = 0; loopPart = false; $('loopPart').setAttribute('aria-pressed', 'false'); }
 const partSay = s => { partsSig = ''; renderParts(); $('partNote').textContent = s; };
 $('split').addEventListener('click', () => splitAt(tau));
 $('merge').addEventListener('click', () => {
   if (sel === 0) { partSay('The first part has nothing before it to merge with.'); return; }
-  parts.splice(sel, 1); sel--; Object.assign(S, parts[sel].P);
+  face = 0; parts.splice(sel, 1); sel--; loadPart();
   rebuildScore(); pushAll(); syncUI();
 });
 $('loopPart').addEventListener('click', e => { loopPart = !loopPart; e.currentTarget.setAttribute('aria-pressed', String(loopPart)); });
-$('copyAll').addEventListener('click', () => { savePart(); for (const p of parts) p.P = snap(); rebuildScore(); syncUI(); partSay('All ' + parts.length + ' parts now share the settings of part ' + (sel + 1) + '.'); });
+$('copyAll').addEventListener('click', () => { if (face) setFace(0); savePart(); for (const p of parts) { p.P = snap(); if (parts[sel].Q) p.Q = Object.assign({}, parts[sel].Q); else delete p.Q; } rebuildScore(); syncUI(); partSay('All ' + parts.length + ' parts now share the settings of part ' + (sel + 1) + '.'); });
 $('fps').addEventListener('change', e => { S.fps = Number(e.target.value); syncUI(); });
 $('play').addEventListener('click', () => setPlaying(!S.playing));
 
@@ -1278,7 +1350,7 @@ async function renderFile() {
   const snd = track ? await pickAudio(track.ab) : null;
   if (document.fonts && document.fonts.ready) await document.fonts.ready;
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
-  const r = new Renderer(cv), st = newState(), sc = score;
+  const r = S.format === 'ring' && S.faces === 2 ? null : new Renderer(cv), st = newState(), sc = score;
   const mo = { target: new Mp4Muxer.ArrayBufferTarget(), video: { codec: pick.mux, width: W, height: H, frameRate: fps }, fastStart: 'in-memory', firstTimestampBehavior: 'offset' };
   if (snd) mo.audio = { codec: snd.mux, numberOfChannels: snd.ch, sampleRate: track.ab.sampleRate };
   const muxer = new Mp4Muxer.Muxer(mo);
@@ -1301,7 +1373,8 @@ async function renderFile() {
       aenc.encode(ad); ad.close(); aPos += len;
     }
   };
-  const us = 1e6 / fps, one = i => { const tf = t0 + i / fps, P = PAt(tf), tw = warp(tf, P), LO = layerOpts(fps, P); LO[1].tw = tw; stateAt(sc, tf, motion(P, tw), st); r.draw(phase(tw), LO, st); return tf - t0; };
+  const two = S.format === 'ring' && S.faces === 2, rig = two ? mkRig(cv) : null;
+  const us = 1e6 / fps, one = i => { const tf = t0 + i / fps; if (two) drawFaces(rig, tf, fps); else renderOne(r, st, PAt(tf, 0), tf, fps); return tf - t0; };
   sc._i = 0; sc._k = 0;
   try {
     // a loop with trails has to start with the tail of its own ending already on screen
@@ -1373,16 +1446,17 @@ $('save').addEventListener('click', async () => {
 });
 
 /* ---------- project files (Mac app) ---------- */
-const GLOBAL_KEYS = ['format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit'];
+const GLOBAL_KEYS = ['format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d'];
 let loadingProject = false, saveTimer = 0;
 function getProject() {
   savePart();
   const g = {}; for (const k of GLOBAL_KEYS) g[k] = S[k];
-  return { v: 1, app: 'mall-call', S: g, parts: parts.map(p => ({ t: p.t, P: p.P })), userEv: userEv.map(e => Object.assign({ t: e.t, type: e.type, seed: e.seed, d: e.d }, evMore(e))), auto, autoCut: Object.assign({}, autoCut), logo: logoFile, soundPath: soundPath || null };
+  return { v: 1, app: 'mall-call', S: g, parts: parts.map(p => (p.Q ? { t: p.t, P: p.P, Q: p.Q } : { t: p.t, P: p.P })), userEv: userEv.map(e => Object.assign({ t: e.t, type: e.type, seed: e.seed, d: e.d }, evMore(e))), auto, autoCut: Object.assign({}, autoCut), logo: logoFile, soundPath: soundPath || null };
 }
 function pushGlobals() {
   setRadio('format', S.format);
-  for (const id of ['shape', 'panels', 'repeats', 'loop', 'fps', 'seed', 'range']) $(id).value = S[id];
+  for (const id of ['shape', 'panels', 'repeats', 'loop', 'fps', 'seed', 'range', 'faces', 'panelsIn', 'panelPx']) $(id).value = S[id];
+  $('view3d').checked = S.view3d;
   $('orbit').checked = S.orbit; $('invert').checked = S.invert; $('outFit').value = S.outFit;
   if (!TC_RATES[S.tcRate]) S.tcRate = '25';
   tcPush(); outSync();
@@ -1403,13 +1477,13 @@ async function applyProject(pj) {
     }
     if (!track) { soundPath = ''; rebuildScore(); }
     if (!missing) {
-      parts = pj.parts.filter(p => p.t < score.D).map(p => ({ t: p.t, P: Object.assign(snap(), { fxAmt: 0, lineMode: 0 }, p.P) }));      // a project from before Auto clips keeps its cut
+      parts = pj.parts.filter(p => p.t < score.D).map(p => { const o = { t: p.t, P: Object.assign(snap(), { fxAmt: 0, lineMode: 0, inner: 'same' }, p.P) }; if (p.Q) o.Q = Object.assign({}, o.P, p.Q, { inner: 'own' }); return o; });      // a project from before Auto clips keeps its cut
       if (!parts.length || parts[0].t !== 0) parts.unshift({ t: 0, P: snap() });
-      userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d, e.type === 'type' ? { txt: String(e.txt || ''), mode: String(e.mode || 'slam'), size: Number(e.size) || 0.5, y: Number(e.y) || 0.5, font: e.font === 'mono' ? 'mono' : 'sans' } : null));
+      userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d, e.type === 'type' ? { txt: String(e.txt || ''), mode: String(e.mode || 'slam'), size: Number(e.size) || 0.5, y: Number(e.y) || 0.5, font: e.font === 'mono' ? 'mono' : 'sans', face: e.face | 0 } : { face: e.face | 0 }));
       for (const [k] of AKEYS) if (pj.auto && Array.isArray(pj.auto[k])) auto[k] = pj.auto[k].filter(q => q.t <= score.D).map(q => ({ t: Number(q.t) || 0, v: Number(q.v) || 0, c: q.c | 0 })).sort((a, b) => a.t - b.t);
       if (pj.autoCut) { autoCut.base = pj.autoCut.base !== false; autoCut.fx = pj.autoCut.fx !== false; autoCut.logo = pj.autoCut.logo !== false; }
     } else $('soundNote').textContent = 'The sound for this project was not found at ' + missing + '. Drop it in again and reopen the project.';
-    sel = 0; tau = 0; Object.assign(S, parts[0].P);
+    sel = 0; tau = 0; loadPart();
     rebuildScore(); pushAll(); syncUI(); tlInsp();
     return true;
   } finally { loadingProject = false; }
@@ -1464,10 +1538,10 @@ window.__selfTest = async () => {
     setKey('glow', 1, 0); setKey('glow', 3, 1, 2); tlChanged();
     const mid = PAt(2).glow, held = PAt(score.D - 0.5).glow;
     undoMark(); trigger('sweep'); userEv[0].t = 2; userEv[0].d = 1.5; mergeEv();
-    const autos = autoEv.filter(e => e.k < 4).length;
+    const autos = autoEv.filter(e => isBase(e.k)).length;
     undoMark(); tlBake(0);
     const pj2 = JSON.stringify(getProject());
-    const baked = !autoCut.base && userEv.length === 1 + autos && autoEv.every(e => e.k >= 4);
+    const baked = !autoCut.base && userEv.length === 1 + autos && autoEv.every(e => !isBase(e.k));
     tau = 2; paint();
     const kept = (await applyProject(JSON.parse(pj2))) && auto.glow && auto.glow.length === 2 && auto.glow[1].c === 2 && !autoCut.base && userEv.length === 1 + autos;
     await applyProject(JSON.parse(pj2)); undoReset();
@@ -1489,6 +1563,7 @@ window.__selfTest = async () => {
 };
 
 /*__OUTPUT__*/
+/*__RING__*/
 
 /* ---------- start ---------- */
 logoSrc = placeholder();

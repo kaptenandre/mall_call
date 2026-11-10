@@ -21,6 +21,7 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 - `src/engine.js`: timing engine, no DOM. Sound analysis (`analyze`), hit picking, the score (`buildTrackScore`, `buildLoopScore`), scheduled events (`makeEvents`), and the per-frame state (`stateAt`).
 - `src/timeline.js`: the timeline editor. Rows, clips, keys (`auto`, `PAt`, `setKey`), zoom, snapping, the inspector strip and undo. Inlined at `/*__TIMELINE__*/`.
 - `src/timecode.js`: SMPTE maths, MIDI timecode and LTC encode and decode, no DOM. Inlined at `/*__TIMECODE__*/`. Only the maths is used by the interface so far.
+- `src/ring.js`: the ring in 3D, plain WebGL with no library so it updates with the page. Inlined at `/*__RING__*/`.
 - `src/output.js`: the clean output window and the timecode settings. Inlined at `/*__OUTPUT__*/`.
 - `scripts/test.js`: node checks for the two files with no DOM.
 - `src/page.html`: interface, the three layer fields (`baseField`, `fxField`, `logoField`), the five drawing styles (`DRAW.rods`, `streaks`, `ascii`, `ridge`, `dither`), `Renderer`, export, parts, trigger pad, project files. The engine is inlined at the `/*__SCORE__*/` marker.
@@ -44,6 +45,8 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 - **Lines** in the glitch layer move one of two ways (`lineMode`, per part). **Pulse**, the default, follows a reference film the user likes: a rack of twelve parallel bars, each a short lit stretch with a hot middle and tapering tips, that strikes out in length and light within a frame of a hit and sinks back over about half a second, each bar slightly its own. Nothing glides; the stretches stand somewhere else after the next hit. **Slide** is the older full-frame hairlines easing from place to place. The user finds Slide too digital.
 - **Type** clips (`EV.type`, the fourth lane) put words on screen: `txt`, `mode` (slam, typeon, roll, ticker), `size`, `y`, `font`. `typeField` draws them in the logo layer with its style and its glitch. They only come from the user, never from the automatic cut.
 - Glow follows the bass (`st.pulse`) so it reads as light thrown by a hit. Trails are off by default. The user called constant glow and trails the softest part of the look.
+- **The ring has two faces.** `S.faces` 1 or 2, `S.panels` outside and `S.panelsIn` inside, `S.panelPx` for a panel's pixel width (0 picks one). With two faces the frame holds two strips: outside on top, inside under it, both from the left (`dims`, `drawFaces`). Each part says what the inside shows, `P.inner`: `same`, `mirror`, `off`, or `own`, which keeps a second set of settings `Q` beside `P`. `face` is which one the controls edit; `PAt(t, face)` reads it. A clip can play on both faces, the outside or the inside (`e.face` 0, 1, 2). The inside is only rendered separately when it really differs. All of these numbers are guesses until the real ring is known, which is why they are settings.
+- **Base looks for a ring**: `orbit` (a wall of light runs a lap), `spokes` (a few bars turning together), `meet` (two fronts leave one point and close on the far side). They treat the frame's left and right edges as the same place. On a ring the automatic cut uses them where it would sweep. `isBase(k)` says which clips are base.
 - **Keys** animate a setting over time (`auto[key] = [{ t, v, c }]`). `PAt(t)` gives the settings in force at a time: the part's, with animated ones read off their keys. Use `PAt`, never `parts[...].P`, when drawing. Settings that change the schedule (How often, How much, Chaos, Easing) and Logo size are not animatable.
 - Timecode: the piece has a rate and a start timecode (`S.tcRate`, `S.tcStart` in frames) so the ruler reads like the lighting desk.
 - Export renders every frame offline with WebCodecs and muxes MP4 with `mp4-muxer`.
@@ -57,7 +60,7 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 5. Glitch is organic: irregular holds, noise-driven tear and slip, never a fixed clock. Avoid visible repetition; variety comes from the seed.
 6. Debris in the glitch layer is driven by its own part of the spectrum: bass, mids, highs.
 7. Pixels are controllable: dither type, shape, fill, size per layer.
-8. Panels are 1 x 3. The ring of 30 panels is a guess from renders; confirm the real count and pixel size before locking formats.
+8. Panels are 1 x 3. The ring of 30 panels is a guess from renders; confirm the real count and pixel size before locking formats. (Counts for both faces and the panel pixel size are settings in the app now.)
 9. Interface text is English, short, and never uses em dashes.
 10. The app ships with a placeholder ring. The real logo is dropped in by the user as a file. Do not draw brand logos in code.
 
@@ -77,6 +80,7 @@ Only the page updates this way. A change to `main.js`, `preload.js`, `update.js`
 - The output window works in Chromium. Full screen on a chosen screen (`output-place` in `main.js`) is untried on any machine.
 - The updater is tested against a local stand-in for GitHub on Linux (first fetch, already current, missing branch, offline) and the two real GitHub addresses answer. It has not run in the packaged Mac app.
 - The automatic cut's structure reading is tested on one synthetic track. It has not been judged by eye or ear on real music.
+- The two-face ring, the ring base looks and the 3D view have been seen as still frames in Chromium with software WebGL. Not tried on the Mac, and an export of a two-face ring has not been run.
 - Pulse lines and Type clips have been looked at as still frames in Chromium, not judged in motion or on the Mac.
 - LTC and MTC are tested as maths only (encode, decode, round trip). No audio or MIDI device is wired up.
 
@@ -86,8 +90,8 @@ Only the page updates this way. A change to `main.js`, `preload.js`, `update.js`
 
 ## Next, roughly in order
 
-1. Inside and outside of the ring. The piece has two faces. Sometimes they show the same thing, sometimes different things. Needs: the panel count of each face, then a second surface in the format, per-part choice of same or own settings, and both strips in one output frame for mapping.
-2. A 3D preview of the ring. The user's collaborator draws the room in Vectorworks. Plan: show the output on a ring in the app (three.js, bundled), first from the panel numbers alone, then on a model exported from Vectorworks (glTF or OBJ with UVs on the LED faces). Also export that view as a film.
+1. The real room in the 3D view. The user's collaborator draws in Vectorworks. Load a model exported from there (OBJ first, it is easy to read; glTF after) and put the frame on its LED faces, so the piece is seen in the space as drawn. Also save the 3D view as a film.
+2. More that tells the two faces apart and shows the circle: content that passes from outside to inside, opposite directions of travel, a look per face on the trigger pad.
 3. ProRes or HAP export through ffmpeg (Homebrew ffmpeg is installed on the main machine), with the start timecode written into the file.
 4. Use it on the Mac for a real session and fix whatever that shows. Tune the automatic cut and the pulse lines on real music.
 5. More in the timeline: select and move several clips, copy and paste, loop a range, markers with names. Own fonts for Type clips.

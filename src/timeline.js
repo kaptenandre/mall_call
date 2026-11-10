@@ -7,7 +7,7 @@ const AKEYS = [['glitch', 'Glitch'], ['lines', 'Lines'], ['chase', 'Chases'], ['
 const ANAME = Object.fromEntries(AKEYS), CURVES = ['Ease', 'Snap', 'Cut'];
 const LAYERS = ['Base', 'Glitch', 'Logo', 'Type'], LAYER_NEW = ['sweep', 'glitch', 'show', 'type'];
 const TYPE_MODES = [['slam', 'Slam, word by word'], ['typeon', 'Type on'], ['roll', 'Roll and lock'], ['ticker', 'Ticker']];
-const layerOf = k => k < 4 ? 0 : k < 10 ? 1 : k === 13 ? 3 : 2, CUTS = ['base', 'fx', 'logo'];
+const layerOf = k => isBase(k) ? 0 : k < 10 ? 1 : k === 13 ? 3 : 2, CUTS = ['base', 'fx', 'logo'];
 const TLH = { ruler: 20, over: 84, parts: 20, ev: 24, auto: 46 };
 const tlv = { z: 1, x0: 0 };
 let tlSel = null, tlDrag = null, tlSnap = true, tlHeadSig = '', tlInspSig = '';
@@ -18,8 +18,8 @@ function aRange(key) {
   return { el, lo: el.min / 100, hi: el.max / 100, to: r[3] || (v => v), back: r[4] || (v => v) };
 }
 // the settings in force at a time: the part's own, with every animated setting read off its keys
-function PAt(t) {
-  const P = parts[partIdx(t)].P;
+function PAt(t, fc) {
+  const pt = parts[partIdx(t)], P = fc && pt.Q && pt.P.inner === 'own' ? pt.Q : pt.P;
   let o = null;
   for (const k in auto) if (auto[k].length) { if (!o) o = Object.assign({}, P); o[k] = autoVal(auto[k], t, score.D, score.cyclic); }
   return o || P;
@@ -51,9 +51,9 @@ function undoApply(s) {
     const o = JSON.parse(s), inv = S.invert;
     Object.assign(S, o.S);
     parts = o.parts; userEv = o.userEv.map(e => mkEv(e[0], e[1], e[2], e[3], e[4])); auto = o.auto; Object.assign(autoCut, o.autoCut);
-    tlSel = null; sel = Math.min(sel, parts.length - 1); Object.assign(S, parts[sel].P);
+    tlSel = null; sel = Math.min(sel, parts.length - 1); loadPart();
     if (S.invert !== inv) { mask = buildMask(logoSrc.img, logoSrc.w, logoSrc.h, S.invert); maskN++; }
-    rebuildScore(); sel = partIdx(tau); Object.assign(S, parts[sel].P);
+    rebuildScore(); sel = partIdx(tau); loadPart();
     pushGlobals(); pushAll(); syncUI(); tlInsp();
   } finally { undoing = false; undoPending = null; }
 }
@@ -101,7 +101,7 @@ function tlSnapT(t, e, skip) {
 // Logo state at a time, for the strip behind the logo lane: 0 gone, 1 loading, 2 up.
 function logoAt(t) {
   let best = null, age = 1e9;
-  for (const e of score.all) { if (e.k < 10 || e.k === 13) continue; let a = t - e.t; if (a < 0) { if (!score.cyclic) continue; a += score.D; } if (a < age && !(e.k === 11 && a >= e.d)) { age = a; best = e; } }
+  for (const e of score.all) { if (e.k < 10 || e.k >= 13) continue; let a = t - e.t; if (a < 0) { if (!score.cyclic) continue; a += score.D; } if (a < age && !(e.k === 11 && a >= e.d)) { age = a; best = e; } }
   if (!best) return 0;
   return best.k === 10 ? (age < best.d ? 1 : 2) : best.k === 11 && age < best.d ? 2 : 0;
 }
@@ -139,7 +139,7 @@ function tlHeads(rows) {
 function tlBake(L) {
   const name = CUTS[L];
   if (!autoCut[name]) return;
-  for (const e of autoEv) if (layerOf(e.k) === L) userEv.push(mkEv(e.t, e.type, e.seed, Math.min(e.d, score.D)));
+  for (const e of autoEv) if (layerOf(e.k) === L) userEv.push(mkEv(e.t, e.type, e.seed, Math.min(e.d, score.D), evMore(e)));
   autoCut[name] = false; tlSel = null;
   rebuildScore(); syncUI(); tlInsp();
 }
@@ -260,8 +260,8 @@ const rowVal = (r, y) => { const R = aRange(r.key); return R.to(R.lo + clamp01((
 function splitAt(t) {
   const i = partIdx(t);
   if (t - parts[i].t < 0.5 || partEnd(i) - t < 0.5) { partSay('A part has to be at least half a second long. Move away from the part edge, then split.'); return false; }
-  savePart(); parts.splice(i + 1, 0, { t, P: Object.assign({}, parts[i].P) });
-  sel = partIdx(tau); Object.assign(S, parts[sel].P);
+  savePart(); const np = { t, P: Object.assign({}, parts[i].P) }; if (parts[i].Q) np.Q = Object.assign({}, parts[i].Q); parts.splice(i + 1, 0, np);
+  sel = partIdx(tau); loadPart();
   rebuildScore(); pushAll(); syncUI();
   return true;
 }
@@ -305,6 +305,7 @@ function tlInsp() {
       field('Start', input('inStart', 'number', '0.01', el => { tlSel.e.t = Math.min(score.D - 0.01, Math.max(0, Number(el.value) || 0)); mergeEv(); }));
       field('Length', input('inLen', 'number', '0.01', el => { if (tlSel.e.k !== 12) tlSel.e.d = Math.max(0.05, Number(el.value) || 0.05); mergeEv(); }));
       field('Seed', input('inSeed', 'number', '1', el => { tlSel.e.seed = Math.max(0, Math.round(Number(el.value)) || 0); }));
+      field('Plays on', select('inFace', [[0, 'Both faces'], [1, 'Outside'], [2, 'Inside']], el => { tlSel.e.face = Number(el.value); }));
       const tc = document.createElement('span'); tc.id = 'inTc'; box.append(tc);
       del();
     } else {
@@ -319,7 +320,7 @@ function tlInsp() {
   if (!s) return;
   if (s.kind === 'ev') {
     if ($('inAuto')) $('inAuto').textContent = 'Automatic ' + s.e.type + ' at ' + s.e.t.toFixed(2) + ' s, ' + tcAt(s.e.t) + '. Press Bake on the lane to edit the automatic clips, or Auto to switch them off.';
-    else { num('inType', s.e.type); num('inTxt', s.e.txt); num('inMode', s.e.mode); num('inSize', Math.round(s.e.size * 100)); num('inY', Math.round(s.e.y * 100)); num('inFont', s.e.font); num('inStart', s.e.t.toFixed(2)); num('inLen', s.e.d.toFixed(2)); num('inSeed', s.e.seed); $('inLen').disabled = s.e.k === 12; $('inTc').textContent = tcAt(s.e.t); }
+    else { num('inType', s.e.type); num('inTxt', s.e.txt); num('inMode', s.e.mode); num('inSize', Math.round(s.e.size * 100)); num('inY', Math.round(s.e.y * 100)); num('inFont', s.e.font); num('inStart', s.e.t.toFixed(2)); num('inLen', s.e.d.toFixed(2)); num('inSeed', s.e.seed); num('inFace', s.e.face | 0); $('inLen').disabled = s.e.k === 12; $('inTc').textContent = tcAt(s.e.t); }
   } else { num('inStart', s.k.t.toFixed(2)); num('inVal', Math.round(aRange(s.key).back(s.k.v) * 100)); num('inCurve', s.k.c); $('inTc').textContent = tcAt(s.k.t); }
 }
 
@@ -352,7 +353,7 @@ function tlInsp() {
     else if (d.mode === 'split') { parts[d.i].t = Math.min(partEnd(d.i) - 0.5, Math.max(parts[d.i - 1].t + 0.5, tlSnapT(x2t(x), e, d.i))); partsSig = ''; }
     tlChanged(); tlInsp();
   });
-  const up = () => { const d = tlDrag; tlDrag = null; if (d && d.mode === 'split' && d.moved) { sel = partIdx(tau); Object.assign(S, parts[sel].P); rebuildScore(); pushAll(); syncUI(); } };
+  const up = () => { const d = tlDrag; tlDrag = null; if (d && d.mode === 'split' && d.moved) { savePart(); sel = partIdx(tau); loadPart(); rebuildScore(); pushAll(); syncUI(); } };
   tl.addEventListener('pointerup', up);
   tl.addEventListener('pointercancel', up);
   tl.addEventListener('dblclick', e => {

@@ -302,12 +302,14 @@ function buildLoopScore(L, seed, ch) {
 }
 
 /* ---------- three layers: base (rare and big), glitch (lines, chases, debris), logo (loader or appearing) ---------- */
-const EV = { sweep: 0, strobe: 1, flood: 2, blackout: 3, glitch: 4, chase: 5, lines: 6, sparks: 7, bars: 8, blocks: 9, load: 10, show: 11, hide: 12, type: 13 };
-const EVD = { sweep: 0.9, strobe: 0.6, flood: 0.9, blackout: 0.4, glitch: 0.6, chase: 4, lines: 0.7, sparks: 0.6, bars: 0.6, blocks: 0.6, load: 3, show: 2, hide: 0, type: 2.5 };
+const EV = { sweep: 0, strobe: 1, flood: 2, blackout: 3, glitch: 4, chase: 5, lines: 6, sparks: 7, bars: 8, blocks: 9, load: 10, show: 11, hide: 12, type: 13, orbit: 14, spokes: 15, meet: 16 };
+const EVD = { sweep: 0.9, strobe: 0.6, flood: 0.9, blackout: 0.4, glitch: 0.6, chase: 4, lines: 0.7, sparks: 0.6, bars: 0.6, blocks: 0.6, load: 3, show: 2, hide: 0, type: 2.5, orbit: 1.4, spokes: 2.4, meet: 1.2 };
+// base clips are the first four and the three that run round the ring; which face of the ring a clip plays on is e.face: 0 both, 1 outside, 2 inside
+const isBase = k => k < 4 || k >= 14;
 // A Type clip carries its words and how they arrive: txt, mode (slam, typeon, roll, ticker), size and y as parts of the frame height, font.
 const TYPE_NEW = { txt: 'MALL CALL', mode: 'slam', size: 0.5, y: 0.5, font: 'sans' };
-const evMore = e => e.k === 13 ? { txt: e.txt, mode: e.mode, size: e.size, y: e.y, font: e.font } : null;
-const mkEv = (t, type, seed, d, more) => { const e = { t, type, k: EV[type], seed: seed | 0, d: d === undefined || d === null ? EVD[type] : d }; return e.k === 13 ? Object.assign(e, TYPE_NEW, more) : e; };
+const evMore = e => e.k === 13 ? { txt: e.txt, mode: e.mode, size: e.size, y: e.y, font: e.font, face: e.face | 0 } : e.face ? { face: e.face } : null;
+const mkEv = (t, type, seed, d, more) => { const e = { t, type, k: EV[type], seed: seed | 0, d: d === undefined || d === null ? EVD[type] : d }; if (more && more.face) e.face = more.face | 0; return e.k === 13 ? Object.assign(e, TYPE_NEW, more) : e; };
 
 // The shape of the piece, read off the score once: where it drops, the builds that lead into drops, the quiet stretches,
 // and the moments each band of the spectrum jumps. The automatic cut hangs its clips on these.
@@ -372,8 +374,9 @@ function makeEvents(sc, P, a, b, pi) {
       if (chosen.every(c => far(c.t, h.t) > (h.drop && c.drop ? 5 : gapMin)) && (cyc && whole ? D >= gapMin * 0.6 || chosen.length === 0 : true)) chosen.push(h);
     }
     chosen.forEach((h, i) => {
-      const type = h.drop ? ['flood', 'sweep', 'sweep', 'strobe'][Math.floor(hash(i, sd, 143) * 3.99)] : ['sweep', 'strobe', 'sweep', 'flood', 'sweep', 'blackout', 'strobe'][(i + Math.floor(hash(sd, 2, 140) * 7)) % 7];
-      const d = type === 'sweep' ? 0.7 + 0.6 * hash(i, sd, 142) : type === 'strobe' ? 0.45 + 0.5 * hash(i, sd, 142) : type === 'flood' ? 0.9 : 0.3 + 0.3 * hash(i, sd, 142);
+      let type = h.drop ? ['flood', 'sweep', 'sweep', 'strobe'][Math.floor(hash(i, sd, 143) * 3.99)] : ['sweep', 'strobe', 'sweep', 'flood', 'sweep', 'blackout', 'strobe'][(i + Math.floor(hash(sd, 2, 140) * 7)) % 7];
+      if (P.ring && type === 'sweep') type = ['orbit', 'meet', 'spokes', 'orbit'][Math.floor(hash(i, sd, 144) * 3.99)];      // on a ring, what sweeps goes round it
+      const d = type === 'orbit' ? 1.1 + 0.8 * hash(i, sd, 142) : type === 'meet' ? 0.9 + 0.6 * hash(i, sd, 142) : type === 'spokes' ? 1.8 + 1.4 * hash(i, sd, 142) : type === 'sweep' ? 0.7 + 0.6 * hash(i, sd, 142) : type === 'strobe' ? 0.45 + 0.5 * hash(i, sd, 142) : type === 'flood' ? 0.9 : 0.3 + 0.3 * hash(i, sd, 142);
       ev.push(mkEv(h.t, type, hash(i, sd, 141) * 1e6, d));
       if (h.drop && h.drop.gap && P.base > 0.3 && h.t - h.drop.gap > a) ev.push(mkEv(h.t - h.drop.gap, 'blackout', 0, h.drop.gap));   // the breath before a drop goes dark
     });
@@ -479,8 +482,10 @@ function stateAt(sc, tau, cfg, st) {
   const all = sc.all;
   for (let q = 0; q < all.length; q++) {
     const e = all[q];
+    if (e.face && cfg.face !== undefined && e.face !== cfg.face + 1) continue;      // a clip for the other face of the ring
     let age = tau - e.t;
     if (age < 0) { if (!sc.cyclic) continue; age += D; }
+    if (e.k >= 14) { if (age < e.d && st.bn < 3) { st.bt[st.bn] = e.k; st.bx[st.bn] = age / e.d; st.ba[st.bn] = age; st.bs[st.bn] = e.seed; st.bn++; } continue; }
     if (e.k === 13) { if (age < e.d && st.tyN < 2) { st.tyE[st.tyN] = e; st.tyX[st.tyN] = age / e.d; st.tyA[st.tyN] = age; st.tyN++; } continue; }
     if (e.k >= 10) { if (age < lgAge && !(e.k === 11 && age >= e.d)) { lgAge = age; lg = e; } continue; }   // a Show that has run out hands back to whatever came before it
     if (age >= e.d) continue;
