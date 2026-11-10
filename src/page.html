@@ -131,6 +131,13 @@ legend{font:500 11px/1 var(--display);letter-spacing:.1em;text-transform:upperca
 legend button{appearance:none;border:0;background:none;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;padding:3px 4px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;border-radius:0}
 legend button:hover,legend button[aria-pressed="true"]{color:var(--ink)}
 fieldset.shut{padding-top:4px;padding-bottom:6px}
+legend .arrow{display:inline-flex;color:var(--ink)}
+legend .spanb{margin-left:2px}
+.railin.two fieldset.span,.railin.three fieldset.span{column-span:all}
+.railin:not(.two) legend .spanb{display:none}
+.railbar{display:flex;gap:6px;margin-bottom:10px}
+.railbar button{appearance:none;border:1px solid var(--rule);background:#000;color:var(--dim);padding:5px 8px;font:500 10px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-radius:0;display:inline-flex;gap:6px;align-items:center}
+.railbar button:hover{color:var(--ink);border-color:var(--ink)}
 fieldset.shut>:not(legend){display:none!important}
 .partbar button.plain{padding:8px 10px;display:inline-flex;align-items:center;gap:8px}
 fieldset.layer{border-left:2px solid var(--signal)}
@@ -514,7 +521,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 30;
+const BUILD = 31;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
