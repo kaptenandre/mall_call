@@ -541,7 +541,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 39;
+const BUILD = 40;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -1337,7 +1337,7 @@ class Renderer {
       // and each pillar is a window onto its own stretch of that picture
       const gN = o.gapN, gk = 1 / (1 + (o.gap || 0)), goff = (1 - gk) / 2, win = u => { const x = u * gN, i = Math.floor(x); return (i + goff + (x - i) * gk) / gN; };
       const wrap = a => gN ? { M: (u, v) => a.M(win(u), v), B: (u, v) => a.B(win(u), v) } : a;
-      if (L === 0) f = wrap(baseField(Wf, H, st));
+      if (L === 0) f = this.gpu && S.gpu !== false && gpuBase(q, W, H, Wf, t, o, st, st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style) ? null : wrap(baseField(Wf, H, st));
       else if (L === 1) f = this.gpu && S.gpu !== false && gpuFx(q, W, H, Wf, t, o, st, st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style) ? null : wrap(fxField(Wf, H, t, o, st));
       else if (L === 3) f = wrap(typeField(Wf, H, o, st));   // words, on their own
       else {                                               // the logo and any symbols share a layer
