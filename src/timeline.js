@@ -218,7 +218,7 @@ function drawTimeline() {
           q.fillStyle = i % 2 ? '#15151c' : '#0f0f15'; q.fillRect(x, r.y + 1, x1 - x, r.h - 1);
           q.fillStyle = p.P.tint; q.fillRect(x, r.y + r.h - 2, x1 - x, 2);
           if (i) { q.fillStyle = '#eceaf4'; q.fillRect(x, r.y, 1, r.h); }
-          q.fillStyle = '#8d8b9e'; q.fillText('PART ' + (i + 1), Math.max(x, 0) + 6, r.y + r.h / 2);
+          q.fillStyle = '#8d8b9e'; q.save(); q.beginPath(); q.rect(x, r.y, Math.max(0, x1 - x - 4), r.h); q.clip(); q.fillText(partName(i).toUpperCase(), Math.max(x, 0) + 6, r.y + r.h / 2); q.restore();
         });
       } else if (r.kind === 'ev') {
         if (r.L === 2) for (let x = 0; x < W; x++) { const ls = logoAt(x2t(x + 0.5)); if (ls) { q.fillStyle = ls === 2 ? '#3a3947' : (x & 2 ? '#3a3947' : '#000'); q.fillRect(x, r.y + r.h - 3, 1, 3); } }

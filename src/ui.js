@@ -11,7 +11,7 @@ Object.assign(ICONS, {
   join: ['M2 8h12M5.5 5.5L8 8l-2.5 2.5M10.5 5.5L8 8l2.5 2.5'], loop: ['M3 8a5 5 0 0 1 8.5-3.5L13 6M13 3v3h-3M13 8a5 5 0 0 1-8.5 3.5L3 10M3 13v-3h3'], copy: ['M5 5h8v8H5zM3 11V3h8']
 });
 {
-  const NAMES = { 'Logo file': 'image', 'Sound': 'over', 'Symbols': 'ev5', 'Pillars': 'ev4', 'Base layer': 'ev0', 'Glitch layer': 'ev1', 'Logo layer': 'ev2', 'Variation': 'dice', 'Pixels': 'dots',
+  const NAMES = { 'Triggers': 'ev1', 'Ring': 'frame', 'Logo file': 'image', 'Sound': 'over', 'Symbols': 'ev5', 'Pillars': 'ev4', 'Base layer': 'ev0', 'Glitch layer': 'ev1', 'Logo layer': 'ev2', 'Variation': 'dice', 'Pixels': 'dots',
     'Format': 'frame', 'Look': 'sun', 'Playback': 'play', 'Project library': 'folder', 'Timecode': 'ruler', 'Output': 'screen', 'Export': 'down' };
   let shut = {};
   try { shut = JSON.parse(localStorage.getItem('mallcall-shut') || '{}'); } catch (e) {}
@@ -39,4 +39,22 @@ Object.assign(ICONS, {
     if (!b.title) b.title = text;
     b.setAttribute('aria-label', text); b.replaceChildren(ic(icon), short);
   }
+}
+// the settings column: as wide as the user drags it, in as many columns as fit, and remembered
+{
+  const app = document.querySelector('.app'), rail = $('rail'), sp = $('splitter');
+  const cols = () => { const w = rail.clientWidth; rail.classList.toggle('two', w >= 560); rail.classList.toggle('three', w >= 900); };
+  try { const w = Number(localStorage.getItem('mallcall-railw')); if (w >= 240) app.style.setProperty('--railw', w + 'px'); } catch (e) {}
+  let down = false;
+  sp.addEventListener('pointerdown', e => { down = true; sp.setPointerCapture(e.pointerId); sp.classList.add('on'); });
+  sp.addEventListener('pointermove', e => {
+    if (!down) return;
+    const w = Math.round(Math.min(innerWidth - 420, Math.max(240, innerWidth - e.clientX)));
+    app.style.setProperty('--railw', w + 'px'); cols(); tlCache = null; if (!S.playing && !busy) paint();
+  });
+  const up = () => { if (!down) return; down = false; sp.classList.remove('on'); try { localStorage.setItem('mallcall-railw', String(rail.clientWidth)); } catch (e) {} };
+  sp.addEventListener('pointerup', up); sp.addEventListener('pointercancel', up);
+  sp.addEventListener('dblclick', () => { app.style.removeProperty('--railw'); try { localStorage.removeItem('mallcall-railw'); } catch (e) {} cols(); tlCache = null; });
+  if (typeof ResizeObserver === 'function') new ResizeObserver(cols).observe(rail); else addEventListener('resize', cols);
+  cols();
 }
