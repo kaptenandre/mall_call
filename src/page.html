@@ -56,6 +56,10 @@ h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase
 .tlinsp label{display:flex;gap:6px;align-items:center}
 .tlinsp input[type=number]{width:74px}
 .tlinsp input[type=text]{width:104px}
+.symbank{display:grid;grid-template-columns:repeat(auto-fill,minmax(36px,1fr));gap:4px}
+.symbank button{appearance:none;border:1px solid var(--rule);background:#000;padding:0;aspect-ratio:1;cursor:pointer;border-radius:0;color:var(--ink);font:500 16px/1 var(--display)}
+.symbank button:hover{border-color:var(--ink)}
+.symbank canvas{display:block;width:100%;height:100%}
 .row.anim>span:first-child::after{content:" ◆";color:var(--signal);font-size:9px}
 .hud{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;font:400 11px/1.3 var(--display);letter-spacing:.07em;text-transform:uppercase;color:var(--dim);padding:8px 2px 10px;font-variant-numeric:tabular-nums}
 .hud b{font-weight:500;color:var(--ink)}
@@ -187,6 +191,14 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
       <label class="drop" for="sfile"><strong>Drop audio or a video here</strong><span>or click to choose. It is read on this computer only.</span></label>
       <p class="note" id="soundNote" aria-live="polite">No sound yet. The piece runs as a seamless loop on a built-in half-second beat.</p>
       <button type="button" class="plain" id="soundOff" hidden>Remove sound</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>Symbols</legend>
+      <div class="symbank" id="symBank"></div>
+      <input type="file" id="symFile" class="sr" accept=".svg,.png,.jpg,.jpeg,.webp,image/svg+xml,image/png" tabindex="-1">
+      <label class="row" for="symAmt"><span>Auto symbols</span><input type="range" id="symAmt" min="0" max="100" value="30"></label>
+      <p class="note" id="symNote">A bank of shapes. Press one to put it on the timeline at the playhead; the plus adds one of your own. A Symbol clip can walk through the bank on every hit, with echoes behind it showing the shapes that came before.</p>
     </fieldset>
 
     <fieldset>
@@ -368,7 +380,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 20;
+const BUILD = 21;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -378,13 +390,13 @@ const STYLE_NAMES = { rods: 'LED rods', streaks: 'Light streaks', ascii: 'ASCII'
 const S = { format: 'wide', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.4, size: 0.78, invert: false,
   loop: 8, fps: 30, playing: true, seed: 1,
   baseAmt: 0.45, baseStyle: 'dither', baseDen: 0.304,
-  logoEach: false, outline: false, pilAmt: 0.4, busy: 0.4, trans: 'cut', transLen: 1, glitch: 0.7, lines: 0.8, lineMode: 1, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxAmt: 0.4, fxStyle: 'rods', fxDen: 0.784,
+  logoEach: false, outline: false, symAmt: 0.3, pilAmt: 0.4, busy: 0.4, trans: 'cut', transLen: 1, glitch: 0.7, lines: 0.8, lineMode: 1, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxAmt: 0.4, fxStyle: 'rods', fxDen: 0.784,
   logoMode: 0, loader: 0, presence: 0.5, eq: 1, logoStyle: 'dither', logoDen: 0.64,
   chaos: 0.6, trail: 0, mix: false, pshape: 0, pfill: 0.78, dither: 'bayer4', wob: 0.5, wobSize: 0.5, eqAmt: 0.6, ease: 0.85, range: 'all',
   tcRate: '25', tcStart: 0, tcShow: false, outFit: 'contain',
   faces: 1, panelsIn: 30, panelPx: 0, view3d: true, inner: 'same', exFmt: 'mp4', exView: 'flat', gap: 0 };
 // The piece can be split into parts. Everything from the three layers down to the look is kept per part; S holds the part being edited.
-const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'logoEach', 'outline', 'pilAmt', 'busy', 'trans', 'transLen', 'glitch', 'lines', 'lineMode', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxAmt', 'fxStyle', 'fxDen',
+const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'logoEach', 'outline', 'symAmt', 'pilAmt', 'busy', 'trans', 'transLen', 'glitch', 'lines', 'lineMode', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxAmt', 'fxStyle', 'fxDen',
   'logoMode', 'loader', 'presence', 'eq', 'logoStyle', 'logoDen', 'chaos', 'trail', 'mix', 'pshape', 'pfill', 'dither', 'wob', 'wobSize', 'eqAmt', 'ease', 'inner'];
 const snap = () => { const o = {}; for (const k of PART_KEYS) o[k] = S[k]; return o; };
 let parts = [{ t: 0, P: snap() }], sel = 0, loopPart = false;
@@ -404,7 +416,7 @@ function setFace(n) {
 }
 // Animated settings: keys per setting, { glitch: [{ t, v, c }] }. autoCut: whether the engine schedules its own clips on a layer.
 let auto = {};
-const autoCut = { base: true, fx: true, logo: true, pil: true };
+const autoCut = { base: true, fx: true, logo: true, pil: true, sym: true };
 
 /* ---------- logo mask ---------- */
 let mask = null, logoSrc = null, maskN = 0;
@@ -495,6 +507,8 @@ function mkDisp(st, W, H, amt, o) {
     DU = u; DV = v;
   };
 }
+// how many pillars a pillar is from the one a pattern starts at, going the short way round
+const i0d = (i, N, sd) => { const d = Math.abs(i - Math.floor(hash(sd, 5, 251) * N)); return Math.min(d, N - d); };
 // Pillar patterns: one value per pillar from each live Pillar clip. Sets st.pl (light) and st.pm (mask); null when there is none.
 // N is how many pillars this face has. Everything is stepped to whole pillars and timed off hits and the eased clock.
 function pillarGains(st, N, o) {
@@ -518,6 +532,11 @@ function pillarGains(st, N, o) {
       else if (e.fx === 'alt') v = (i + st.mi) & 1 ? 1 : 0;
       else if (e.fx === 'pop') v = hash(i, st.mi, sd) < Math.max(0.12, wd) ? Math.exp(-st.dtm / 0.28) : 0;
       else if (e.fx === 'vu') { const b = Math.abs((i + 0.5) / N - 0.5) * 2, l = score.spec ? score.spec[hi * NB + Math.min(NB - 1, Math.floor(b * NB))] : [score.lo, score.mid, score.hi][i % 3][hi]; v = Math.pow(Math.min(1, l), 1.6); }
+      else if (e.fx === 'echo') {                           // a delay: the hit repeats pillar by pillar, a little later and a little weaker each time
+        const steps = Math.min(i0d(i, N, sd), N), t = st.tau - steps * (0.02 + 0.06 / sp);
+        let hp = t / score.hop; if (hp < 0) hp = score.cyclic ? hp + score.nh : 0;
+        v = score.pulse[Math.min(score.nh - 1, hp | 0)] * Math.pow(0.78 + 0.21 * wd, steps);
+      }
       else if (e.fx === 'build') v = u < prog(x, sd) / 0.97 * 1.02 ? 1 : 0;
       else if (e.fx === 'drain') v = u >= prog(x, sd) / 0.97 * 1.02 ? 1 : 0;
       else { const d = Math.abs(u - 0.5) * 2; v = d < ioExpo(x) * 1.05 ? 1 : 0; }
@@ -680,6 +699,91 @@ function logoField(W, H, t, o, st) {
   return { M: f(mask.data), B: f(mask.blur) };
 }
 
+// The symbol bank: plain line shapes drawn here, plus any the user adds as files. A Symbol clip shows one, or walks through them.
+const SYM_DRAW = {
+  x: g => { g.moveTo(44, 44); g.lineTo(212, 212); g.moveTo(212, 44); g.lineTo(44, 212); },
+  plus: g => { g.moveTo(128, 34); g.lineTo(128, 222); g.moveTo(34, 128); g.lineTo(222, 128); },
+  square: g => g.rect(44, 44, 168, 168),
+  nest: g => { g.rect(40, 40, 176, 176); g.rect(92, 92, 72, 72); },
+  circle: g => g.arc(128, 128, 88, 0, TAU),
+  rings: g => { for (const r of [96, 62, 28]) { g.moveTo(128 + r, 128); g.arc(128, 128, r, 0, TAU); } },
+  arc: g => { g.arc(128, 128, 92, 0.25 * Math.PI, 1.7 * Math.PI); g.moveTo(128 + 54, 128); g.arc(128, 128, 54, 0, 1.2 * Math.PI); },
+  corners: g => { for (const [x, y, a, b] of [[40, 40, 1, 1], [216, 40, -1, 1], [40, 216, 1, -1], [216, 216, -1, -1]]) { g.moveTo(x + 62 * a, y); g.lineTo(x, y); g.lineTo(x, y + 62 * b); } },
+  arrow: g => { g.rect(40, 40, 176, 176); g.moveTo(84, 172); g.lineTo(172, 84); g.moveTo(108, 84); g.lineTo(172, 84); g.lineTo(172, 148); },
+  tri: g => { g.moveTo(128, 40); g.lineTo(220, 208); g.lineTo(36, 208); g.closePath(); },
+  diamond: g => { g.moveTo(128, 32); g.lineTo(224, 128); g.lineTo(128, 224); g.lineTo(32, 128); g.closePath(); },
+  bars: g => { for (const y of [72, 128, 184]) { g.moveTo(40, y); g.lineTo(216, y); } },
+  grid: g => { for (const k of [44, 100, 156, 212]) { g.moveTo(k, 44); g.lineTo(k, 212); g.moveTo(44, k); g.lineTo(212, k); } },
+  chev: g => { for (const x of [60, 124]) { g.moveTo(x, 48); g.lineTo(x + 72, 128); g.lineTo(x, 208); } },
+  slash: g => { for (const x of [20, 84, 148]) { g.moveTo(x, 212); g.lineTo(x + 88, 44); } },
+  dot: g => { g.arc(128, 128, 30, 0, TAU); g.moveTo(128 + 92, 128); g.arc(128, 128, 92, 0, TAU); }
+};
+const SYM_NAMES = { x: 'Cross', plus: 'Plus', square: 'Square', nest: 'Square in square', circle: 'Circle', rings: 'Rings', arc: 'Arcs', corners: 'Corners', arrow: 'Arrow', tri: 'Triangle', diamond: 'Diamond', bars: 'Bars', grid: 'Grid', chev: 'Chevrons', slash: 'Slashes', dot: 'Target' };
+let userSyms = [];                 // { id, name, dataUrl, mask }
+const symMasks = new Map();
+const symIds = () => Object.keys(SYM_DRAW).concat(userSyms.map(u => u.id));
+const symName = id => SYM_NAMES[id] || (userSyms.find(u => u.id === id) || { name: id }).name;
+function symCanvas(id, px) {
+  const c = document.createElement('canvas'); c.width = c.height = px;
+  const g = c.getContext('2d', { willReadFrequently: true }), u = userSyms.find(q => q.id === id);
+  if (u && u.img) { const k = Math.min(px / u.img.naturalWidth, px / u.img.naturalHeight) * 0.92, w = u.img.naturalWidth * k, h = u.img.naturalHeight * k; g.drawImage(u.img, (px - w) / 2, (px - h) / 2, w, h); }
+  else if (SYM_DRAW[id]) { g.scale(px / 256, px / 256); g.strokeStyle = '#fff'; g.lineWidth = 17; g.lineCap = 'square'; g.lineJoin = 'miter'; g.beginPath(); SYM_DRAW[id](g); g.stroke(); }
+  return c;
+}
+function symMask(id) {
+  let m = symMasks.get(id);
+  if (m) return m;
+  const u = userSyms.find(q => q.id === id);
+  if (u && u.mask) m = u.mask;
+  else { const c = symCanvas(SYM_DRAW[id] ? id : 'x', 192), px = c.getContext('2d').getImageData(0, 0, 192, 192).data, data = new Float32Array(192 * 192); for (let i = 0; i < data.length; i++) data[i] = px[i * 4 + 3] / 255; m = { w: 192, h: 192, data }; }
+  symMasks.set(id, m);
+  return m;
+}
+async function addSymbol(file, known) {
+  try {
+    const dataUrl = known || await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(file); });
+    const img = await loadImg(dataUrl), w = img.naturalWidth || 512, h = img.naturalHeight || 512;
+    let n = 1; while (userSyms.some(u => u.id === 'u' + n)) n++;
+    userSyms.push({ id: 'u' + n, name: file.name.replace(/\.[^.]+$/, ''), dataUrl, img, mask: buildMask(img, w, h, false) });
+    symBank(); tlInspSig = ''; tlInsp();
+    return true;
+  } catch (e) { $('symNote').textContent = 'That file could not be read as a picture. Try an SVG or a PNG.'; return false; }
+}
+// Symbol clips: the shape, its echoes trailing off behind it, struck by every hit. wide: clips that sit across the frame;
+// otherwise the ones that put a shape in every pillar.
+function symField(W, H, o, st, per, N) {
+  const items = [], ids = symIds(), asp = W / H, hit = 0.5 + 0.5 * Math.exp(-st.dtm / 0.22);
+  const pick = (e, n) => e.step ? ids[Math.floor(hash(n, e.seed, 270) * ids.length * 0.999)] : e.sy;
+  for (let c = 0; c < st.syN; c++) {
+    const e = st.syE[c];
+    if (!!e.each !== per) continue;
+    if (per) { items.push({ e, per: true }); continue; }
+    const n = Math.max(0, Math.min(8, e.echo | 0));
+    for (let j = n; j >= 0; j--) {                        // the echoes first, the shape itself on top; each echo is one hit behind the last
+      const w = e.size / asp, m = symMask(pick(e, st.mi - j));
+      items.push({ m, left: e.x + j * e.ex / asp - w / 2, top: e.y + j * e.ey - e.size / 2, w, h: e.size, gain: (j ? 0.8 / (1 + 0.55 * j) : 1) * hit });
+    }
+  }
+  if (!items.length) return null;
+  const f = (u, v) => {
+    let val = 0;
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.per) {
+        const e = it.e, x = u * N, pi = Math.min(N - 1, Math.max(0, Math.floor(x))), m = symMask(pick(e, st.mi - Math.floor(pi * (e.dl || 0))));
+        const hs = e.size * (W / N) / H, lu = (x - pi - 0.5) / e.size + 0.5, lv = (v - e.y) / hs + 0.5;
+        if (lu < 0 || lu > 1 || lv < 0 || lv > 1) continue;
+        const b = sample(m.data, m, lu, lv) * hit; if (b > val) val = b;
+        continue;
+      }
+      const lu = (u - it.left) / it.w, lv = (v - it.top) / it.h;
+      if (lu < 0 || lu > 1 || lv < 0 || lv > 1) continue;
+      const b = sample(it.m.data, it.m, lu, lv) * it.gain; if (b > val) val = b;
+    }
+    return val;
+  };
+  return { M: f, B: f };
+}
 // Type: words as clips on the timeline, drawn in the logo layer with its style and its glitch. Four ways to arrive:
 // slam (one word at a time, cut in hard through two wrong frames), typeon (letter by letter in fits and starts, with a cursor),
 // roll (the picture loses vertical hold, rolls and locks), ticker (runs across, surging with the sound).
@@ -1018,7 +1122,7 @@ class Renderer {
     const PN = LO[0].gapN || LO[0].cols;
     pillarGains(st, PN, LO[0]); st.pgK = LO[0].gapN ? 1 / (1 + LO[0].gap) : 1;
     for (let L = 0; L < 3; L++) {
-      if ((L === 0 && !st.bn && !st.pl && !st.pf) || (L === 2 && !st.lv && !st.tyN)) continue;
+      if ((L === 0 && !st.bn && !st.pl && !st.pf) || (L === 2 && !st.lv && !st.tyN && !st.syN)) continue;
       const o = LO[L];
       o.va = st.va; o.vb = st.vb; o.amb = L === 1 ? 1 : 0;
       if (L === 2 && st.dens !== 1) o.density = Math.min(1.2, (lerp(22, 96, o.density) * st.dens - 22) / 74);
@@ -1034,8 +1138,10 @@ class Renderer {
       else {                                               // the logo and any words share the top layer
         // a logo in every pillar sits in the pillar itself, not in the picture behind them
         const each = o.logoEach && PN > 1, a = !st.lv ? null : each ? logoField(W, H, t, Object.assign({}, o, { repeats: PN, travel: 0 }), st) : wrap(logoField(Wf, H, t, o, st));
-        const b = st.tyN ? wrap(typeField(Wf, H, o, st)) : null;
-        f = a && b ? { M: (u, v) => Math.max(a.M(u, v), b.M(u, v)), B: (u, v) => Math.max(a.B(u, v), b.B(u, v)) } : a || b;
+        const fs = [a, st.tyN ? wrap(typeField(Wf, H, o, st)) : null];
+        if (st.syN) { const w = symField(Wf, H, o, st, false, PN), pp = PN > 1 ? symField(W, H, o, st, true, PN) : null; fs.push(w ? wrap(w) : null, pp); }
+        const live = fs.filter(Boolean);
+        f = live.length === 1 ? live[0] : { M: (u, v) => { let m = 0; for (let i = 0; i < live.length; i++) { const x = live[i].M(u, v); if (x > m) m = x; } return m; }, B: (u, v) => { let m = 0; for (let i = 0; i < live.length; i++) { const x = live[i].B(u, v); if (x > m) m = x; } return m; } };
       }
       DRAW[st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style](q, W, H, t, o, f.M, f.B);
       const lm = L === 1 ? st.pmFx : L === 2 ? st.pmLogo : null;          // a pattern that hides only this layer, pillar by pillar
@@ -1106,7 +1212,7 @@ function rebuildScore() {
   const chAt = t => parts[partIdx(t)].P.chaos;
   score = track ? buildTrackScore(track.an, S.seed, chAt) : buildLoopScore(S.loop, S.seed, chAt);
   autoEv = [];
-  parts.forEach((p, i) => { for (const e of makeEvents(score, { base: p.P.baseAmt, fx: Math.min(1, p.P.fxAmt * busyK(p.P)), mode: p.P.logoMode, presence: p.P.presence, pil: Math.min(1, p.P.pilAmt * busyK(p.P)), ring: S.format === 'ring' }, p.t, partEnd(i), i)) if (e.k === 17 ? autoCut.pil : isBase(e.k) ? autoCut.base : e.k < 10 ? autoCut.fx : autoCut.logo) autoEv.push(e); });
+  parts.forEach((p, i) => { for (const e of makeEvents(score, { base: p.P.baseAmt, fx: Math.min(1, p.P.fxAmt * busyK(p.P)), mode: p.P.logoMode, presence: p.P.presence, pil: Math.min(1, p.P.pilAmt * busyK(p.P)), sym: Math.min(1, (p.P.symAmt || 0) * busyK(p.P)), ring: S.format === 'ring' }, p.t, partEnd(i), i)) if (e.k === 18 ? autoCut.sym : e.k === 17 ? autoCut.pil : isBase(e.k) ? autoCut.base : e.k < 10 ? autoCut.fx : autoCut.logo) autoEv.push(e); });
   // how each part comes in: a short move across the edge between it and the part before
   parts.forEach((p, i) => {
     const tr = p.P.trans, t = p.t, sd = S.seed * 31 + i * 7;
@@ -1253,7 +1359,8 @@ const PAD = [
   ['Glitch', [['glitch', 'Glitch', 'Q'], ['chase', 'Chase', 'W'], ['lines', 'Lines', 'E'], ['sparks', 'Sparks', 'R'], ['bars', 'Bars', 'T'], ['blocks', 'Blocks', 'Y']]],
   ['Logo', [['load', 'Loader', 'A'], ['show', 'Show', 'S'], ['hide', 'Hide', 'D']]],
   ['Type', [['type', 'Words', 'F'], ['type', 'Ticker', 'V', { fx: 'band', mode: 'band', size: 0.1, y: 0.9, txt: 'MALL CALL', trk: 0.08 }], ['type', 'Stack', 'B', { fx: 'stack', mode: 'stack', size: 0.36 }], ['type', 'Stretch', 'N', { fx: 'stretch', mode: 'stretch' }]]],
-  ['Pillars', [['pillar', 'Chase', 'G', { fx: 'chase' }], ['pillar', 'Spin', 'H', { fx: 'spin', pm: 'light' }], ['pillar', 'Pop', 'J', { fx: 'pop' }], ['pillar', 'Build', 'K', { fx: 'build' }], ['pillar', 'VU', 'L', { fx: 'vu', pm: 'light' }], ['pillar', 'Alt', 'Z', { fx: 'alt' }], ['pillar', 'Wave', 'X', { fx: 'wave' }], ['pillar', 'Frames', 'C', { fx: 'chase', pm: 'frame', wd: 0.4 }]]]
+  ['Pillars', [['pillar', 'Chase', 'G', { fx: 'chase' }], ['pillar', 'Spin', 'H', { fx: 'spin', pm: 'light' }], ['pillar', 'Pop', 'J', { fx: 'pop' }], ['pillar', 'Build', 'K', { fx: 'build' }], ['pillar', 'VU', 'L', { fx: 'vu', pm: 'light' }], ['pillar', 'Alt', 'Z', { fx: 'alt' }], ['pillar', 'Wave', 'X', { fx: 'wave' }], ['pillar', 'Frames', 'C', { fx: 'chase', pm: 'frame', wd: 0.4 }], ['pillar', 'Echo', 'M', { fx: 'echo', pm: 'light', wd: 0.6 }]]],
+  ['Symbols', [['sym', 'Symbols', 'O', { fx: 'walk', step: true }], ['sym', 'In pillars', 'P', { fx: 'each', step: true, each: true, echo: 0, size: 0.8, dl: 0.5 }]]]
 ];
 const KEYS = {};
 function trigger(type, btn, more) {
@@ -1407,7 +1514,7 @@ const clampInt = (el, lo, hi, d) => { const n = Math.round(Number(el.value)); re
 const px2den = v => 1 - 1.2 * v, den2px = d => (1 - d) / 1.2;
 // id, state key, value from 0..1 slider position, and back; rebuild = the schedule depends on it
 const RANGES = [['baseAmt', 'baseAmt', 1], ['basePx', 'baseDen', 0, px2den, den2px], ['glitch', 'glitch'], ['lines', 'lines'], ['chase', 'chase'], ['bgLo', 'bgLo'], ['bgMid', 'bgMid'], ['bgHi', 'bgHi'], ['fxAmt', 'fxAmt', 1],
-  ['fxPx', 'fxDen', 0, px2den, den2px], ['wob', 'wob'], ['wobSize', 'wobSize'], ['eqAmt', 'eqAmt'], ['ease', 'ease'], ['presence', 'presence', 1], ['pilAmt', 'pilAmt', 1], ['busy', 'busy', 1], ['logoPx', 'logoDen', 0, px2den, den2px], ['size', 'size'], ['chaos', 'chaos', 1], ['trail', 'trail'], ['pfill', 'pfill'], ['glow', 'glow']];
+  ['fxPx', 'fxDen', 0, px2den, den2px], ['wob', 'wob'], ['wobSize', 'wobSize'], ['eqAmt', 'eqAmt'], ['ease', 'ease'], ['presence', 'presence', 1], ['pilAmt', 'pilAmt', 1], ['symAmt', 'symAmt', 1], ['busy', 'busy', 1], ['logoPx', 'logoDen', 0, px2den, den2px], ['size', 'size'], ['chaos', 'chaos', 1], ['trail', 'trail'], ['pfill', 'pfill'], ['glow', 'glow']];
 for (const [id, key, rebuild, to] of RANGES) $(id).addEventListener('input', e => { const v = e.target.value / 100, x = to ? to(v) : v; if (auto[key] && auto[key].length) setKey(key, tau, x); else S[key] = x; if (rebuild) rebuildScore(); syncUI(); });
 function pushRanges() { for (const [id, key, , , back] of RANGES) $(id).value = Math.round((back ? back(S[key]) : S[key]) * 100); }
 for (const id of ['baseStyle', 'fxStyle', 'logoStyle']) {
@@ -1536,7 +1643,7 @@ $('play').addEventListener('click', () => setPlaying(!S.playing));
 /* ---------- export ---------- */
 let rendered = null, dlPromise = null, stop = false;
 // A finished render is kept and offered again until something that changes the picture or the sound changes.
-const renderKey = () => JSON.stringify([Object.assign({}, S, { playing: 0 }), fontFile ? fontFile.name : 0, S.exView === '3d' ? [ringCam.yaw, ringCam.pitch, ringCam.dist] : 0, parts, S.range === 'part' ? sel : -1, maskN, track ? track.name + track.ab.length : 0, userEv.map(e => e.type + e.t.toFixed(3) + e.seed + e.d.toFixed(3) + JSON.stringify(evMore(e))), auto, autoCut]);
+const renderKey = () => JSON.stringify([Object.assign({}, S, { playing: 0 }), fontFile ? fontFile.name : 0, userSyms.map(u => u.name), S.exView === '3d' ? [ringCam.yaw, ringCam.pitch, ringCam.dist] : 0, parts, S.range === 'part' ? sel : -1, maskN, track ? track.name + track.ab.length : 0, userEv.map(e => e.type + e.t.toFixed(3) + e.seed + e.d.toFixed(3) + JSON.stringify(evMore(e))), auto, autoCut]);
 // Resolves to the save capability, null when this view cannot save, or undefined when the page runs outside Claude.
 function getDownloads() {
   if (window.nativeApp) return Promise.resolve({ save: async ({ filename, data }) => {      // the Mac app writes straight to disk through a save dialog
@@ -1723,7 +1830,7 @@ let loadingProject = false, saveTimer = 0;
 function getProject() {
   savePart();
   const g = {}; for (const k of GLOBAL_KEYS) g[k] = S[k];
-  return { v: 1, app: 'mall-call', S: g, parts: parts.map(p => (p.Q ? { t: p.t, P: p.P, Q: p.Q } : { t: p.t, P: p.P })), userEv: userEv.map(e => Object.assign({ t: e.t, type: e.type, seed: e.seed, d: e.d }, evMore(e))), auto, autoCut: Object.assign({}, autoCut), logo: logoFile, font: fontFile, soundPath: soundPath || null };
+  return { v: 1, app: 'mall-call', S: g, parts: parts.map(p => (p.Q ? { t: p.t, P: p.P, Q: p.Q } : { t: p.t, P: p.P })), userEv: userEv.map(e => Object.assign({ t: e.t, type: e.type, seed: e.seed, d: e.d }, evMore(e))), auto, autoCut: Object.assign({}, autoCut), logo: logoFile, font: fontFile, syms: userSyms.map(u => ({ name: u.name, dataUrl: u.dataUrl })), soundPath: soundPath || null };
 }
 function pushGlobals() {
   setRadio('format', S.format);
@@ -1739,8 +1846,11 @@ async function applyProject(pj) {
   try {
     audio.pause(); S.playing = false;
     for (const k of GLOBAL_KEYS) if (k in pj.S) S[k] = pj.S[k];
-    pushGlobals(); undoReset(); tlSel = null; auto = {}; autoCut.base = autoCut.fx = autoCut.logo = autoCut.pil = true;
+    pushGlobals(); undoReset(); tlSel = null; auto = {}; autoCut.base = autoCut.fx = autoCut.logo = autoCut.pil = autoCut.sym = true;
     if (!pj.soundPath && track) { audio.removeAttribute('src'); track = null; soundPath = ''; resetParts(); }
+    userSyms = []; symMasks.clear();
+    for (const u of (Array.isArray(pj.syms) ? pj.syms : [])) if (u && u.dataUrl) await addSymbol({ name: String(u.name || 'symbol') }, u.dataUrl);
+    symBank();
     if (pj.font && pj.font.dataUrl) { const blob = await (await fetch(pj.font.dataUrl)).blob(); await loadFont(new File([blob], pj.font.name)); }
     if (pj.logo && pj.logo.dataUrl) { const blob = await (await fetch(pj.logo.dataUrl)).blob(); await loadLogo(new File([blob], pj.logo.name, { type: blob.type })); }
     let missing = '';
@@ -1750,11 +1860,11 @@ async function applyProject(pj) {
     }
     if (!track) { soundPath = ''; rebuildScore(); }
     if (!missing) {
-      parts = pj.parts.filter(p => p.t < score.D).map(p => { const o = { t: p.t, P: Object.assign(snap(), { fxAmt: 0, lineMode: 0, inner: 'same', pilAmt: 0, busy: 0.7, trans: 'cut', transLen: 1 }, p.P) }; if (p.Q) o.Q = Object.assign({}, o.P, p.Q, { inner: 'own' }); return o; });      // a project from before Auto clips keeps its cut
+      parts = pj.parts.filter(p => p.t < score.D).map(p => { const o = { t: p.t, P: Object.assign(snap(), { fxAmt: 0, lineMode: 0, inner: 'same', pilAmt: 0, symAmt: 0, busy: 0.7, trans: 'cut', transLen: 1 }, p.P) }; if (p.Q) o.Q = Object.assign({}, o.P, p.Q, { inner: 'own' }); return o; });      // a project from before Auto clips keeps its cut
       if (!parts.length || parts[0].t !== 0) parts.unshift({ t: 0, P: snap() });
-      userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d, e.type === 'type' ? { txt: String(e.txt || ''), mode: String(e.mode || 'slam'), size: Number(e.size) || 0.5, y: Number(e.y) || 0.5, font: ['mono', 'own'].includes(e.font) ? e.font : 'sans', x: e.x === undefined ? 0.5 : Number(e.x) || 0, caps: e.caps !== false, trk: Number(e.trk) || 0, out: e.out === 'same' ? 'same' : 'cut', ol: !!e.ol, face: e.face | 0 } : e.type === 'pillar' ? { fx: PILLAR_FX.includes(e.fx) ? e.fx : 'chase', pm: ['light', 'frame'].includes(e.pm) ? e.pm : 'mask', on: ['logo', 'glitch'].includes(e.on) ? e.on : 'all', sp: Number(e.sp) || 1, wd: Number(e.wd) || 0.25, face: e.face | 0 } : { face: e.face | 0 }));
+      userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d, e.type === 'type' ? { txt: String(e.txt || ''), mode: String(e.mode || 'slam'), size: Number(e.size) || 0.5, y: Number(e.y) || 0.5, font: ['mono', 'own'].includes(e.font) ? e.font : 'sans', x: e.x === undefined ? 0.5 : Number(e.x) || 0, caps: e.caps !== false, trk: Number(e.trk) || 0, out: e.out === 'same' ? 'same' : 'cut', ol: !!e.ol, face: e.face | 0 } : e.type === 'sym' ? { sy: String(e.sy || 'x'), step: !!e.step, echo: Math.max(0, Math.min(8, e.echo | 0)), ex: Number(e.ex) || 0, ey: Number(e.ey) || 0, size: Number(e.size) || 0.6, x: e.x === undefined ? 0.5 : Number(e.x) || 0, y: e.y === undefined ? 0.5 : Number(e.y) || 0, each: !!e.each, dl: Number(e.dl) || 0, face: e.face | 0 } : e.type === 'pillar' ? { fx: PILLAR_FX.includes(e.fx) ? e.fx : 'chase', pm: ['light', 'frame'].includes(e.pm) ? e.pm : 'mask', on: ['logo', 'glitch'].includes(e.on) ? e.on : 'all', sp: Number(e.sp) || 1, wd: Number(e.wd) || 0.25, face: e.face | 0 } : { face: e.face | 0 }));
       for (const [k] of AKEYS) if (pj.auto && Array.isArray(pj.auto[k])) auto[k] = pj.auto[k].filter(q => q.t <= score.D).map(q => ({ t: Number(q.t) || 0, v: Number(q.v) || 0, c: q.c | 0 })).sort((a, b) => a.t - b.t);
-      if (pj.autoCut) { autoCut.base = pj.autoCut.base !== false; autoCut.fx = pj.autoCut.fx !== false; autoCut.logo = pj.autoCut.logo !== false; autoCut.pil = pj.autoCut.pil !== false; }
+      if (pj.autoCut) { autoCut.base = pj.autoCut.base !== false; autoCut.fx = pj.autoCut.fx !== false; autoCut.logo = pj.autoCut.logo !== false; autoCut.pil = pj.autoCut.pil !== false; autoCut.sym = pj.autoCut.sym !== false; }
     } else $('soundNote').textContent = 'The sound for this project was not found at ' + missing + '. Drop it in again and reopen the project.';
     sel = 0; tau = 0; loadPart();
     rebuildScore(); pushAll(); syncUI(); tlInsp();
@@ -1780,7 +1890,7 @@ if (window.nativeApp) {
       const r = await window.nativeApp.projectOpen();
       if (r && !(await applyProject(JSON.parse(r.json)))) say('That file is not a project from this app.');
     } else if (cmd === 'new-project') {
-      audio.pause(); audio.removeAttribute('src'); track = null; soundPath = ''; userEv = []; tau = 0; auto = {}; autoCut.base = autoCut.fx = autoCut.logo = autoCut.pil = true; tlSel = null; resetParts(); rebuildScore(); syncUI(); undoReset(); tlInsp();
+      audio.pause(); audio.removeAttribute('src'); track = null; soundPath = ''; userEv = []; tau = 0; auto = {}; autoCut.base = autoCut.fx = autoCut.logo = autoCut.pil = autoCut.sym = true; tlSel = null; resetParts(); rebuildScore(); syncUI(); undoReset(); tlInsp();
       $('soundNote').textContent = 'No sound yet. The piece runs as a seamless loop on a built-in half-second beat.';
     } else if (cmd === 'export') $('save').click();
     else if (cmd === 'play') setPlaying(!S.playing);
@@ -1843,6 +1953,20 @@ window.__selfTest = async () => {
   return r;
 };
 
+// the bank as a row of small pictures; press one to drop it on the timeline
+function symBank() {
+  const box = $('symBank'); box.textContent = '';
+  for (const id of symIds()) {
+    const b = document.createElement('button'); b.type = 'button'; b.title = symName(id); b.setAttribute('aria-label', symName(id));
+    b.append(symCanvas(id, 72));
+    b.addEventListener('click', () => trigger('sym', b, { sy: id, step: false }));
+    box.append(b);
+  }
+  const add = document.createElement('button'); add.type = 'button'; add.textContent = '+'; add.title = 'Add a symbol of your own, SVG or PNG'; add.setAttribute('aria-label', 'Add a symbol of your own');
+  add.addEventListener('click', () => $('symFile').click()); box.append(add);
+}
+$('symFile').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) addSymbol(f).then(() => touch()); });
+symBank();
 /*__OUTPUT__*/
 /*__RING__*/
 /*__LIBRARY__*/

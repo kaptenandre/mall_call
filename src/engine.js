@@ -302,8 +302,8 @@ function buildLoopScore(L, seed, ch) {
 }
 
 /* ---------- three layers: base (rare and big), glitch (lines, chases, debris), logo (loader or appearing) ---------- */
-const EV = { sweep: 0, strobe: 1, flood: 2, blackout: 3, glitch: 4, chase: 5, lines: 6, sparks: 7, bars: 8, blocks: 9, load: 10, show: 11, hide: 12, type: 13, orbit: 14, spokes: 15, meet: 16, pillar: 17 };
-const EVD = { sweep: 0.9, strobe: 0.6, flood: 0.9, blackout: 0.4, glitch: 0.6, chase: 4, lines: 0.7, sparks: 0.6, bars: 0.6, blocks: 0.6, load: 3, show: 2, hide: 0, type: 2.5, orbit: 1.4, spokes: 2.4, meet: 1.2, pillar: 4 };
+const EV = { sweep: 0, strobe: 1, flood: 2, blackout: 3, glitch: 4, chase: 5, lines: 6, sparks: 7, bars: 8, blocks: 9, load: 10, show: 11, hide: 12, type: 13, orbit: 14, spokes: 15, meet: 16, pillar: 17, sym: 18 };
+const EVD = { sweep: 0.9, strobe: 0.6, flood: 0.9, blackout: 0.4, glitch: 0.6, chase: 4, lines: 0.7, sparks: 0.6, bars: 0.6, blocks: 0.6, load: 3, show: 2, hide: 0, type: 2.5, orbit: 1.4, spokes: 2.4, meet: 1.2, pillar: 4, sym: 3 };
 // base clips are the first four and the three that run round the ring; which face of the ring a clip plays on is e.face: 0 both, 1 outside, 2 inside
 const isBase = k => k < 4 || (k >= 14 && k <= 16);
 // A Type clip carries its words and how they arrive: txt, mode (slam, typeon, roll, ticker), size and y as parts of the frame height, font.
@@ -311,11 +311,15 @@ const isBase = k => k < 4 || (k >= 14 && k <= 16);
 const TYPE_NEW = { txt: 'MALL CALL', mode: 'slam', size: 0.5, y: 0.5, font: 'sans', x: 0.5, caps: true, trk: 0, out: 'cut' };
 // A Pillar clip plays a pattern across the pillars, one value per pillar. fx: the pattern. pm: 'light' lights whole pillars,
 // 'mask' shows the picture only where the pattern is. sp: speed. wd: how much of the ring is on, 0 to 1.
-const PILLAR_FX = ['chase', 'spin', 'ping', 'wave', 'random', 'alt', 'pop', 'vu', 'build', 'drain', 'split'];
+const PILLAR_FX = ['chase', 'spin', 'ping', 'wave', 'random', 'alt', 'pop', 'vu', 'echo', 'build', 'drain', 'split'];
 // on: what a mask hides: 'all' layers, only the 'logo' layer, or only the 'glitch' layer. pm 'frame' lights just the outline of each pillar.
 const PIL_NEW = { fx: 'chase', pm: 'mask', sp: 1, wd: 0.25, on: 'all' };
-const evMore = e => e.k === 13 ? { txt: e.txt, mode: e.mode, size: e.size, y: e.y, font: e.font, x: e.x, caps: e.caps, trk: e.trk, out: e.out, ol: !!e.ol, face: e.face | 0 } : e.k === 17 ? { fx: e.fx, pm: e.pm, sp: e.sp, wd: e.wd, on: e.on, face: e.face | 0 } : e.face ? { face: e.face } : null;
-const mkEv = (t, type, seed, d, more) => { const e = { t, type, k: EV[type], seed: seed | 0, d: d === undefined || d === null ? EVD[type] : d }; if (more && more.mode === 'band' && (d === undefined || d === null)) e.d = 8; if (more && more.face) e.face = more.face | 0; return e.k === 13 ? Object.assign(e, TYPE_NEW, more) : e.k === 17 ? Object.assign(e, PIL_NEW, more) : e; };
+// A Symbol clip shows a shape from the bank. sy: which one. step: change to another on every hit. echo: how many delayed copies
+// trail behind it, each ex, ey further off and each showing the shape from one hit earlier. each: one in every pillar, and then
+// dl makes each pillar run that many hits behind the one before it, so the shapes chase round the ring like a delay.
+const SYM_NEW = { sy: 'x', step: true, echo: 3, ex: 0.05, ey: -0.05, size: 0.6, x: 0.5, y: 0.5, each: false, dl: 0 };
+const evMore = e => e.k === 18 ? { sy: e.sy, step: !!e.step, echo: e.echo | 0, ex: e.ex, ey: e.ey, size: e.size, x: e.x, y: e.y, each: !!e.each, dl: e.dl, face: e.face | 0 } : e.k === 13 ? { txt: e.txt, mode: e.mode, size: e.size, y: e.y, font: e.font, x: e.x, caps: e.caps, trk: e.trk, out: e.out, ol: !!e.ol, face: e.face | 0 } : e.k === 17 ? { fx: e.fx, pm: e.pm, sp: e.sp, wd: e.wd, on: e.on, face: e.face | 0 } : e.face ? { face: e.face } : null;
+const mkEv = (t, type, seed, d, more) => { const e = { t, type, k: EV[type], seed: seed | 0, d: d === undefined || d === null ? EVD[type] : d }; if (more && more.mode === 'band' && (d === undefined || d === null)) e.d = 8; if (more && more.face) e.face = more.face | 0; return e.k === 13 ? Object.assign(e, TYPE_NEW, more) : e.k === 17 ? Object.assign(e, PIL_NEW, more) : e.k === 18 ? Object.assign(e, SYM_NEW, more) : e; };
 
 // The shape of the piece, read off the score once: where it drops, the builds that lead into drops, the quiet stretches,
 // and the moments each band of the spectrum jumps. The automatic cut hangs its clips on these.
@@ -461,6 +465,18 @@ function makeEvents(sc, P, a, b, pi) {
       t = t0 + L + lerp(7, 0.4, pil) * (0.4 + 1.2 * r(n, 248));
     }
   }
+  if (P.sym > 0.02) {                                        // shapes from the bank: on drops, and now and then on a strong hit
+    const r = (n, salt) => hash(n, sd, salt), strong = hits.slice().sort((x, y) => y.v - x.v).slice(0, Math.ceil(hits.length * 0.25));
+    const cand = drops.map(d => d.t).concat(strong.map(h => h.t)), used = [];
+    cand.forEach((t, n) => {
+      if (r(Math.round(t * 100), 271) > 0.15 + 0.7 * P.sym || used.some(q => Math.abs(q - t) < lerp(16, 4, P.sym))) return;
+      const L = Math.min(b - t - 0.05, 1.5 + 3.5 * r(n, 272));
+      if (L < 0.8) return;
+      used.push(t);
+      const each = r(n, 273) < 0.35;
+      ev.push(mkEv(t, 'sym', r(n, 274) * 1e6, L, { step: true, echo: each ? 0 : 1 + Math.floor(r(n, 275) * 3.99), ex: (r(n, 276) - 0.5) * 0.14, ey: (r(n, 277) - 0.5) * 0.14, size: each ? 0.8 : 0.45 + 0.35 * r(n, 278), each, dl: each ? [0, 1, 1, 2][Math.floor(r(n, 279) * 3.99)] * 0.5 : 0 }));
+    });
+  }
   return ev;
 }
 // Loader progress: it jumps between a handful of checkpoints, like a real one stalling and catching up.
@@ -491,7 +507,8 @@ function newState() {
     bn: 0, bt: new Int8Array(3), bx: new Float32Array(3), ba: new Float32Array(3), bs: new Int32Array(3),
     lsN: 0, lsX: new Float32Array(2), lsS: new Int32Array(2), chase: 0, chSeed: 0, chI: 1, fxGain: 1, tau: 0,
     lv: 0, lp: 1, lseed: 0, lsince: 9, sty: new Int8Array(3), tyN: 0, tyE: [null, null], tyX: new Float32Array(2), tyA: new Float32Array(2),
-    pfN: 0, pfE: [null, null, null], pfX: new Float32Array(3), pfA: new Float32Array(3), mi: 0, dtm: 9 };
+    pfN: 0, pfE: [null, null, null], pfX: new Float32Array(3), pfA: new Float32Array(3), mi: 0, dtm: 9,
+    syN: 0, syE: [null, null], syA: new Float32Array(2) };
 }
 // relative weights of the hard glitch states; every section of the piece leans on a different few
 const GW = [0.2, 0.2, 0.22, 0.07, 0.12, 0.1, 0.14, 0.12, 0.12];
@@ -509,7 +526,7 @@ function stateAt(sc, tau, cfg, st) {
   const cv = a => a[h0] + (a[h1] - a[h0]) * hf;
   const pk = cv(sc.pulse);
   // everything scheduled or triggered that is live right now
-  st.bn = 0; st.lsN = 0; st.tyN = 0; st.pfN = 0; st.black = false;
+  st.bn = 0; st.lsN = 0; st.tyN = 0; st.pfN = 0; st.syN = 0; st.black = false;
   let gX = 0, cz = 0, czSeed = 0, xLo = 0, xMid = 0, xHi = 0, lg = null, lgAge = 1e9, strike = 0;
   const all = sc.all;
   for (let q = 0; q < all.length; q++) {
@@ -518,7 +535,8 @@ function stateAt(sc, tau, cfg, st) {
     let age = tau - e.t;
     if (age < 0) { if (!sc.cyclic) continue; age += D; }
     if (e.k === 17) { if (age < e.d && st.pfN < 3) { st.pfE[st.pfN] = e; st.pfX[st.pfN] = age / e.d; st.pfA[st.pfN] = age; st.pfN++; } continue; }
-    if (e.k >= 14) { if (age < e.d && st.bn < 3) { st.bt[st.bn] = e.k; st.bx[st.bn] = age / e.d; st.ba[st.bn] = age; st.bs[st.bn] = e.seed; st.bn++; } continue; }
+    if (e.k >= 14 && e.k <= 16) { if (age < e.d && st.bn < 3) { st.bt[st.bn] = e.k; st.bx[st.bn] = age / e.d; st.ba[st.bn] = age; st.bs[st.bn] = e.seed; st.bn++; } continue; }
+    if (e.k === 18) { if (age < e.d && st.syN < 2) { st.syE[st.syN] = e; st.syA[st.syN] = age; st.syN++; } continue; }
     if (e.k === 13) { if (age < e.d && st.tyN < 2) { st.tyE[st.tyN] = e; st.tyX[st.tyN] = age / e.d; st.tyA[st.tyN] = age; st.tyN++; } continue; }
     if (e.k >= 10) { if (age < lgAge && !(e.k === 11 && age >= e.d)) { lgAge = age; lg = e; } continue; }   // a Show that has run out hands back to whatever came before it
     if (age >= e.d) continue;

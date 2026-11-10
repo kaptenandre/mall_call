@@ -5,10 +5,10 @@
 const AKEYS = [['glitch', 'Glitch'], ['lines', 'Lines'], ['chase', 'Chases'], ['bgLo', 'Bass blocks'], ['bgMid', 'Mid bars'], ['bgHi', 'High sparks'], ['wob', 'Wobble'], ['wobSize', 'Wobble size'],
   ['eqAmt', 'EQ strength'], ['trail', 'Trails'], ['glow', 'Glow'], ['pfill', 'Pixel fill'], ['baseDen', 'Base pixels'], ['fxDen', 'Glitch pixels'], ['logoDen', 'Logo pixels']];
 const ANAME = Object.fromEntries(AKEYS), CURVES = ['Ease', 'Snap', 'Cut'];
-const LAYERS = ['Base', 'Glitch', 'Logo', 'Type', 'Pillars'], LAYER_NEW = ['sweep', 'glitch', 'show', 'type', 'pillar'];
-const PIL_NAMES = { drain: 'Drain away', chase: 'Chase', spin: 'Spin', ping: 'Ping pong', wave: 'Wave', random: 'Random', alt: 'Every other, swaps on the hit', pop: 'Pop on the hit', vu: 'A band of the sound each', build: 'Build up', split: 'Split open' };
+const LAYERS = ['Base', 'Glitch', 'Logo', 'Type', 'Pillars', 'Symbols'], LAYER_NEW = ['sweep', 'glitch', 'show', 'type', 'pillar', 'sym'];
+const PIL_NAMES = { echo: 'Echo, a delay round the ring', drain: 'Drain away', chase: 'Chase', spin: 'Spin', ping: 'Ping pong', wave: 'Wave', random: 'Random', alt: 'Every other, swaps on the hit', pop: 'Pop on the hit', vu: 'A band of the sound each', build: 'Build up', split: 'Split open' };
 const TYPE_MODES = [['slam', 'Slam, word by word'], ['typeon', 'Type on'], ['letters', 'Letters, scattered'], ['roll', 'Roll and lock'], ['ticker', 'Ticker, one pass'], ['band', 'Ticker band, keeps running'], ['stack', 'Stack, rows sliding'], ['stretch', 'Stretch, snaps on the hit'], ['wave', 'Wave, stepped']];
-const layerOf = k => isBase(k) ? 0 : k < 10 ? 1 : k === 13 ? 3 : k === 17 ? 4 : 2, CUTS = ['base', 'fx', 'logo', null, 'pil'];
+const layerOf = k => isBase(k) ? 0 : k < 10 ? 1 : k === 13 ? 3 : k === 17 ? 4 : k === 18 ? 5 : 2, CUTS = ['base', 'fx', 'logo', null, 'pil', 'sym'];
 const TLH = { ruler: 20, over: 84, parts: 20, ev: 24, auto: 46 };
 const tlv = { z: 1, x0: 0 };
 // Small line icons, drawn on a 16 unit grid. f: filled instead of stroked.
@@ -18,7 +18,7 @@ const ICONS = {
   fit: ['M2 8h12M2 8l3-3M2 8l3 3M14 8l-3-3M14 8l-3 3M2 3v10M14 3v10'], snap: ['M4 2.5v5.5a4 4 0 0 0 8 0V2.5M4 5.5h2.6M9.4 5.5H12M6.6 2.5v5.5a1.4 1.4 0 0 0 2.8 0V2.5'],
   undo: ['M6 3L3 6l3 3M3 6h6.5a3.5 3.5 0 0 1 0 7H6'], redo: ['M10 3l3 3-3 3M13 6H6.5a3.5 3.5 0 0 0 0 7H10'],
   ruler: ['M13.5 8a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0zM8 5v3l2 1.5'], over: ['M2 8h.01M4.5 6v4M7 3.5v9M9.5 5.5v5M12 7v2M14 8h.01'], parts: ['M2 4h5v8H2zM9 4h5v8H9z'],
-  ev0: ['M2 3h12v10H2zM2 8h12'], ev1: ['M2 4.5h7M6 8h8M2 11.5h4M9 11.5h5'], ev2: ['M13 8A5 5 0 1 1 3 8a5 5 0 0 1 10 0zM10 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0z'], ev3: ['M3 4V3h10v1M8 3v10M6 13h4'], ev4: ['M3 3v10M6.3 6v7M9.7 3v10M13 8v5'],
+  ev0: ['M2 3h12v10H2zM2 8h12'], ev1: ['M2 4.5h7M6 8h8M2 11.5h4M9 11.5h5'], ev2: ['M13 8A5 5 0 1 1 3 8a5 5 0 0 1 10 0zM10 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0z'], ev3: ['M3 4V3h10v1M8 3v10M6 13h4'], ev4: ['M3 3v10M6.3 6v7M9.7 3v10M13 8v5'], ev5: ['M3 3l10 10M13 3L3 13'],
   auto: ['M3 13c2-6 3-9 5-9s3 3 5 9']
 };
 function ic(name) {
@@ -91,7 +91,7 @@ addEventListener('keydown', undoMark, true);
 /* rows and view */
 function tlRows() {
   const rows = [{ kind: 'ruler', h: TLH.ruler, name: 'Time' }, { kind: 'over', h: TLH.over, name: 'Sound' }, { kind: 'parts', h: TLH.parts, name: 'Parts' }];
-  for (let L = 0; L < 5; L++) rows.push({ kind: 'ev', L, h: TLH.ev, name: LAYERS[L] });
+  for (let L = 0; L < 6; L++) rows.push({ kind: 'ev', L, h: TLH.ev, name: LAYERS[L] });
   for (const key in auto) rows.push({ kind: 'auto', key, h: TLH.auto, name: ANAME[key] });
   let y = 0; for (const r of rows) { r.y = y; y += r.h; }
   rows.H = y;
@@ -136,7 +136,7 @@ function clipRects(e, W) {
   return out;
 }
 function tlHeads(rows) {
-  const sig = rows.map(r => r.kind + (r.key || r.L || '')).join() + '|' + autoCut.base + autoCut.fx + autoCut.logo + autoCut.pil + '|' + Object.keys(auto).map(k => auto[k].length ? 1 : 0).join('');
+  const sig = rows.map(r => r.kind + (r.key || r.L || '')).join() + '|' + autoCut.base + autoCut.fx + autoCut.logo + autoCut.pil + autoCut.sym + '|' + Object.keys(auto).map(k => auto[k].length ? 1 : 0).join('');
   if (sig === tlHeadSig) return;
   tlHeadSig = sig;
   const box = $('tlHead'); box.textContent = '';
@@ -229,7 +229,7 @@ function drawTimeline() {
             if (x > W || x + w < 0) continue;
             q.fillStyle = user ? S.tint : '#1b1b22'; q.fillRect(x, r.y + 3, w, r.h - 8);
             if (!user) { q.strokeStyle = '#5a5968'; q.lineWidth = 1; q.strokeRect(x + 0.5, r.y + 3.5, w - 1, r.h - 9); }
-            if (w > 34) { q.save(); q.beginPath(); q.rect(x, r.y, w - 3, r.h); q.clip(); q.fillStyle = user ? '#000' : '#8d8b9e'; q.fillText(e.k === 13 ? e.txt : e.k === 17 ? e.fx.toUpperCase() + (e.pm === 'light' ? ' ●' : e.pm === 'frame' ? ' □' : '') : e.type.toUpperCase(), Math.max(x, 0) + 4, r.y + r.h / 2 - 0.5); q.restore(); }
+            if (w > 34) { q.save(); q.beginPath(); q.rect(x, r.y, w - 3, r.h); q.clip(); q.fillStyle = user ? '#000' : '#8d8b9e'; q.fillText(e.k === 13 ? e.txt : e.k === 18 ? (e.step ? 'SYMBOLS' : symName(e.sy).toUpperCase()) + (e.echo ? ' ×' + (e.echo + 1) : '') : e.k === 17 ? e.fx.toUpperCase() + (e.pm === 'light' ? ' ●' : e.pm === 'frame' ? ' □' : '') : e.type.toUpperCase(), Math.max(x, 0) + 4, r.y + r.h / 2 - 0.5); q.restore(); }
           }
         }
       } else {
@@ -327,6 +327,18 @@ function tlInsp() {
         const ol = document.createElement('input'); ol.type = 'checkbox'; ol.id = 'inOl'; ol.addEventListener('change', () => { tlSel.e.ol = ol.checked; tlChanged(); }); field('Outline', ol);
         field('Font', select('inFont', [['sans', 'Sans'], ['mono', 'Mono'], ['own', fontFile ? fontFile.name : 'Own font…']], el => { if (el.value === 'own' && !fontFile) { el.value = tlSel.e.font; $('ffile').click(); } else tlSel.e.font = el.value; }));
         const pick = document.createElement('button'); pick.type = 'button'; pick.textContent = 'Load font'; pick.addEventListener('click', () => $('ffile').click()); box.append(pick);
+      } else if (s.e.k === 18) {
+        const chk = (id, label, key) => { const el = document.createElement('input'); el.type = 'checkbox'; el.id = id; el.addEventListener('change', () => { tlSel.e[key] = el.checked; tlChanged(); }); field(label, el); };
+        field('Shape', select('inSy', symIds().map(i => [i, symName(i)]), el => { tlSel.e.sy = el.value; }));
+        chk('inStep', 'New one on every hit', 'step');
+        field('Echoes', input('inEcho', 'number', '1', el => { tlSel.e.echo = Math.max(0, Math.min(8, Math.round(Number(el.value)) || 0)); }));
+        field('Echo across', input('inEx', 'number', '1', el => { tlSel.e.ex = Math.max(-0.5, Math.min(0.5, (Number(el.value) || 0) / 100)); }));
+        field('up', input('inEy', 'number', '1', el => { tlSel.e.ey = -Math.max(-0.5, Math.min(0.5, (Number(el.value) || 0) / 100)); }));
+        field('Size', input('inSize', 'number', '1', el => { tlSel.e.size = Math.min(1.5, Math.max(0.05, (Number(el.value) || 60) / 100)); }));
+        field('Across', input('inX', 'number', '1', el => { tlSel.e.x = Math.min(1, Math.max(0, (Number(el.value) || 0) / 100)); }));
+        field('Height', input('inY', 'number', '1', el => { tlSel.e.y = Math.min(1, Math.max(0, (Number(el.value) || 0) / 100)); }));
+        chk('inEach', 'One in every pillar', 'each');
+        field('Pillar delay', input('inDl', 'number', '10', el => { tlSel.e.dl = Math.max(0, Math.min(4, (Number(el.value) || 0) / 100)); }));
       } else if (s.e.k === 17) {
         field('Pattern', select('inFx', PILLAR_FX.map(f => [f, PIL_NAMES[f]]), el => { tlSel.e.fx = el.value; }));
         field('It', select('inPm', [['mask', 'Shows the picture where it is on'], ['light', 'Lights whole pillars'], ['frame', 'Lights only the outline of pillars']], el => { tlSel.e.pm = el.value; }));
@@ -352,7 +364,8 @@ function tlInsp() {
   if (!s) return;
   if (s.kind === 'ev') {
     if ($('inAuto')) $('inAuto').textContent = 'Automatic ' + s.e.type + ' at ' + s.e.t.toFixed(2) + ' s, ' + tcAt(s.e.t) + '. Press Bake on the lane to edit the automatic clips, or Auto to switch them off.';
-    else { num('inType', s.e.type); num('inTxt', s.e.txt); num('inMode', s.e.mode); num('inSize', Math.round(s.e.size * 100)); num('inY', Math.round(s.e.y * 100)); num('inFont', s.e.font); num('inX', Math.round((s.e.x === undefined ? 0.5 : s.e.x) * 100)); num('inTrk', Math.round((s.e.trk || 0) * 100)); num('inOut', s.e.out || 'cut'); if ($('inCaps')) $('inCaps').checked = s.e.caps !== false; num('inFx', s.e.fx); num('inOn', s.e.on || 'all'); if ($('inOl')) $('inOl').checked = !!s.e.ol; num('inPm', s.e.pm); num('inSp', Math.round((s.e.sp || 1) * 100)); num('inWd', Math.round((s.e.wd || 0.25) * 100)); num('inStart', s.e.t.toFixed(2)); num('inLen', s.e.d.toFixed(2)); num('inSeed', s.e.seed); num('inFace', s.e.face | 0); $('inLen').disabled = s.e.k === 12; $('inTc').textContent = tcAt(s.e.t); }
+    else { num('inType', s.e.type); num('inTxt', s.e.txt); num('inMode', s.e.mode); num('inSize', Math.round(s.e.size * 100)); num('inY', Math.round(s.e.y * 100)); num('inFont', s.e.font); num('inX', Math.round((s.e.x === undefined ? 0.5 : s.e.x) * 100)); num('inTrk', Math.round((s.e.trk || 0) * 100)); num('inOut', s.e.out || 'cut'); if ($('inCaps')) $('inCaps').checked = s.e.caps !== false; if (s.e.k === 18) { num('inSy', s.e.sy); $('inStep').checked = !!s.e.step; num('inEcho', s.e.echo | 0); num('inEx', Math.round((s.e.ex || 0) * 100)); num('inEy', Math.round(-(s.e.ey || 0) * 100)); $('inEach').checked = !!s.e.each; num('inDl', Math.round((s.e.dl || 0) * 100)); $('inSy').disabled = !!s.e.step; }
+      num('inFx', s.e.fx); num('inOn', s.e.on || 'all'); if ($('inOl')) $('inOl').checked = !!s.e.ol; num('inPm', s.e.pm); num('inSp', Math.round((s.e.sp || 1) * 100)); num('inWd', Math.round((s.e.wd || 0.25) * 100)); num('inStart', s.e.t.toFixed(2)); num('inLen', s.e.d.toFixed(2)); num('inSeed', s.e.seed); num('inFace', s.e.face | 0); $('inLen').disabled = s.e.k === 12; $('inTc').textContent = tcAt(s.e.t); }
   } else { num('inStart', s.k.t.toFixed(2)); num('inVal', Math.round(aRange(s.key).back(s.k.v) * 100)); num('inCurve', s.k.c); $('inTc').textContent = tcAt(s.k.t); }
 }
 
