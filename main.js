@@ -256,6 +256,20 @@ ipcMain.handle('lib-pick-root', async () => {
   return r.filePaths[0];
 });
 ipcMain.handle('lib-reveal', async (event, name) => { const root = await libRoot(), dir = path.join(root, safeName(name)); await fsp.mkdir(root, { recursive: true }); shell.openPath(name && fs.existsSync(dir) ? dir : root); return true; });
+// The app's own running record, for whoever is helping: the latest state, and a line a write so there is a history.
+// It stays in the library folder. Nothing leaves the computer unless that folder is one the user syncs.
+ipcMain.handle('diag-write', async (event, json) => {
+  try {
+    const dir = path.join(await libRoot(), '_diagnostics'), text = String(json).slice(0, 200000);
+    await fsp.mkdir(dir, { recursive: true });
+    const o = JSON.parse(text); o.computer = { platform: process.platform + ' ' + process.arch, os: process.getSystemVersion ? process.getSystemVersion() : '', electron: process.versions.electron, cpus: require('os').cpus().length, cpu: (require('os').cpus()[0] || {}).model, memGB: Math.round(require('os').totalmem() / 1073741824) };
+    await fsp.writeFile(path.join(dir, 'latest.json'), JSON.stringify(o, null, 1), 'utf8');
+    const log = path.join(dir, 'history.log'), line = [o.at, 'build ' + o.build, o.frameMs + ' ms', o.preview, o.playing ? 'playing' : 'paused', (o.errors || []).length + ' errors'].join('  ') + '\n';
+    const st = await fsp.stat(log).catch(() => null);
+    if (st && st.size > 400000) await fsp.writeFile(log, line, 'utf8'); else await fsp.appendFile(log, line, 'utf8');
+    return true;
+  } catch (e) { return false; }
+});
 ipcMain.handle('lib-list', async () => {
   const root = await libRoot(), out = [];
   let names = [];
