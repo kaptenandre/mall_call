@@ -87,6 +87,11 @@ function ringFrame() {
   const t = document.createElement('button'); t.type = 'button'; t.textContent = 'Turn'; t.title = 'Walk slowly round the ring while it plays. A 3D film turns too.'; t.setAttribute('aria-pressed', 'false'); t.style.marginLeft = 'auto';
   t.addEventListener('click', () => { ringTurn = !ringTurn; t.setAttribute('aria-pressed', String(ringTurn)); });
   bar.append(t);
+  { // how large the preview is drawn, and a press to change it
+    const q = document.createElement('button'); q.type = 'button'; q.id = 'pqBtn'; q.title = 'How large the preview is drawn while playing. Paused frames and exports are always full size. Press to change: auto, full, half, quarter'; q.append('Preview');
+    q.addEventListener('click', () => { const o = ['auto', '1', '0.5', '0.25'], sel = $('pq'); sel.value = o[(o.indexOf(String(S.pq)) + 1) % 4]; sel.dispatchEvent(new Event('change')); });
+    bar.append(q);
+  }
   const st = document.createElement('button'); st.type = 'button'; st.id = 'statsBtn'; st.textContent = 'Stats'; st.title = 'Show how hard the computer is working: time per frame, where it goes, processor and memory'; st.setAttribute('aria-pressed', 'false');
   st.addEventListener('click', () => { S.stats = !S.stats; statsShow(); touch(); });
   bar.append(st);
