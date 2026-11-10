@@ -84,7 +84,12 @@ h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase
 .padfoot{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding-top:4px}
 .rail{display:flex;flex-direction:column;gap:14px;min-width:0}
 fieldset{margin:0;padding:14px;border:1px solid var(--rule);background:var(--panel);display:flex;flex-direction:column;gap:12px;min-width:0}
-legend{font:500 11px/1 var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--dim);padding:0 6px;margin-left:-6px}
+legend{font:500 11px/1 var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--dim);padding:0 6px;margin-left:-6px;display:flex;align-items:center;gap:2px}
+legend button{appearance:none;border:0;background:none;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;padding:3px 4px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;border-radius:0}
+legend button:hover,legend button[aria-pressed="true"]{color:var(--ink)}
+fieldset.shut{padding-top:4px;padding-bottom:6px}
+fieldset.shut>:not(legend){display:none!important}
+.partbar button.plain{padding:8px 10px;display:inline-flex;align-items:center;gap:8px}
 fieldset.layer{border-left:2px solid var(--signal)}
 .note{margin:0;color:var(--dim);font-size:12.5px}
 .row{display:grid;grid-template-columns:104px minmax(0,1fr);align-items:center;gap:10px}
@@ -130,7 +135,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 .bar{height:3px;background:var(--rule)}
 .bar i{display:block;height:100%;width:0;background:var(--signal)}
 [hidden]{display:none!important}
-@media (min-width:1500px){.app{grid-template-columns:minmax(0,1fr) 628px}.rail{display:grid;grid-template-columns:1fr 1fr;align-items:start}}
+@media (min-width:1500px){.app{grid-template-columns:minmax(0,1fr) 628px}.rail{display:block;columns:2;column-gap:14px}.rail fieldset{break-inside:avoid;margin-bottom:14px}}
 @media (max-width:880px){.app{grid-template-columns:minmax(0,1fr)}.stagecol{position:static}}
 @media (max-width:620px){.top,.app{padding-left:16px;padding-right:16px}.padrow{grid-template-columns:minmax(0,1fr)}}
 </style>
@@ -139,7 +144,6 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 <div class="smpte" id="smpte" role="timer" aria-label="Timecode at the playhead" title="Timecode at the playhead. Set the rate and the start under Timecode.">00:00:00:00</div>
 <header class="top">
   <h1>Mall Call <span id="build" style="color:var(--dim);font-weight:400"></span></h1>
-  <p>Three layers cut to your sound. A base layer for the rare big sweep or strobe, a glitch layer of lines, chases and debris, and the logo on top as a loader or popping through. Trigger any of it by hand.</p>
 </header>
 
 <main class="app">
@@ -380,7 +384,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 21;
+const BUILD = 22;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -747,7 +751,7 @@ async function addSymbol(file, known) {
     userSyms.push({ id: 'u' + n, name: file.name.replace(/\.[^.]+$/, ''), dataUrl, img, mask: buildMask(img, w, h, false) });
     symBank(); tlInspSig = ''; tlInsp();
     return true;
-  } catch (e) { $('symNote').textContent = 'That file could not be read as a picture. Try an SVG or a PNG.'; return false; }
+  } catch (e) { $('trigNote').textContent = 'That file could not be read as a picture. Try an SVG or a PNG.'; return false; }
 }
 // Symbol clips: the shape, its echoes trailing off behind it, struck by every hit. wide: clips that sit across the frame;
 // otherwise the ones that put a shape in every pillar.
@@ -1969,6 +1973,7 @@ $('symFile').addEventListener('change', e => { const f = e.target.files && e.tar
 symBank();
 /*__OUTPUT__*/
 /*__RING__*/
+/*__UI__*/
 /*__LIBRARY__*/
 
 // Used by the app's export check (MALLCALL_EXPORT_TEST): a short piece through the real export, flat or as the ring in 3D.

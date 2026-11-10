@@ -24,6 +24,7 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 - `src/timeline.js`: the timeline editor. Rows, clips, keys (`auto`, `PAt`, `setKey`), zoom, snapping, the inspector strip and undo. Inlined at `/*__TIMELINE__*/`.
 - `src/timecode.js`: SMPTE maths, MIDI timecode and LTC encode and decode, no DOM. Inlined at `/*__TIMECODE__*/`. Only the maths is used by the interface so far.
 - `src/ring.js`: the ring in 3D, plain WebGL with no library so it updates with the page. Inlined at `/*__RING__*/`.
+- `src/ui.js`: the interface pass over the rail: an icon on every section name, explaining notes folded behind an i, sections that shut (remembered). Notes with `aria-live` report things and stay in view. Inlined at `/*__UI__*/`. The user wants icons in place of text wherever a picture says it.
 - `src/library.js`: the project library in the rail. Inlined at `/*__LIBRARY__*/`.
 - `src/output.js`: the clean output window and the timecode settings. Inlined at `/*__OUTPUT__*/`.
 - `scripts/test.js`: node checks for the two files with no DOM.
