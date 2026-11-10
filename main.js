@@ -3,6 +3,7 @@ const { app, BrowserWindow, Menu, dialog, ipcMain, shell, screen } = require('el
 const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
+const { spawn, execFile } = require('child_process');
 const update = require('./update.js');
 
 const NAME = 'Mall Call';
@@ -55,12 +56,15 @@ function createWindow() {
 // one that finishes late waits for Reload With Update, so work in the window is never thrown away unasked.
 let updateWaiting = false;
 function loadPage() { updateWaiting = false; buildMenu(); if (win && !win.isDestroyed()) win.loadFile(update.pagePath()); }
-async function checkUpdates(reload) {
-  const got = await update.check();
-  if (got && reload) return loadPage();
+async function checkUpdates(reload, quick) {
+  const got = await update.check(quick);
+  if (got && reload === true) return loadPage();
   if (got) updateWaiting = true;
   buildMenu();
+  // found while running: tell the page. It saves the session and asks to be reloaded as soon as it is not rendering.
+  if (got && reload === 'ask') send('update-ready');
 }
+ipcMain.handle('reload-update', () => { if (updateWaiting) loadPage(); return true; });
 
 function buildMenu() {
   const mac = process.platform === 'darwin';
@@ -101,8 +105,8 @@ function buildMenu() {
       { label: 'Reload With Update', enabled: updateWaiting, click: () => loadPage() },
       { type: 'separator' },
       { label: 'Follow', enabled: false },
-      ...['off', ...new Set(['main', ...update.state().branches, update.state().channel].filter(b => b && b !== 'off'))].map(b => ({
-        label: b === 'off' ? 'Nothing (use the built-in version)' : b, type: 'radio', checked: update.state().channel === b,
+      ...['latest', 'off', ...new Set(['main', ...update.state().branches, update.state().channel].filter(b => b && b !== 'off' && b !== 'latest'))].map(b => ({
+        label: b === 'off' ? 'Nothing (use the built-in version)' : b === 'latest' ? 'The newest work, whichever branch' : b, type: 'radio', checked: update.state().channel === b,
         click: async () => { await update.setChannel(b); if (b === 'off') { buildMenu(); loadPage(); } else checkUpdates(true); }
       }))
     ] },
@@ -162,6 +166,59 @@ ipcMain.handle('output-place', (event, where) => {
   outWin.setFullScreen(false); outWin.setBounds(d.bounds); outWin.setFullScreen(true);
   return true;
 });
+// Export through ffmpeg: ProRes or HAP in a .mov, with the start timecode and the sound. The page sends raw frames.
+const FF_PATHS = ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg', 'ffmpeg'];
+let ffPath = null, ffJob = null;
+const ffFind = async () => {
+  for (const p of FF_PATHS) {
+    const out = await new Promise(res => execFile(p, ['-hide_banner', '-encoders'], { maxBuffer: 4e6 }, (err, so) => res(err ? null : String(so))));
+    if (out) { ffPath = p; return { ok: true, prores: /prores_ks/.test(out), hap: /\bhap\b/.test(out) }; }
+  }
+  return { ok: false, prores: false, hap: false };
+};
+ipcMain.handle('ff-check', () => ffFind());
+ipcMain.handle('ff-start', async (event, o) => {
+  if (ffJob) return { error: 'busy' };
+  if (!ffPath && !(await ffFind()).ok) return { error: 'noffmpeg' };
+  const W = o.w | 0, H = o.h | 0, fps = Number(o.fps), codec = String(o.codec);
+  if (!(W > 0 && H > 0 && fps > 0) || !/^\d\d:\d\d:\d\d:\d\d$/.test(String(o.timecode)) || !['prores', 'prores4444', 'hap'].includes(codec)) return { error: 'bad' };
+  let out = process.env.MALLCALL_FF_OUT || null;
+  if (!out) {
+    const r = await dialog.showSaveDialog(win, { defaultPath: path.join(lastDir || app.getPath('movies'), String(o.name)), filters: [{ name: 'QuickTime movie', extensions: ['mov'] }] });
+    if (r.canceled || !r.filePath) return { error: 'declined' };
+    out = r.filePath; lastDir = path.dirname(out);
+  }
+  const a = ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', W + 'x' + H, '-r', String(fps), '-i', 'pipe:0'];
+  const snd = o.audioPath && fs.existsSync(String(o.audioPath));
+  if (snd) a.push('-ss', String(Number(o.t0) || 0), '-t', String(Number(o.dur) || 1), '-i', String(o.audioPath));
+  a.push('-map', '0:v');
+  if (snd) a.push('-map', '1:a:0', '-c:a', 'pcm_s16le');
+  if (codec === 'hap') a.push('-vf', 'pad=ceil(iw/4)*4:ceil(ih/4)*4', '-c:v', 'hap', '-format', 'hap');     // HAP wants sizes in fours
+  else a.push('-c:v', 'prores_ks', '-profile:v', codec === 'prores4444' ? '4' : '3', '-pix_fmt', codec === 'prores4444' ? 'yuv444p10le' : 'yuv422p10le', '-vendor', 'apl0');
+  a.push('-timecode', String(o.timecode), '-shortest', out);
+  const proc = spawn(ffPath, a, { stdio: ['pipe', 'ignore', 'pipe'] });
+  const job = ffJob = { proc, out, log: '', done: null, snd };
+  proc.stderr.on('data', d => { job.log = (job.log + d).slice(-2000); });
+  proc.stdin.on('error', () => {});
+  job.done = new Promise(res => proc.on('close', code => res(code)));
+  proc.on('error', () => {});
+  return { ok: true, sound: snd };
+});
+ipcMain.handle('ff-frame', async (event, data) => {
+  const job = ffJob;
+  if (!job || job.proc.exitCode !== null) return false;
+  if (!job.proc.stdin.write(Buffer.from(data))) await new Promise(res => job.proc.stdin.once('drain', res));   // ffmpeg sets the pace
+  return true;
+});
+ipcMain.handle('ff-end', async (event, abort) => {
+  const job = ffJob;
+  if (!job) return { error: 'nojob' };
+  ffJob = null;
+  if (abort) { job.proc.kill('SIGKILL'); await job.done; fsp.unlink(job.out).catch(() => {}); return { error: 'aborted' }; }
+  job.proc.stdin.end();
+  const code = await job.done;
+  return code === 0 ? { ok: true, path: job.out } : { error: 'ffmpeg', log: job.log };
+});
 ipcMain.handle('autosave', async (event, json) => {
   await fsp.mkdir(path.dirname(autosaveFile()), { recursive: true });
   await fsp.writeFile(autosaveFile(), String(json), 'utf8');
@@ -205,6 +262,13 @@ app.whenReady().then(async () => {
     if (update.takeFresh()) updateWaiting = false;
   }
   buildMenu(); createWindow();
+  if (!SMOKE) setInterval(() => { if (update.state().channel !== 'off' && !updateWaiting) checkUpdates('ask', true); }, 180000);
+  if (process.env.MALLCALL_EXPORT_TEST) win.webContents.once('did-finish-load', async () => {      // e.g. MALLCALL_EXPORT_TEST=prores or hap:3d, with MALLCALL_FF_OUT=/path/out.mov
+    const [fmt, view] = process.env.MALLCALL_EXPORT_TEST.split(':');
+    await new Promise(r => setTimeout(r, 1500));
+    let res; try { res = await win.webContents.executeJavaScript('window.__exportTest(' + JSON.stringify(fmt) + ',' + JSON.stringify(view || '') + ')'); } catch (e) { res = { failed: String(e) }; }
+    console.log('EXPORT ' + JSON.stringify(res)); app.exit(0);
+  });
   if (process.env.MALLCALL_UPDATE_PROBE) win.webContents.once('did-finish-load', () => setTimeout(() => { console.log('PROBE ' + JSON.stringify({ url: win.webContents.getURL(), status: update.status(), state: update.state() })); app.exit(0); }, 600));
 });
 app.on('window-all-closed', () => app.quit());

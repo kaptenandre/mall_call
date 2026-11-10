@@ -172,6 +172,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 
     <fieldset>
       <legend>Sound</legend>
+      <input type="file" id="ffile" class="sr" accept=".ttf,.otf,.woff,.woff2" tabindex="-1">
       <input type="file" id="sfile" class="sr" accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.flac,.ogg,.mp4,.mov">
       <label class="drop" for="sfile"><strong>Drop audio or a video here</strong><span>or click to choose. It is read on this computer only.</span></label>
       <p class="note" id="soundNote" aria-live="polite">No sound yet. The piece runs as a seamless loop on a built-in half-second beat.</p>
@@ -268,6 +269,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
           <label><input type="radio" name="face" id="faceOut" value="0" checked><span>Edit outside</span></label>
           <label><input type="radio" name="face" id="faceIn" value="1"><span>Edit inside</span></label>
         </div>
+        <label class="row" for="gap"><span>Air between</span><input type="number" id="gap" min="0" max="20" step="0.1" value="0"></label>
         <label class="row" for="panelPx"><span>Panel pixels</span><input type="number" id="panelPx" min="0" max="512" value="0"></label>
         <label class="check" for="view3d"><input type="checkbox" id="view3d" checked> Show the ring in 3D</label>
         <label class="row" for="repeats"><span>Logos in ring</span><input type="number" id="repeats" min="1" max="12" value="3"></label>
@@ -318,9 +320,11 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
     <fieldset>
       <legend>Export</legend>
       <label class="row" for="range"><span>What</span><select id="range"><option value="all">Whole piece</option><option value="part">This part only</option></select></label>
-      <button type="button" class="primary" id="save">Save as MP4</button>
+      <label class="row" for="exFmt"><span>File</span><select id="exFmt"><option value="mp4">MP4, H.264</option></select></label>
+      <label class="row" for="exView" id="exViewRow" hidden><span>Picture</span><select id="exView"><option value="flat">The flat frame, for mapping</option><option value="3d">The ring in 3D, as it stands above</option></select></label>
+      <button type="button" class="primary" id="save">Save</button>
       <div class="bar" id="bar" hidden><i id="barFill"></i></div>
-      <p class="note" id="saveNote" aria-live="polite">Every frame is rendered once at full size. Without sound the file loops seamlessly; with sound it runs the length of the track and carries the audio.</p>
+      <p class="note" id="saveNote" aria-live="polite">Every frame is rendered once at full size. Without sound the file loops seamlessly; with sound it runs the length of the track and carries the audio. ProRes and HAP also carry the start timecode.</p>
     </fieldset>
   </aside>
 </main>
@@ -345,7 +349,7 @@ const S = { format: 'wide', shape: 3, panels: 30, repeats: 3, orbit: true, tint:
   logoMode: 0, loader: 0, presence: 0.5, eq: 1, logoStyle: 'dither', logoDen: 0.64,
   chaos: 0.6, trail: 0, mix: false, pshape: 0, pfill: 0.78, dither: 'bayer4', wob: 0.5, wobSize: 0.5, eqAmt: 0.6, ease: 0.85, range: 'all',
   tcRate: '25', tcStart: 0, tcShow: false, outFit: 'contain',
-  faces: 1, panelsIn: 30, panelPx: 0, view3d: true, inner: 'same' };
+  faces: 1, panelsIn: 30, panelPx: 0, view3d: true, inner: 'same', exFmt: 'mp4', exView: 'flat', gap: 0 };
 // The piece can be split into parts. Everything from the three layers down to the look is kept per part; S holds the part being edited.
 const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'glitch', 'lines', 'lineMode', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxAmt', 'fxStyle', 'fxDen',
   'logoMode', 'loader', 'presence', 'eq', 'logoStyle', 'logoDen', 'chaos', 'trail', 'mix', 'pshape', 'pfill', 'dither', 'wob', 'wobSize', 'eqAmt', 'ease', 'inner'];
@@ -629,6 +633,20 @@ function typeMask(text, font) {
   return m;
 }
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => typeMasks.clear());
+// A font of your own for Type clips: drop a TTF, OTF or WOFF file, or pick Own font on a clip. It is kept inside the project.
+let fontFile = null, fontFace = null;
+async function loadFont(file) {
+  try {
+    const face = new FontFace('MallCallOwn', await file.arrayBuffer());
+    await face.load();
+    if (fontFace) document.fonts.delete(fontFace);
+    document.fonts.add(face); fontFace = face;
+    TYPE_FONTS.own = '120px "MallCallOwn", "Instrument Sans", sans-serif';
+    fontFile = { name: file.name, dataUrl: await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(file); }) };
+    typeMasks.clear(); tlInspSig = ''; tlInsp(); syncUI();
+    return true;
+  } catch (e) { $('trigNote').textContent = 'That file could not be read as a font. Try a TTF, OTF or WOFF.'; return false; }
+}
 function typeField(W, H, o, st) {
   const disp = mkDisp(st, W, H, 1, o), items = [];
   for (let i = 0; i < st.tyN; i++) {
@@ -888,10 +906,15 @@ class Renderer {
       if (lc.width !== W || lc.height !== H) { lc.width = W; lc.height = H; }
       q.globalCompositeOperation = 'source-over'; q.globalAlpha = 1; q.fillStyle = '#000'; q.fillRect(0, 0, W, H);
       let f;
-      if (L === 0) f = baseField(W, H, st); else if (L === 1) f = fxField(W, H, t, o, st);
+      const Wf = o.gapN ? W * (1 + o.gap) : W;             // with air between the pillars the picture is as wide as the whole ring, air included
+      if (L === 0) f = baseField(Wf, H, st); else if (L === 1) f = fxField(Wf, H, t, o, st);
       else {                                               // the logo and any words share the top layer
-        const a = st.lv ? logoField(W, H, t, o, st) : null, b = st.tyN ? typeField(W, H, o, st) : null;
+        const a = st.lv ? logoField(Wf, H, t, o, st) : null, b = st.tyN ? typeField(Wf, H, o, st) : null;
         f = a && b ? { M: (u, v) => Math.max(a.M(u, v), b.M(u, v)), B: (u, v) => Math.max(a.B(u, v), b.B(u, v)) } : a || b;
+      }
+      if (o.gapN) {                                        // each pillar is a window onto its own stretch of that picture
+        const N = o.gapN, k = 1 / (1 + o.gap), off = (1 - k) / 2, a = f, win = u => { const x = u * N, i = Math.floor(x); return (i + off + (x - i) * k) / N; };
+        f = { M: (u, v) => a.M(win(u), v), B: (u, v) => a.B(win(u), v) };
       }
       DRAW[st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style](q, W, H, t, o, f.M, f.B);
       g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1; g.drawImage(lc, 0, 0);
@@ -973,6 +996,7 @@ function sizeStage() {
 function renderOne(R, st, P, tf, fps, fc) {
   const tw = warp(tf, P), LO = layerOpts(fps, P), mo = motion(P, tw);
   LO[1].tw = tw; mo.face = fc;
+  if (S.format === 'ring' && S.gap > 0) for (const o of LO) { o.gap = S.gap; o.gapN = fc ? S.panelsIn : S.panels; }
   stateAt(score, tf, mo, st);
   R.draw(phase(tw), LO, st);
 }
@@ -1051,8 +1075,8 @@ function syncUI() {
   $('hudRes').textContent = W + ' × ' + H + ' · ' + S.fps + ' fps';
   $('fmtNote').textContent = S.format === 'wide' ? 'One 16:9 screen, ' + W + ' × ' + H + '.'
     : S.format === 'panel' ? 'One tall panel, 1 × ' + S.shape + ', ' + W + ' × ' + H + '.'
-    : (S.faces === 2 ? 'Two strips in one frame, ' + W + ' × ' + H + ': the ' + S.panels + ' outside panels on top, the ' + S.panelsIn + ' inside panels under them.' : 'All ' + S.panels + ' panels side by side as one strip, ' + W + ' × ' + H + '.') + ' Each panel is 1 × ' + S.shape + ', ' + pw + ' × ' + (pw * S.shape) + ' pixels. Panel pixels 0 picks a size by itself. The thin lines mark the panel edges and are not in the export. What the inside shows is set per part.';
-  { const two = S.format === 'ring' && S.faces === 2; $('panelsInRow').hidden = $('innerRow').hidden = !two; $('faceSeg').hidden = !two || S.inner !== 'own'; if (face && (!two || S.inner !== 'own')) face = 0; setRadio('face', face); $('inner').value = S.inner; $('ring3d').hidden = !(S.format === 'ring' && S.view3d); }
+    : (S.faces === 2 ? 'Two strips in one frame, ' + W + ' × ' + H + ': the ' + S.panels + ' outside panels on top, the ' + S.panelsIn + ' inside panels under them.' : 'All ' + S.panels + ' panels side by side as one strip, ' + W + ' × ' + H + '.') + ' Each panel is 1 × ' + S.shape + ', ' + pw + ' × ' + (pw * S.shape) + ' pixels. Air between is the gap from one pillar to the next, counted in pillar widths: with it set, the picture runs behind the pillars and each one shows its own stretch. Panel pixels 0 picks a size by itself. The thin lines mark the panel edges and are not in the export. What the inside shows is set per part.';
+  { const two = S.format === 'ring' && S.faces === 2; $('panelsInRow').hidden = $('innerRow').hidden = !two; $('faceSeg').hidden = !two || S.inner !== 'own'; if (face && (!two || S.inner !== 'own')) face = 0; setRadio('face', face); $('inner').value = S.inner; $('ring3d').hidden = !(S.format === 'ring' && S.view3d); $('exViewRow').hidden = S.format !== 'ring'; }
   $('modeNote').textContent = S.logoMode === 0 ? 'The logo builds like a loading screen with a progress bar, lands on a hit, holds, then drops out.'
     : S.logoMode === 1 ? 'The logo stays out and cuts in on some of the hits.' : 'The logo is up the whole time and cuts between poses on the hits.';
   $('loader').disabled = S.logoMode !== 0;
@@ -1214,9 +1238,11 @@ async function loadSound(file, quiet, knownPath) {
   }
 }
 function dropFile(f) {
+  if (/\.(ttf|otf|woff2?)$/i.test(f.name)) { loadFont(f); return; }
   if (/^(audio|video)\//.test(f.type) || /\.(mp3|wav|m4a|aac|flac|ogg|mp4|mov|webm)$/i.test(f.name)) loadSound(f); else loadLogo(f);
 }
 $('file').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) loadLogo(f); e.target.value = ''; });
+$('ffile').addEventListener('change', async e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f && (await loadFont(f)) && tlSel && tlSel.kind === 'ev' && tlSel.e.k === 13) { tlSel.e.font = 'own'; tlChanged(); tlInsp(); } });
 $('sfile').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) loadSound(f); e.target.value = ''; });
 $('soundOff').addEventListener('click', () => {
   audio.pause(); audio.removeAttribute('src'); if (soundUrl) { URL.revokeObjectURL(soundUrl); soundUrl = null; }
@@ -1279,6 +1305,7 @@ $('orbit').addEventListener('change', e => { S.orbit = e.target.checked; syncUI(
 $('faces').addEventListener('change', e => { if (face) setFace(0); S.faces = Number(e.target.value); pscale = 1; slowFrames = 0; syncUI(); });
 $('panelsIn').addEventListener('change', e => { S.panelsIn = clampInt(e.target, 4, 240, 30); e.target.value = S.panelsIn; syncUI(); });
 $('panelPx').addEventListener('change', e => { const n = clampInt(e.target, 0, 512, 0); S.panelPx = n < 8 ? 0 : n; e.target.value = S.panelPx; syncUI(); });
+$('gap').addEventListener('change', e => { const n = Number(e.target.value); S.gap = Number.isFinite(n) ? Math.min(20, Math.max(0, Math.round(n * 100) / 100)) : 0; e.target.value = S.gap; syncUI(); });
 $('view3d').addEventListener('change', e => { S.view3d = e.target.checked; syncUI(); });
 $('inner').addEventListener('change', e => { const v = e.target.value; if (face) setFace(0); S.inner = v; savePart(); if (v === 'own' && !parts[sel].Q) parts[sel].Q = Object.assign({}, parts[sel].P); syncUI(); });
 radios('face', v => setFace(Number(v)));
@@ -1297,6 +1324,22 @@ $('randAll').addEventListener('click', () => {
 });
 $('loop').addEventListener('change', e => { S.loop = Number(e.target.value); if (!track) { userEv = []; auto = {}; tlSel = null; resetParts(); rebuildScore(); } syncUI(); tlInsp(); });
 $('range').addEventListener('change', e => { S.range = e.target.value; });
+$('exFmt').addEventListener('change', e => { S.exFmt = e.target.value; touch(); });
+$('exView').addEventListener('change', e => { S.exView = e.target.value; touch(); });
+if (window.nativeApp && window.nativeApp.ffCheck) window.nativeApp.ffCheck().then(f => {
+  const add = (v, n) => { const o = document.createElement('option'); o.value = v; o.textContent = n; $('exFmt').append(o); };
+  if (f && f.prores) { add('prores', 'ProRes 422 HQ, .mov'); add('prores4444', 'ProRes 4444, .mov'); }
+  if (f && f.hap) add('hap', 'HAP, .mov');
+  $('exFmt').value = [...$('exFmt').options].some(o => o.value === S.exFmt) ? S.exFmt : 'mp4';
+}, () => {});
+// the app found a newer page while running: save the session and reload, unless a render is going
+let updatePending = false;
+async function updateReload() {
+  if (!updatePending || busy || !window.nativeApp || !window.nativeApp.reloadUpdate) return;
+  updatePending = false;
+  try { await window.nativeApp.autosave(JSON.stringify(getProject())); } catch (e) {}
+  window.nativeApp.reloadUpdate();
+}
 function resetParts() { face = 0; S.inner = 'same'; parts = [{ t: 0, P: snap() }]; sel = 0; loopPart = false; $('loopPart').setAttribute('aria-pressed', 'false'); }
 const partSay = s => { partsSig = ''; renderParts(); $('partNote').textContent = s; };
 $('split').addEventListener('click', () => splitAt(tau));
@@ -1313,7 +1356,7 @@ $('play').addEventListener('click', () => setPlaying(!S.playing));
 /* ---------- export ---------- */
 let rendered = null, dlPromise = null, stop = false;
 // A finished render is kept and offered again until something that changes the picture or the sound changes.
-const renderKey = () => JSON.stringify([Object.assign({}, S, { playing: 0 }), parts, S.range === 'part' ? sel : -1, maskN, track ? track.name + track.ab.length : 0, userEv.map(e => e.type + e.t.toFixed(3) + e.seed + e.d.toFixed(3) + JSON.stringify(evMore(e))), auto, autoCut]);
+const renderKey = () => JSON.stringify([Object.assign({}, S, { playing: 0 }), fontFile ? fontFile.name : 0, S.exView === '3d' ? [ringCam.yaw, ringCam.pitch, ringCam.dist] : 0, parts, S.range === 'part' ? sel : -1, maskN, track ? track.name + track.ab.length : 0, userEv.map(e => e.type + e.t.toFixed(3) + e.seed + e.d.toFixed(3) + JSON.stringify(evMore(e))), auto, autoCut]);
 // Resolves to the save capability, null when this view cannot save, or undefined when the page runs outside Claude.
 function getDownloads() {
   if (window.nativeApp) return Promise.resolve({ save: async ({ filename, data }) => {      // the Mac app writes straight to disk through a save dialog
@@ -1343,13 +1386,14 @@ async function pickAudio(ab) {
 }
 async function renderFile() {
   const whole = S.range !== 'part' || parts.length === 1, t0 = whole ? 0 : parts[sel].t, t1 = whole ? score.D : partEnd(sel);
-  const { W, H } = dims(), fps = S.fps, D = score.D, N = Math.max(1, Math.round((t1 - t0) * fps));
+  const { W: FW, H: FH } = dims(), fps = S.fps, D = score.D, N = Math.max(1, Math.round((t1 - t0) * fps));
+  const src = exSource(FW, FH), W = src.W, H = src.H;
   const bitrate = Math.round(Math.min(45e6, Math.max(4e6, W * H * fps * 0.18)));
   const pick = await pickCodec(W, H, fps, bitrate);
   if (!pick) throw new Error('codec');
   const snd = track ? await pickAudio(track.ab) : null;
   if (document.fonts && document.fonts.ready) await document.fonts.ready;
-  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const cv = src.cv;
   const r = S.format === 'ring' && S.faces === 2 ? null : new Renderer(cv), st = newState(), sc = score;
   const mo = { target: new Mp4Muxer.ArrayBufferTarget(), video: { codec: pick.mux, width: W, height: H, frameRate: fps }, fastStart: 'in-memory', firstTimestampBehavior: 'offset' };
   if (snd) mo.audio = { codec: snd.mux, numberOfChannels: snd.ch, sampleRate: track.ab.sampleRate };
@@ -1383,7 +1427,7 @@ async function renderFile() {
       if (failed) throw failed;
       if (stop) throw new Error('stop');
       const tf = one(i);
-      const vf = new VideoFrame(cv, { timestamp: Math.round(i * us), duration: Math.round(us) });
+      const vf = new VideoFrame(src.shot(), { timestamp: Math.round(i * us), duration: Math.round(us) });
       enc.encode(vf, { keyFrame: i % fps === 0 });
       vf.close();
       if (aenc) feed(tf + 0.5);
@@ -1403,7 +1447,47 @@ async function renderFile() {
   if (failed) throw failed;
   muxer.finalize();
   return { blob: new Blob([muxer.target.buffer], { type: 'video/mp4' }), silent: !!track && !snd, opus: !!snd && snd.mux === 'opus',
-    name: (track ? 'track' : 'loop') + (whole ? '' : '-part' + (sel + 1)) + '-seed' + S.seed + '-' + S.format + '-' + W + 'x' + H + '-' + Math.round(t1 - t0) + 's-' + fps + 'fps.mp4' };
+    name: exName(whole, W, H, t1 - t0, fps, src.v3) + '.mp4' };
+}
+const exName = (whole, W, H, len, fps, v3) => (track ? 'track' : 'loop') + (whole ? '' : '-part' + (sel + 1)) + '-seed' + S.seed + '-' + S.format + (v3 ? '-3d' : '') + '-' + W + 'x' + H + '-' + Math.round(len) + 's-' + fps + 'fps';
+// What an export films: the flat frame, or the ring in 3D as it stands in the preview. cv is always the flat frame.
+function exSource(FW, FH) {
+  const cv = document.createElement('canvas'); cv.width = FW; cv.height = FH;
+  if (!(S.format === 'ring' && S.exView === '3d')) return { cv, W: FW, H: FH, v3: false, shot: () => cv };
+  const c3 = document.createElement('canvas'); c3.width = 1920; c3.height = 1080;
+  const r3 = ringMake(c3);
+  if (!r3) throw new Error('gl');
+  return { cv, W: 1920, H: 1080, v3: true, shot: () => { ringDraw(r3, c3, cv, 1920, 1080); return c3; } };
+}
+// ProRes or HAP through ffmpeg in the Mac app: every frame goes over as raw pixels, the app adds the sound and the start timecode.
+async function renderMov() {
+  const whole = S.range !== 'part' || parts.length === 1, t0 = whole ? 0 : parts[sel].t, t1 = whole ? score.D : partEnd(sel);
+  const { W: FW, H: FH } = dims(), fps = S.fps, D = score.D, N = Math.max(1, Math.round((t1 - t0) * fps));
+  const src = exSource(FW, FH), W = src.W, H = src.H, cv = src.cv, sc = score;
+  if (document.fonts && document.fonts.ready) await document.fonts.ready;
+  const two = S.format === 'ring' && S.faces === 2, rig = two ? mkRig(cv) : null, r = two ? null : new Renderer(cv), st = newState();
+  const one = i => { const tf = t0 + i / fps; if (two) drawFaces(rig, tf, fps); else renderOne(r, st, PAt(tf, 0), tf, fps); };
+  // the timecode of the first frame, counted at the file's own frame rate
+  const R = TC_RATES[S.tcRate], c = framesToTc(S.tcStart + t0 * R.real + 1e-6, R), tc = tc2(c.h) + ':' + tc2(c.m) + ':' + tc2(c.s) + ':' + tc2(Math.min(fps - 1, Math.floor(c.f * fps / R.fps)));
+  const name = exName(whole, W, H, t1 - t0, fps, src.v3) + '-' + S.exFmt + '.mov';
+  const go = await window.nativeApp.ffStart({ w: W, h: H, fps, codec: S.exFmt, timecode: tc, audioPath: track ? soundPath : '', t0, dur: t1 - t0, name });
+  if (!go || !go.ok) throw new Error(go && go.error || 'ffmpeg');
+  const rb = src.v3 ? document.createElement('canvas') : cv, rg = rb.getContext('2d', src.v3 ? { willReadFrequently: true } : undefined);
+  if (src.v3) { rb.width = W; rb.height = H; }
+  sc._i = 0; sc._k = 0;
+  try {
+    if (sc.cyclic && whole && PAt(D - 0.01).trail > 0.01) for (let i = Math.max(0, N - Math.round(fps * 0.8)); i < N; i++) one(i);
+    for (let i = 0; i < N; i++) {
+      if (stop) throw new Error('stop');
+      one(i);
+      if (src.v3) rg.drawImage(src.shot(), 0, 0);
+      if (!(await window.nativeApp.ffFrame(rg.getImageData(0, 0, W, H).data.buffer))) throw new Error('ffmpeg');
+      if (i % 3 === 0) { $('barFill').style.width = (100 * (i + 1) / N).toFixed(1) + '%'; say('Rendering frame ' + (i + 1) + ' of ' + N + '.'); await new Promise(res => setTimeout(res, 0)); }
+    }
+  } catch (e) { await window.nativeApp.ffEnd(true); throw e; }
+  const end = await window.nativeApp.ffEnd(false);
+  if (!end || !end.ok) throw new Error('ffmpeg');
+  return { path: end.path, tc, sound: go.sound };
 }
 async function offer(file, downloads) {
   const tail = file.silent ? ' This browser could not encode the sound, so the file is picture only.'
@@ -1429,6 +1513,14 @@ $('save').addEventListener('click', async () => {
     const downloads = await getDownloads();
     if (downloads === null) { say('Saving files is not available in this view. Open the page on claude.ai in Chrome.'); return; }
     if (typeof VideoEncoder === 'undefined' || typeof VideoFrame === 'undefined' || !window.Mp4Muxer) { say('Video encoding is not available here. In a browser, open the page in Chrome.'); return; }
+    if (S.exFmt !== 'mp4' && window.nativeApp && window.nativeApp.ffStart) {
+      const wasPlaying = S.playing;
+      if (track) audio.pause();
+      busy = true; stop = false; btn.textContent = 'Stop rendering'; $('bar').hidden = false; $('barFill').style.width = '0%';
+      try { const f = await renderMov(); say('Saved ' + f.path + '. It starts at timecode ' + f.tc + (track && !f.sound ? '. The sound file was not found, so the film is silent.' : '.')); }
+      finally { busy = false; btn.textContent = 'Save'; $('bar').hidden = true; last = performance.now(); if (track && wasPlaying) setPlaying(true); updateReload(); }
+      return;
+    }
     const key = renderKey();
     if (!rendered || rendered.key !== key) {
       rendered = null;
@@ -1436,27 +1528,27 @@ $('save').addEventListener('click', async () => {
       if (track) audio.pause();
       busy = true; stop = false; btn.textContent = 'Stop rendering'; $('bar').hidden = false; $('barFill').style.width = '0%';
       try { rendered = await renderFile(); rendered.key = key; }
-      finally { busy = false; btn.textContent = 'Save as MP4'; $('bar').hidden = true; last = performance.now(); if (track && wasPlaying) setPlaying(true); }
+      finally { busy = false; btn.textContent = 'Save'; $('bar').hidden = true; last = performance.now(); if (track && wasPlaying) setPlaying(true); updateReload(); }
     }
     await offer(rendered, downloads);
   } catch (e) {
     const m = e && e.message;
-    say(m === 'stop' ? 'Render stopped.' : m === 'codec' ? 'This browser has no video encoder for this size. Try Chrome, or a smaller format.' : 'The render stopped before it finished. Try again, or try a shorter piece.');
+    say(m === 'stop' ? 'Render stopped.' : m === 'declined' ? 'Not saved.' : m === 'noffmpeg' ? 'ffmpeg was not found on this computer. Install it with Homebrew: brew install ffmpeg.' : m === 'gl' ? 'The 3D view could not be drawn for the film.' : m === 'ffmpeg' ? 'ffmpeg stopped before the film was finished.' : m === 'codec' ? 'This browser has no video encoder for this size. Try Chrome, or a smaller format.' : 'The render stopped before it finished. Try again, or try a shorter piece.');
   }
 });
 
 /* ---------- project files (Mac app) ---------- */
-const GLOBAL_KEYS = ['format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d'];
+const GLOBAL_KEYS = ['format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap'];
 let loadingProject = false, saveTimer = 0;
 function getProject() {
   savePart();
   const g = {}; for (const k of GLOBAL_KEYS) g[k] = S[k];
-  return { v: 1, app: 'mall-call', S: g, parts: parts.map(p => (p.Q ? { t: p.t, P: p.P, Q: p.Q } : { t: p.t, P: p.P })), userEv: userEv.map(e => Object.assign({ t: e.t, type: e.type, seed: e.seed, d: e.d }, evMore(e))), auto, autoCut: Object.assign({}, autoCut), logo: logoFile, soundPath: soundPath || null };
+  return { v: 1, app: 'mall-call', S: g, parts: parts.map(p => (p.Q ? { t: p.t, P: p.P, Q: p.Q } : { t: p.t, P: p.P })), userEv: userEv.map(e => Object.assign({ t: e.t, type: e.type, seed: e.seed, d: e.d }, evMore(e))), auto, autoCut: Object.assign({}, autoCut), logo: logoFile, font: fontFile, soundPath: soundPath || null };
 }
 function pushGlobals() {
   setRadio('format', S.format);
-  for (const id of ['shape', 'panels', 'repeats', 'loop', 'fps', 'seed', 'range', 'faces', 'panelsIn', 'panelPx']) $(id).value = S[id];
-  $('view3d').checked = S.view3d;
+  for (const id of ['shape', 'panels', 'repeats', 'loop', 'fps', 'seed', 'range', 'faces', 'panelsIn', 'panelPx', 'gap']) $(id).value = S[id];
+  $('view3d').checked = S.view3d; $('exView').value = S.exView; if ([...$('exFmt').options].some(o => o.value === S.exFmt)) $('exFmt').value = S.exFmt;
   $('orbit').checked = S.orbit; $('invert').checked = S.invert; $('outFit').value = S.outFit;
   if (!TC_RATES[S.tcRate]) S.tcRate = '25';
   tcPush(); outSync();
@@ -1469,6 +1561,7 @@ async function applyProject(pj) {
     for (const k of GLOBAL_KEYS) if (k in pj.S) S[k] = pj.S[k];
     pushGlobals(); undoReset(); tlSel = null; auto = {}; autoCut.base = autoCut.fx = autoCut.logo = true;
     if (!pj.soundPath && track) { audio.removeAttribute('src'); track = null; soundPath = ''; resetParts(); }
+    if (pj.font && pj.font.dataUrl) { const blob = await (await fetch(pj.font.dataUrl)).blob(); await loadFont(new File([blob], pj.font.name)); }
     if (pj.logo && pj.logo.dataUrl) { const blob = await (await fetch(pj.logo.dataUrl)).blob(); await loadLogo(new File([blob], pj.logo.name, { type: blob.type })); }
     let missing = '';
     if (pj.soundPath && window.nativeApp) {
@@ -1479,7 +1572,7 @@ async function applyProject(pj) {
     if (!missing) {
       parts = pj.parts.filter(p => p.t < score.D).map(p => { const o = { t: p.t, P: Object.assign(snap(), { fxAmt: 0, lineMode: 0, inner: 'same' }, p.P) }; if (p.Q) o.Q = Object.assign({}, o.P, p.Q, { inner: 'own' }); return o; });      // a project from before Auto clips keeps its cut
       if (!parts.length || parts[0].t !== 0) parts.unshift({ t: 0, P: snap() });
-      userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d, e.type === 'type' ? { txt: String(e.txt || ''), mode: String(e.mode || 'slam'), size: Number(e.size) || 0.5, y: Number(e.y) || 0.5, font: e.font === 'mono' ? 'mono' : 'sans', face: e.face | 0 } : { face: e.face | 0 }));
+      userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d, e.type === 'type' ? { txt: String(e.txt || ''), mode: String(e.mode || 'slam'), size: Number(e.size) || 0.5, y: Number(e.y) || 0.5, font: ['mono', 'own'].includes(e.font) ? e.font : 'sans', face: e.face | 0 } : { face: e.face | 0 }));
       for (const [k] of AKEYS) if (pj.auto && Array.isArray(pj.auto[k])) auto[k] = pj.auto[k].filter(q => q.t <= score.D).map(q => ({ t: Number(q.t) || 0, v: Number(q.v) || 0, c: q.c | 0 })).sort((a, b) => a.t - b.t);
       if (pj.autoCut) { autoCut.base = pj.autoCut.base !== false; autoCut.fx = pj.autoCut.fx !== false; autoCut.logo = pj.autoCut.logo !== false; }
     } else $('soundNote').textContent = 'The sound for this project was not found at ' + missing + '. Drop it in again and reopen the project.';
@@ -1514,6 +1607,7 @@ if (window.nativeApp) {
     else if (cmd === 'new-variation') $('shuffle').click();
     else if (cmd === 'undo' || cmd === 'redo') { const a = document.activeElement; if (a && a.tagName === 'INPUT' && (a.type === 'text' || a.type === 'number')) document.execCommand(cmd); else if (cmd === 'undo') undo(); else redo(); }
     else if (cmd === 'output') $('outOpen').click();
+    else if (cmd === 'update-ready') { updatePending = true; updateReload(); }
   });
 }
 // Used by the app's own start-up check: one frame, the encoders, and a project round trip.
@@ -1564,6 +1658,19 @@ window.__selfTest = async () => {
 
 /*__OUTPUT__*/
 /*__RING__*/
+
+// Used by the app's export check (MALLCALL_EXPORT_TEST): a short piece through the real export, flat or as the ring in 3D.
+window.__exportTest = async (fmt, ringView) => {
+  const set = (id, v) => { $(id).value = v; $(id).dispatchEvent(new Event('change')); };
+  set('loop', '4'); $('tcStart').value = '01:00:00:00'; $('tcStart').dispatchEvent(new Event('change'));
+  if (ringView) { $('fmtRing').checked = true; $('fmtRing').dispatchEvent(new Event('change')); set('faces', '2'); set('panelsIn', '24'); set('exView', ringView); }
+  if (![...$('exFmt').options].some(o => o.value === fmt)) return { failed: 'format ' + fmt + ' is not offered' };
+  set('exFmt', fmt);
+  $('save').click();
+  await new Promise(res => setTimeout(res, 300));
+  while (busy) await new Promise(res => setTimeout(res, 100));
+  return { note: $('saveNote').textContent, size: dims() };
+};
 
 /* ---------- start ---------- */
 logoSrc = placeholder();

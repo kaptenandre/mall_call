@@ -15,7 +15,7 @@ const bundled = path.join(__dirname, 'app');
 const liveDir = () => path.join(app.getPath('userData'), 'live');
 const stateFile = () => path.join(app.getPath('userData'), 'update.json');
 
-let state = { channel: null, sha: '', built: '', branches: ['main'], shell: false };
+let state = { channel: null, sha: '', built: '', branches: ['main'], shell: false, latest: '' };
 let status = 'Not checked yet', fresh = false;
 
 async function get(url, accept) {
@@ -26,7 +26,7 @@ async function get(url, accept) {
 const builtSha = () => { try { return JSON.parse(fs.readFileSync(path.join(bundled, 'build.json'), 'utf8')).sha || ''; } catch (e) { return ''; } };
 async function load() {
   try { Object.assign(state, JSON.parse(await fsp.readFile(stateFile(), 'utf8'))); } catch (e) {}
-  if (state.channel === null) state.channel = app.isPackaged ? 'main' : 'off';      // run from source and you already have the latest
+  if (state.channel === null) state.channel = app.isPackaged ? 'latest' : 'off';    // run from source and you already have the latest
   // a copy fetched for an older build of the app is dropped when the app itself is rebuilt
   if (state.built !== builtSha()) { state.sha = ''; state.built = builtSha(); state.shell = false; }
 }
@@ -37,14 +37,27 @@ function pagePath() {
   const live = path.join(liveDir(), 'index.html');
   return state.channel !== 'off' && state.sha && fs.existsSync(live) ? live : path.join(bundled, 'index.html');
 }
-async function check() {
+// 'latest' follows whichever branch was worked on most recently, so new work arrives without choosing anything.
+// Looking that up costs a few requests, so it is done at launch and from the menu, not on the timer.
+async function newestBranch() {
+  const list = JSON.parse(await get(API + '/branches?per_page=100')).filter(x => /^[\w./-]+$/.test(String(x.name)) && x.commit && /^[0-9a-f]{40}$/.test(x.commit.sha));
+  if (!list.length) throw new Error('404 no branches');
+  state.branches = list.map(x => x.name);
+  let best = null, when = 0;
+  await Promise.all(list.slice(0, 12).map(async x => { try { const t = Date.parse(JSON.parse(await get(API + '/commits/' + x.commit.sha)).commit.committer.date) || 0; if (t > when) { when = t; best = x.name; } } catch (e) {} }));
+  if (best) state.latest = best;
+  return state.latest || 'main';
+}
+async function check(quick) {
   if (state.channel === 'off') { status = 'Updates are off'; return false; }
+  let branch = state.channel;
   try {
-    const sha = (await get(API + '/commits/' + state.channel, 'application/vnd.github.sha')).trim();
-    if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error('no commit for ' + state.channel);
-    get(API + '/branches?per_page=100').then(t => { const b = JSON.parse(t).map(x => String(x.name)).filter(n => /^[\w./-]+$/.test(n)); if (b.length) { state.branches = b; save(); } }).catch(() => {});
+    if (branch === 'latest') branch = quick && state.latest ? state.latest : await newestBranch();
+    else if (!quick) get(API + '/branches?per_page=100').then(t => { const b = JSON.parse(t).map(x => String(x.name)).filter(n => /^[\w./-]+$/.test(n)); if (b.length) { state.branches = b; save(); } }).catch(() => {});
+    const sha = (await get(API + '/commits/' + branch, 'application/vnd.github.sha')).trim();
+    if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error('no commit for ' + branch);
     const short = sha.slice(0, 7);
-    if (sha === state.sha || (!state.sha && sha === builtSha())) { status = 'Up to date with ' + state.channel + ' (' + short + ')'; return false; }
+    if (sha === state.sha || (!state.sha && sha === builtSha())) { status = 'Up to date with ' + branch + ' (' + short + ')'; return false; }
     const at = RAW + '/' + sha + '/';
     const m = A.sources(await get(at + A.MANIFEST)), files = {};
     await Promise.all([m.page, ...m.parts.map(x => x[1])].map(async f => { files[f] = await get(at + f); }));
@@ -57,11 +70,11 @@ async function check() {
     await fsp.writeFile(path.join(dir, 'index.html.tmp'), page, 'utf8');
     await fsp.rename(path.join(dir, 'index.html.tmp'), path.join(dir, 'index.html'));
     state.sha = sha; state.shell = shell; fresh = true;
-    status = 'Updated to ' + state.channel + ' (' + short + ')' + (shell ? '. The app itself has changed too: pull and run npm run dist' : '');
+    status = 'Updated to ' + branch + ' (' + short + ')' + (shell ? '. The app itself has changed too: pull and run npm run dist' : '');
     await save();
     return true;
   } catch (e) {
-    status = /^(403|429)/.test(e.message) ? 'GitHub is limiting requests. Try again in a while' : /^404/.test(e.message) ? 'Nothing found for ' + state.channel : /marker|manifest|CDN/.test(e.message) ? 'This update needs a newer app: pull and run npm run dist' : 'Could not reach GitHub';
+    status = /^(403|429)/.test(e.message) ? 'GitHub is limiting requests. Try again in a while' : /^404/.test(e.message) ? 'Nothing found for ' + branch : /marker|manifest|CDN/.test(e.message) ? 'This update needs a newer app: pull and run npm run dist' : 'Could not reach GitHub';
     return false;
   }
 }
