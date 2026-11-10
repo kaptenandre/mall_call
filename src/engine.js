@@ -449,7 +449,8 @@ function newState() {
     inv: false, black: false, crush: 0, rods: 0, hide: false, seed: 0, nSl: 0, sl, eq: 0, eqv: new Float32Array(NB), eqLay: 0,
     tx: 1, ty: 1, dens: 1, va: 0.3, vb: 0.7, tearA: 0, tearF: 3, tearP: 0, dropA: 0, dropF: 4, dropP: 0, gI: 0, gx: 0, gy: 0,
     bLo: 0, bMid: 0, bHi: 0, loK: 0, miK: 0, hiK: 0, fbx: 0, fby: 0,
-    hl: new Float32Array(4), vl: new Float32Array(4), hI: new Float32Array(4), vI: new Float32Array(4), lines: false,
+    hl: new Float32Array(4), vl: new Float32Array(4), hI: new Float32Array(4), vI: new Float32Array(4), lines: false, pulseLines: false,
+    pn: 0, pHz: false, pp: new Float32Array(12), pc: new Float32Array(12), pL: new Float32Array(12), pI: new Float32Array(12), pE: new Float32Array(12),
     bn: 0, bt: new Int8Array(3), bx: new Float32Array(3), ba: new Float32Array(3), bs: new Int32Array(3),
     lsN: 0, lsX: new Float32Array(2), lsS: new Int32Array(2), chase: 0, chSeed: 0, chI: 1, fxGain: 1, tau: 0,
     lv: 0, lp: 1, lseed: 0, lsince: 9, sty: new Int8Array(3) };
@@ -471,7 +472,7 @@ function stateAt(sc, tau, cfg, st) {
   const pk = cv(sc.pulse);
   // everything scheduled or triggered that is live right now
   st.bn = 0; st.lsN = 0; st.black = false;
-  let gX = 0, cz = 0, czSeed = 0, xLo = 0, xMid = 0, xHi = 0, lg = null, lgAge = 1e9;
+  let gX = 0, cz = 0, czSeed = 0, xLo = 0, xMid = 0, xHi = 0, lg = null, lgAge = 1e9, strike = 0;
   const all = sc.all;
   for (let q = 0; q < all.length; q++) {
     const e = all[q];
@@ -484,7 +485,7 @@ function stateAt(sc, tau, cfg, st) {
     else if (e.k === 3) st.black = true;
     else if (e.k === 4) gX = Math.max(gX, 1 - x * x);
     else if (e.k === 5) { cz = 1; czSeed = e.seed; }
-    else if (e.k === 6) { if (st.lsN < 2) { st.lsX[st.lsN] = x; st.lsS[st.lsN] = e.seed; st.lsN++; } }
+    else if (e.k === 6) { if (cfg.lineMode) strike = Math.max(strike, Math.exp(-age / (0.3 * e.d))); else if (st.lsN < 2) { st.lsX[st.lsN] = x; st.lsS[st.lsN] = e.seed; st.lsN++; } }   // a Lines clip strikes every line, or in Slide mode sends a volley across
     else if (e.k === 7) xHi = Math.max(xHi, 1 - x);
     else if (e.k === 8) xMid = Math.max(xMid, 1 - x);
     else xLo = Math.max(xLo, 1 - x);
@@ -524,8 +525,26 @@ function stateAt(sc, tau, cfg, st) {
   const ja = (0.05 * Gv + 0.035 * burst + 0.012 * pk * ch) * settle;
   st.ox += (hash(k, sd, 16) - 0.5) * 2 * ja; st.oy += (hash(k, sd, 17) - 0.5) * 1.4 * ja;
   // the fast eased motion belongs to the lines; each one leaves a touch later than the last
-  st.lines = cfg.lines > 0.02;
-  if (st.lines) {
+  st.lines = cfg.lines > 0.02; st.pulseLines = st.lines && !!cfg.lineMode;
+  if (st.pulseLines) {
+    // Pulse: a rack of parallel bars, each showing a short lit stretch. The whole rack strikes out in length and light the
+    // instant the sound hits, then sinks back, every bar a little in its own way. Nothing glides: the stretches sit where
+    // they are, creeping slightly, and stand somewhere else after the next hit.
+    const bands = [sc.pulse, sc.mid, sc.hi], N = st.pn = 12;
+    const at = (a, t) => { let hp = t / sc.hop; if (hp < 0) hp = sc.cyclic ? hp + sc.nh : 0; return a[Math.min(sc.nh - 1, hp | 0)]; };
+    st.pHz = hash(m.sec, sd, 200) < 0.5;
+    const c0 = 0.3 + 0.4 * hash(m.i, sd, 205), slope = (hash(m.i, sd, 207) - 0.5) * 0.9, bow = (hash(m.i, sd, 208) - 0.5) * 0.5;
+    for (let j = 0; j < N; j++) {
+      const dly = 0.03 * hash(j, sd, 201), x = j / (N - 1) - 0.5;
+      const env = Math.max(strike, clamp01(Math.max(at(sc.pulse, tau - dly), 0.75 * at(bands[j % 3], tau - dly)) * (0.7 + 0.5 * hash(j, sd, 202))));
+      const creep = sc.cyclic ? Math.sin(TAU * (tau / D + hash(j, sd, 206))) : nz(tau * 0.11 + j * 7.3, sd);
+      st.pp[j] = (j + 0.5 + 0.5 * (hash(m.sec * 16 + j, sd, 209) - 0.5)) / N;
+      st.pc[j] = c0 + slope * x + bow * (x * x - 0.08) + 0.06 * (hash(m.i * 16 + j, sd, 210) - 0.5) + 0.03 * creep;
+      st.pL[j] = lerp(0.014, 0.14 + 0.3 * hash(m.i * 16 + j, sd, 204), Math.pow(env, 0.75));
+      st.pI[j] = cfg.lines * (0.55 + 0.45 * env) * (1 - 0.12 * hash(k, j, 203));          // a lamp is never quite steady
+      st.pE[j] = env;
+    }
+  } else if (st.lines) {
     for (let j = 0; j < 4; j++) {
       const eh = m.le(clamp01((dtm / m.ld - m.ldl[j]) / 0.6)), evv = m.le(clamp01((dtm / m.ld - m.ldl[j + 4]) / 0.6));
       st.hl[j] = m.L0.h[j] + (m.L.h[j] - m.L0.h[j]) * eh; st.hI[j] = cfg.lines * (0.5 + 2 * eh * (1 - eh));
@@ -541,7 +560,7 @@ function stateAt(sc, tau, cfg, st) {
     }
   }
   const sx = clamp01(dtm / m.ld), se = m.le(sx);
-  if (m.slab && st.lines && sx > 0 && sx < 1) { st.slabX = m.slab > 0 ? -0.2 + 1.4 * se : 1.2 - 1.4 * se; st.slabW = m.slabW * 0.5; } else st.slabW = 0;
+  if (m.slab && st.lines && !st.pulseLines && sx > 0 && sx < 1) { st.slabX = m.slab > 0 ? -0.2 + 1.4 * se : 1.2 - 1.4 * se; st.slabW = m.slabW * 0.5; } else st.slabW = 0;
   st.pulse = pk;
   st.gain = Math.min(1, cv(sc.gain) + 0.3 * pk);
   st.flash = 0.45 * pk;

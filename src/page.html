@@ -188,6 +188,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
       <legend>2 Glitch layer</legend>
       <label class="row" for="glitch"><span>Glitch</span><input type="range" id="glitch" min="0" max="100" value="70"></label>
       <label class="row" for="lines"><span>Lines</span><input type="range" id="lines" min="0" max="100" value="80"></label>
+      <label class="row" for="lineMode"><span>Lines move</span><select id="lineMode"><option value="1">Pulse</option><option value="0">Slide</option></select></label>
       <label class="row" for="chase"><span>Chases</span><input type="range" id="chase" min="0" max="100" value="40"></label>
       <label class="row" for="bgLo"><span>Bass blocks</span><input type="range" id="bgLo" min="0" max="100" value="60"></label>
       <label class="row" for="bgMid"><span>Mid bars</span><input type="range" id="bgMid" min="0" max="100" value="50"></label>
@@ -195,7 +196,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
       <label class="row" for="fxAmt"><span>Auto clips</span><input type="range" id="fxAmt" min="0" max="100" value="40"></label>
       <label class="row" for="wob"><span>Wobble</span><input type="range" id="wob" min="0" max="100" value="50"></label>
       <label class="row" for="wobSize"><span>Wobble size</span><input type="range" id="wobSize" min="0" max="100" value="50"></label>
-      <p class="note">Lines carry the fast ease in and out. Blocks, bars and sparks each listen to their own part of the spectrum. Auto clips is how many clips the automatic cut puts on the glitch lane: chases through a build, lines racing into a drop, bursts where a band jumps. Wobble is how far the picture tears and slips, from none to always moving; size runs from tight ripples to long waves.</p>
+      <p class="note">Pulse lines are short lit stretches that strike out on a hit and sink back, like a lamp. Slide lines run the full frame and ease from place to place. Blocks, bars and sparks each listen to their own part of the spectrum. Auto clips is how many clips the automatic cut puts on the glitch lane: chases through a build, lines racing into a drop, bursts where a band jumps. Wobble is how far the picture tears and slips, from none to always moving; size runs from tight ripples to long waves.</p>
       <label class="row" for="fxStyle"><span>Drawn as</span><select id="fxStyle"></select></label>
       <label class="row" for="fxPx"><span>Pixel size</span><input type="range" id="fxPx" min="0" max="100" value="18"></label>
     </fieldset>
@@ -326,15 +327,15 @@ const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
 
 const STYLES = ['rods', 'streaks', 'ascii', 'ridge', 'dither'];
 const STYLE_NAMES = { rods: 'LED rods', streaks: 'Light streaks', ascii: 'ASCII', ridge: 'Ridge lines', dither: 'Dither' };
-const S = { format: 'wide', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.55, size: 0.78, invert: false,
+const S = { format: 'wide', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.4, size: 0.78, invert: false,
   loop: 8, fps: 30, playing: true, seed: 1,
   baseAmt: 0.45, baseStyle: 'dither', baseDen: 0.304,
-  glitch: 0.7, lines: 0.8, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxAmt: 0.4, fxStyle: 'rods', fxDen: 0.784,
+  glitch: 0.7, lines: 0.8, lineMode: 1, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxAmt: 0.4, fxStyle: 'rods', fxDen: 0.784,
   logoMode: 0, loader: 0, presence: 0.5, eq: 1, logoStyle: 'dither', logoDen: 0.64,
-  chaos: 0.6, trail: 0.2, mix: false, pshape: 0, pfill: 0.78, dither: 'bayer4', wob: 0.5, wobSize: 0.5, eqAmt: 0.6, ease: 0.85, range: 'all',
+  chaos: 0.6, trail: 0, mix: false, pshape: 0, pfill: 0.78, dither: 'bayer4', wob: 0.5, wobSize: 0.5, eqAmt: 0.6, ease: 0.85, range: 'all',
   tcRate: '25', tcStart: 0, tcShow: false, outFit: 'contain' };
 // The piece can be split into parts. Everything from the three layers down to the look is kept per part; S holds the part being edited.
-const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'glitch', 'lines', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxAmt', 'fxStyle', 'fxDen',
+const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'glitch', 'lines', 'lineMode', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxAmt', 'fxStyle', 'fxDen',
   'logoMode', 'loader', 'presence', 'eq', 'logoStyle', 'logoDen', 'chaos', 'trail', 'mix', 'pshape', 'pfill', 'dither', 'wob', 'wobSize', 'eqAmt', 'ease'];
 const snap = () => { const o = {}; for (const k of PART_KEYS) o[k] = S[k]; return o; };
 let parts = [{ t: 0, P: snap() }], sel = 0, loopPart = false;
@@ -469,7 +470,7 @@ function fxField(W, H, t, o, st) {
   const rodN = Math.max(6, Math.round(W / (unit * 2.4)));
   const slabA = st.slabW > 0 ? st.slabX - st.slabW / 2 : 9, slabB = st.slabX + st.slabW / 2;
   const bN = Math.max(4, Math.round(W / (unit * 6))), mN = Math.max(6, Math.round(H / (unit * 1.6))), hN = Math.max(8, Math.round(W / unit)), hM = Math.max(6, Math.round(H / unit));
-  const lines = st.lines, bLo = st.bLo, bMid = st.bMid, bHi = st.bHi, fxg = st.fxGain;
+  const lines = st.lines, pulse = st.pulseLines, bLo = st.bLo, bMid = st.bMid, bHi = st.bHi, fxg = st.fxGain;
   // chase lanes: a lit run stepping along a row or a column, a few of them at different speeds
   const lanes = [];
   if (st.chase) {
@@ -492,7 +493,11 @@ function fxField(W, H, t, o, st) {
     disp(u0, v0);
     const u = DU, v = DV;
     let val = 0;
-    if (lines) for (let j = 0; j < 4; j++) {
+    if (pulse) {                                        // lit stretches with a hot middle and tips that fall away
+      const across = st.pHz ? v : u, along = st.pHz ? u : v, th = st.pHz ? thV : thU;
+      for (let j = 0; j < st.pn; j++) if (Math.abs(across - st.pp[j]) < th * (1 + 0.9 * st.pE[j])) { const d = Math.abs(along - st.pc[j]) / st.pL[j]; if (d < 1) { const b = st.pI[j] * Math.pow(1 - d * d, 1.4); if (b > val) val = b; } }
+    }
+    else if (lines) for (let j = 0; j < 4; j++) {
       if (st.hI[j] > val && Math.abs(v - st.hl[j]) < thV) val = st.hI[j];
       if (st.vI[j] > val && Math.abs(u - st.vl[j]) < thU) val = st.vI[j];
     }
@@ -781,7 +786,7 @@ class Renderer {
       this.fq.globalCompositeOperation = 'copy'; this.fq.drawImage(cv, 0, 0); this.fbOk = true;
     } else this.fbOk = false;
     if (st.flash > 0.02) { g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = Math.min(0.8, st.flash * 0.7); g.drawImage(cv, 0, 0); g.restore(); }
-    const glow = o.glow * (1 + 0.8 * st.flash);
+    const glow = o.glow * (0.3 + 1.6 * st.pulse);            // glow is light thrown by a hit, not a haze that is always there
     if (glow > 0.01) this.bloom(glow);
   }
   bloom(a) {
@@ -820,7 +825,7 @@ function layerOpts(fps, P) {
     wobA: P.wob * 2, wobB: Math.max(0, P.wob - 0.5) * 0.05, wobF: Math.pow(4, 0.5 - P.wobSize), eqAmt: P.eqAmt, ease: P.ease, tw: 0 });
   return [mk(P.baseStyle, P.baseDen), mk(P.fxStyle, P.fxDen), mk(P.logoStyle, P.logoDen)];
 }
-const motion = (P, tw) => ({ glitch: P.glitch, eq: track ? P.eq : 0, chaos: P.chaos, lines: P.lines, chase: P.chase, bgLo: P.bgLo, bgMid: P.bgMid, bgHi: P.bgHi, mix: P.mix, ease: P.ease, tw });
+const motion = (P, tw) => ({ glitch: P.glitch, eq: track ? P.eq : 0, chaos: P.chaos, lines: P.lines, lineMode: P.lineMode, chase: P.chase, bgLo: P.bgLo, bgMid: P.bgMid, bgHi: P.bgHi, mix: P.mix, ease: P.ease, tw });
 // eased seconds: real time blended toward the organic clock by the part's Easing amount
 const warp = (tau, P) => tau + (phiAt(score, tau) - tau) * P.ease;
 const phase = tw => score.cyclic ? tw / score.D : tw / 8;
@@ -973,7 +978,7 @@ const LOOKS = {
 };
 function pushAll() {
   pushRanges();
-  for (const id of ['baseStyle', 'fxStyle', 'logoStyle', 'dither', 'loader']) $(id).value = S[id];
+  for (const id of ['baseStyle', 'fxStyle', 'logoStyle', 'dither', 'loader', 'lineMode']) $(id).value = S[id];
   setRadio('logoMode', S.logoMode); setRadio('pshape', S.pshape); setRadio('eq', S.eq);
   $('mix').checked = S.mix; $('hot').checked = S.hot;
   $('tintPick').value = S.tint; $('tintHex').value = S.tint.toUpperCase();
@@ -1110,6 +1115,7 @@ radios('logoMode', v => { S.logoMode = Number(v); rebuildScore(); syncUI(); });
 radios('pshape', v => { S.pshape = Number(v); syncUI(); });
 $('invert').addEventListener('change', e => { S.invert = e.target.checked; mask = buildMask(logoSrc.img, logoSrc.w, logoSrc.h, S.invert); maskN++; syncUI(); });
 $('loader').addEventListener('change', e => { S.loader = Number(e.target.value); syncUI(); });
+$('lineMode').addEventListener('change', e => { S.lineMode = Number(e.target.value); syncUI(); });
 $('dither').addEventListener('change', e => { S.dither = e.target.value; syncUI(); });
 $('mix').addEventListener('change', e => { S.mix = e.target.checked; syncUI(); });
 $('tintPick').addEventListener('input', e => setTint(e.target.value, false));
@@ -1316,7 +1322,7 @@ async function applyProject(pj) {
     }
     if (!track) { soundPath = ''; rebuildScore(); }
     if (!missing) {
-      parts = pj.parts.filter(p => p.t < score.D).map(p => ({ t: p.t, P: Object.assign(snap(), { fxAmt: 0 }, p.P) }));      // a project from before Auto clips keeps its cut
+      parts = pj.parts.filter(p => p.t < score.D).map(p => ({ t: p.t, P: Object.assign(snap(), { fxAmt: 0, lineMode: 0 }, p.P) }));      // a project from before Auto clips keeps its cut
       if (!parts.length || parts[0].t !== 0) parts.unshift({ t: 0, P: snap() });
       userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d));
       for (const [k] of AKEYS) if (pj.auto && Array.isArray(pj.auto[k])) auto[k] = pj.auto[k].filter(q => q.t <= score.D).map(q => ({ t: Number(q.t) || 0, v: Number(q.v) || 0, c: q.c | 0 })).sort((a, b) => a.t - b.t);

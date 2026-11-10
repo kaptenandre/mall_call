@@ -7,7 +7,7 @@ const AKEYS = [['glitch', 'Glitch'], ['lines', 'Lines'], ['chase', 'Chases'], ['
 const ANAME = Object.fromEntries(AKEYS), CURVES = ['Ease', 'Snap', 'Cut'];
 const LAYERS = ['Base', 'Glitch', 'Logo'], LAYER_NEW = ['sweep', 'glitch', 'show'];
 const layerOf = k => k < 4 ? 0 : k < 10 ? 1 : 2, CUTS = ['base', 'fx', 'logo'];
-const TLH = { ruler: 20, over: 34, parts: 20, ev: 24, auto: 46 };
+const TLH = { ruler: 20, over: 84, parts: 20, ev: 24, auto: 46 };
 const tlv = { z: 1, x0: 0 };
 let tlSel = null, tlDrag = null, tlSnap = true, tlHeadSig = '', tlInspSig = '';
 
@@ -68,7 +68,7 @@ addEventListener('keydown', undoMark, true);
 
 /* rows and view */
 function tlRows() {
-  const rows = [{ kind: 'ruler', h: TLH.ruler, name: 'Time' }, { kind: 'over', h: TLH.over, name: 'Level' }, { kind: 'parts', h: TLH.parts, name: 'Parts' }];
+  const rows = [{ kind: 'ruler', h: TLH.ruler, name: 'Time' }, { kind: 'over', h: TLH.over, name: 'Sound' }, { kind: 'parts', h: TLH.parts, name: 'Parts' }];
   for (let L = 0; L < 3; L++) rows.push({ kind: 'ev', L, h: TLH.ev, name: LAYERS[L] });
   for (const key in auto) rows.push({ kind: 'auto', key, h: TLH.auto, name: ANAME[key] });
   let y = 0; for (const r of rows) { r.y = y; y += r.h; }
@@ -167,15 +167,30 @@ function drawTimeline() {
           q.fillStyle = '#2c2b36'; for (let j = 1; j < 4; j++) q.fillRect(Math.round(t2x((i + j / 4) * step)), r.y + r.h - 3, 1, 3);
         }
       } else if (r.kind === 'over') {
+        // the spectrum over time, bass at the bottom, then the level as a line and the hits as ticks
+        const sp = score.spec, rowsN = sp ? NB : 3, bh = (r.h - 8) / rowsN, three = [score.lo, score.mid, score.hi];
         for (let x = 0; x < W; x++) {
-          const a = Math.floor(x2t(x) / D * score.nh), b = Math.max(a + 1, Math.floor(x2t(x + 1) / D * score.nh));
-          let lv = 0, gl = 0;
-          for (let h = a; h < b && h < score.nh; h++) { lv = Math.max(lv, score.gain[h] + 0.3 * score.pulse[h]); gl = Math.max(gl, score.G[h]); }
-          const hh = Math.max(1, Math.round(Math.min(1, lv) * (r.h - 6))), Pp = PAt(x2t(x + 0.5));
-          q.fillStyle = gl * Pp.glitch * 1.6 > 0.4 ? Pp.tint : '#34333f'; q.fillRect(x, r.y + r.h - hh, 1, hh);
+          const a = Math.max(0, Math.floor(x2t(x) / D * score.nh)), b = Math.max(a + 1, Math.floor(x2t(x + 1) / D * score.nh));
+          for (let k = 0; k < rowsN; k++) {
+            let v = 0;
+            for (let h = a; h < b && h < score.nh; h++) { const q = sp ? sp[h * NB + k] : three[k][h]; if (q > v) v = q; }
+            if (v < 0.06) continue;
+            q.globalAlpha = Math.min(1, v * v * 1.15); q.fillStyle = v > 0.82 ? '#ffffff' : S.tint;
+            q.fillRect(x, r.y + r.h - Math.ceil((k + 1) * bh), 1, Math.max(1, Math.ceil(bh) - (sp ? 0 : 2)));
+          }
         }
-        q.fillStyle = '#8d8b9e';
-        for (const h of score.hitList) { const x = t2x(h.t); if (x >= 0 && x <= W) q.fillRect(Math.round(x), r.y, 1, 2 + Math.round(3 * h.v)); }
+        q.globalAlpha = 1;
+        q.beginPath();
+        for (let x = 0; x < W; x++) {
+          const a = Math.max(0, Math.floor(x2t(x) / D * score.nh)), b = Math.max(a + 1, Math.floor(x2t(x + 1) / D * score.nh));
+          let lv = 0; for (let h = a; h < b && h < score.nh; h++) lv = Math.max(lv, score.gain[h] * 0.75 + 0.25 * score.pulse[h]);
+          const y = r.y + r.h - 1 - Math.min(1, lv) * (r.h - 10); if (x) q.lineTo(x, y); else q.moveTo(x, y);
+        }
+        q.strokeStyle = '#eceaf4'; q.lineWidth = 1; q.globalAlpha = 0.55; q.stroke(); q.globalAlpha = 1;
+        q.fillStyle = '#eceaf4';
+        for (const h of score.hitList) { const x = t2x(h.t); if (x >= 0 && x <= W) q.fillRect(Math.round(x), r.y, 1, 3 + Math.round(5 * Math.min(1, h.v))); }
+        for (const d of (score.struct ? score.struct.drops : [])) { const x = t2x(d.t); if (x >= 0 && x <= W) { q.fillRect(Math.round(x) - 3, r.y, 7, 3); q.fillText('DROP', Math.round(x) + 6, r.y + 6); } }
+        if (!sp) { q.fillStyle = '#5a5968'; ['BASS', 'MID', 'HIGH'].forEach((n, k) => q.fillText(n, 4, r.y + r.h - (k + 0.5) * bh)); }
       } else if (r.kind === 'parts') {
         parts.forEach((p, i) => {
           const x = Math.round(t2x(p.t)), x1 = Math.round(t2x(partEnd(i)));
