@@ -459,7 +459,7 @@ body.rendering .rail fieldset { opacity: .55; }
       <label class="row" for="loop"><span>Loop length</span><select id="loop"><option value="4">4 s</option><option value="8" selected>8 s</option><option value="16">16 s</option></select></label>
       <label class="row" for="fps"><span>Frame rate</span><select id="fps"><option value="25">25 fps</option><option value="30" selected>30 fps</option><option value="50">50 fps</option><option value="60">60 fps</option></select></label>
       <label class="row" for="pq"><span>Preview</span><select id="pq"><option value="auto">Full, drops to half if slow</option><option value="1">Always full size</option><option value="0.5">Half size, lighter</option><option value="0.25">Quarter size, lightest</option></select></label>
-      <label class="check" for="gpu"><input type="checkbox" id="gpu" checked> Draw on the graphics card (logo and glitch layers so far)</label>
+      <label class="check" for="gpu"><input type="checkbox" id="gpu" checked> Draw on the graphics card</label>
       <button type="button" class="plain" id="play">Pause</button>
     </fieldset>
 
@@ -544,7 +544,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 43;
+const BUILD = 44;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
