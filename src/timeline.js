@@ -229,7 +229,7 @@ function drawTimeline() {
             if (x > W || x + w < 0) continue;
             q.fillStyle = user ? S.tint : '#1b1b22'; q.fillRect(x, r.y + 3, w, r.h - 8);
             if (!user) { q.strokeStyle = '#5a5968'; q.lineWidth = 1; q.strokeRect(x + 0.5, r.y + 3.5, w - 1, r.h - 9); }
-            if (w > 34) { q.save(); q.beginPath(); q.rect(x, r.y, w - 3, r.h); q.clip(); q.fillStyle = user ? '#000' : '#8d8b9e'; q.fillText(e.k === 13 ? e.txt : e.k === 18 ? (e.step ? 'SYMBOLS' : symName(e.sy).toUpperCase()) + (e.echo ? ' ×' + (e.echo + 1) : '') : e.k === 17 ? e.fx.toUpperCase() + (e.pm === 'light' ? ' ●' : e.pm === 'frame' ? ' □' : '') : e.type.toUpperCase(), Math.max(x, 0) + 4, r.y + r.h / 2 - 0.5); q.restore(); }
+            if (w > 34) { q.save(); q.beginPath(); q.rect(x, r.y, w - 3, r.h); q.clip(); q.fillStyle = user ? '#000' : '#8d8b9e'; q.fillText(e.k === 13 ? e.txt : e.k === 18 ? (e.step ? 'SYMBOLS' : symName(e.sy).toUpperCase()) + (e.echo ? ' ×' + (e.echo + 1) : '') : e.k === 17 ? e.fx.toUpperCase() + (e.pm === 'light' ? ' ●' : e.pm === 'frame' ? ' □' : '') : e.clean ? 'CLEAN' : e.type.toUpperCase(), Math.max(x, 0) + 4, r.y + r.h / 2 - 0.5); q.restore(); }
           }
         }
       } else {
@@ -347,6 +347,7 @@ function tlInsp() {
         field('Speed', input('inSp', 'number', '5', el => { tlSel.e.sp = Math.min(6, Math.max(0.05, (Number(el.value) || 100) / 100)); }));
         field('On', input('inWd', 'number', '5', el => { tlSel.e.wd = Math.min(1, Math.max(0.02, (Number(el.value) || 25) / 100)); }));
       } else field('Clip', select('inType', Object.keys(EV).filter(t => layerOf(EV[t]) === layerOf(s.e.k)).map(t => [t, t[0].toUpperCase() + t.slice(1)]), el => { const e = tlSel.e; e.type = el.value; e.k = EV[e.type]; e.d = e.k === 12 ? 0 : e.d || EVD[e.type]; mergeEv(); }));
+      if (s.e.k === 11) { const cl = document.createElement('input'); cl.type = 'checkbox'; cl.id = 'inClean'; cl.checked = !!s.e.clean; cl.addEventListener('change', () => { tlSel.e.clean = cl.checked; tlChanged(); }); field('Plain logo', cl); }
       field('Start', input('inStart', 'number', '0.01', el => { tlSel.e.t = Math.min(score.D - 0.01, Math.max(0, Number(el.value) || 0)); mergeEv(); }));
       field('Length', input('inLen', 'number', '0.01', el => { if (tlSel.e.k !== 12) tlSel.e.d = Math.max(0.05, Number(el.value) || 0.05); mergeEv(); }));
       field('Seed', input('inSeed', 'number', '1', el => { tlSel.e.seed = Math.max(0, Math.round(Number(el.value)) || 0); }));

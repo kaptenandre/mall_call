@@ -373,6 +373,7 @@ body.rendering .rail fieldset { opacity: .55; }
         </div>
       </div>
       <label class="row" for="eqAmt"><span>EQ strength</span><input type="range" id="eqAmt" min="0" max="100" value="60"></label>
+      <label class="check" for="cleanEnds"><input type="checkbox" id="cleanEnds" checked> Plain logo as a track opens and closes</label>
       <label class="check" for="outline"><input type="checkbox" id="outline"> Outline only</label>
       <label class="check" for="logoEach"><input type="checkbox" id="logoEach"> One logo in every pillar</label>
       <label class="row" for="logoStyle"><span>Drawn as</span><select id="logoStyle"></select></label>
@@ -539,14 +540,14 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 35;
+const BUILD = 36;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
 
 const STYLES = ['rods', 'streaks', 'ascii', 'ridge', 'dither'];
 const STYLE_NAMES = { rods: 'LED rods', streaks: 'Light streaks', ascii: 'ASCII', ridge: 'Ridge lines', dither: 'Dither' };
-const S = { format: 'ring', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.4, size: 0.78, invert: false,
+const S = { cleanEnds: true, format: 'ring', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.4, size: 0.78, invert: false,
   loop: 8, fps: 30, playing: true, seed: 1,
   baseAmt: 0.45, baseStyle: 'dither', baseDen: 0.304,
   logoEach: false, outline: false, symAmt: 0.3, pilAmt: 0.4, busy: 0.4, trans: 'cut', transLen: 1, glitch: 0.7, lines: 0.8, lineMode: 1, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxAmt: 0.4, fxStyle: 'rods', fxDen: 0.784,
@@ -1318,9 +1319,10 @@ class Renderer {
     CORE = LO[0].hot ? '#fff' : LO[0].tint; SHAPE = LO[0].pshape;
     const PN = LO[0].gapN || LO[0].cols;
     pillarGains(st, PN, LO[0]); st.pgK = LO[0].gapN ? 1 / (1 + LO[0].gap) : 1;
+    if (st.clean) { st.pm = null; st.pmLogo = null; }       // nothing hides a plain logo, pillar patterns included
     for (let L = 0; L < 4; L++) {
       if ((L === 0 && !st.bn && !st.pl && !st.pf) || (L === 2 && !st.lv && !st.syN) || (L === 3 && !st.tyN)) continue;
-      const o = LO[L];
+      let o = LO[L];
       o.va = st.va; o.vb = st.vb; o.amb = L === 1 ? 1 : 0;
       if (L === 2 && st.dens !== 1) o.density = Math.min(1.2, (lerp(22, 96, o.density) * st.dens - 22) / 74);
       const lc = this.lay[L], q = this.lg[L];
@@ -1335,9 +1337,15 @@ class Renderer {
       else if (L === 3) f = wrap(typeField(Wf, H, o, st));   // words, on their own
       else {                                               // the logo and any symbols share a layer
         // a logo in every pillar sits in the pillar itself, not in the picture behind them
-        const each = o.logoEach && PN > 1, a = !st.lv ? null : each ? logoField(W, H, t, Object.assign({}, o, { repeats: PN, travel: 0 }), st) : wrap(logoField(Wf, H, t, o, st));
+        // a clean Show: the logo as it is, standing still, with none of the pose, crop, warp, EQ or tear on it
+        let sL = st;
+        if (st.clean) {
+          sL = Object.assign(Object.create(st), { s: 1, kx: 1, ox: 0, oy: 0, rot: 0, sk: 0, tx: 1, ty: 1, eq: 0, x0: 0, x1: 1, y0: 0, y1: 1, hide: false, gI: 0, inv: false, lv: 2, crush: 0, nSl: 0, tearA: 0, dropA: 0 });
+          o = Object.assign({}, o, { wobA: 0, wobB: 0, travel: 0, outline: false, density: Math.max(o.density, 0.8) });
+        }
+        const each = o.logoEach && PN > 1, a = !st.lv ? null : each ? logoField(W, H, t, Object.assign({}, o, { repeats: PN, travel: 0 }), sL) : wrap(logoField(Wf, H, t, o, sL));
         const fs = [a];
-        if (st.syN) { const w = symField(Wf, H, o, st, false, PN), pp = PN > 1 ? symField(W, H, o, st, true, PN) : null; fs.push(w ? wrap(w) : null, pp); }
+        if (st.syN && !st.clean) { const w = symField(Wf, H, o, st, false, PN), pp = PN > 1 ? symField(W, H, o, st, true, PN) : null; fs.push(w ? wrap(w) : null, pp); }
         const live = fs.filter(Boolean);
         f = live.length === 1 ? live[0] : { M: (u, v) => { let m = 0; for (let i = 0; i < live.length; i++) { const x = live[i].M(u, v); if (x > m) m = x; } return m; }, B: (u, v) => { let m = 0; for (let i = 0; i < live.length; i++) { const x = live[i].B(u, v); if (x > m) m = x; } return m; } };
       }
@@ -1417,7 +1425,7 @@ function rebuildScore(eventsOnly) {
   const chAt = t => parts[partIdx(t)].P.chaos;
   if (!eventsOnly || !score) score = track ? buildTrackScore(track.an, S.seed, chAt) : buildLoopScore(S.loop, S.seed, chAt);
   autoEv = [];
-  parts.forEach((p, i) => { for (const e of makeEvents(score, { base: p.P.baseAmt, fx: Math.min(1, p.P.fxAmt * busyK(p.P)), mode: p.P.logoMode, presence: p.P.presence, pil: Math.min(1, p.P.pilAmt * busyK(p.P)), sym: Math.min(1, (p.P.symAmt || 0) * busyK(p.P)), ring: S.format === 'ring' }, p.t, partEnd(i), i)) if (e.k === 18 ? autoCut.sym : e.k === 17 ? autoCut.pil : isBase(e.k) ? autoCut.base : e.k < 10 ? autoCut.fx : autoCut.logo) autoEv.push(e); });
+  parts.forEach((p, i) => { for (const e of makeEvents(score, { base: p.P.baseAmt, fx: Math.min(1, p.P.fxAmt * busyK(p.P)), mode: p.P.logoMode, cleanEnds: S.cleanEnds !== false, presence: p.P.presence, pil: Math.min(1, p.P.pilAmt * busyK(p.P)), sym: Math.min(1, (p.P.symAmt || 0) * busyK(p.P)), ring: S.format === 'ring' }, p.t, partEnd(i), i)) if (e.k === 18 ? autoCut.sym : e.k === 17 ? autoCut.pil : isBase(e.k) ? autoCut.base : e.k < 10 ? autoCut.fx : autoCut.logo) autoEv.push(e); });
   // how each part comes in: a short move across the edge between it and the part before
   parts.forEach((p, i) => {
     const tr = p.P.trans, t = p.t, sd = S.seed * 31 + i * 7;
@@ -1668,7 +1676,7 @@ function seek(x) {
 const PAD = [
   ['Base', [['sweep', 'Sweep', '1'], ['strobe', 'Strobe', '2'], ['flood', 'Flood', '3'], ['blackout', 'Blackout', '4'], ['orbit', 'Orbit', '5'], ['spokes', 'Spokes', '6'], ['meet', 'Meet', '7']]],
   ['Glitch', [['glitch', 'Glitch', 'Q'], ['chase', 'Chase', 'W'], ['lines', 'Lines', 'E'], ['sparks', 'Sparks', 'R'], ['bars', 'Bars', 'T'], ['blocks', 'Blocks', 'Y']]],
-  ['Logo', [['load', 'Loader', 'A'], ['show', 'Show', 'S'], ['hide', 'Hide', 'D']]],
+  ['Logo', [['load', 'Loader', 'A'], ['show', 'Show', 'S'], ['hide', 'Hide', 'D'], ['show', 'Clean', 'I', { fx: 'clean', clean: true }]]],
   ['Type', [['type', 'Words', 'F'], ['type', 'Ticker', 'V', { fx: 'band', mode: 'band', size: 0.1, y: 0.9, txt: 'MALL CALL', trk: 0.08 }], ['type', 'Stack', 'B', { fx: 'stack', mode: 'stack', size: 0.36 }], ['type', 'Stretch', 'N', { fx: 'stretch', mode: 'stretch' }], ['type', 'Bump', '8', { fx: 'bump', mode: 'bump' }], ['type', 'Spin', '9', { fx: 'spin', mode: 'spin' }], ['type', 'Flip', '0', { fx: 'flip', mode: 'flip' }], ['type', 'Drop', 'U', { fx: 'drop', mode: 'drop' }]]],
   ['Pillars', [['pillar', 'Chase', 'G', { fx: 'chase' }], ['pillar', 'Spin', 'H', { fx: 'spin', pm: 'light' }], ['pillar', 'Pop', 'J', { fx: 'pop' }], ['pillar', 'Build', 'K', { fx: 'build' }], ['pillar', 'VU', 'L', { fx: 'vu', pm: 'light' }], ['pillar', 'Alt', 'Z', { fx: 'alt' }], ['pillar', 'Wave', 'X', { fx: 'wave' }], ['pillar', 'Frames', 'C', { fx: 'chase', pm: 'frame', wd: 0.4 }], ['pillar', 'Echo', 'M', { fx: 'echo', pm: 'light', wd: 0.6 }]]],
   ['Symbols', [['sym', 'Symbols', 'O', { fx: 'walk', step: true }], ['sym', 'In pillars', 'P', { fx: 'each', step: true, each: true, echo: 0, size: 0.8, dl: 0.5 }]]]
@@ -1988,6 +1996,7 @@ $('pilNext').addEventListener('click', () => pilSet((S.pil | 0) + 1));
 }
 // press a pillar on the strips to see that one on its own
 stage.addEventListener('click', e => { const r = stage.getBoundingClientRect(), d = dims(), u = (e.clientX - r.left) / r.width * d.W / d.pw, inside = d.two && (e.clientY - r.top) / r.height > 0.5; pilSet(inside ? Math.round(Math.floor(u) * S.panels / S.panelsIn) : Math.floor(u)); });
+$('cleanEnds').addEventListener('change', e => { S.cleanEnds = e.target.checked; rebuildScore(true); syncUI(); });
 $('pq').addEventListener('change', e => { S.pq = e.target.value; pscale = S.pq === 'auto' ? 1 : Number(S.pq); slowFrames = 0; sizeStage(); touch(); if (!S.playing && !busy) paint(); });
 $('play').addEventListener('click', () => setPlaying(!S.playing));
 
@@ -2177,7 +2186,7 @@ $('save').addEventListener('click', async () => {
 });
 
 /* ---------- project files (Mac app) ---------- */
-const GLOBAL_KEYS = ['format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap', 'gGain', 'gCon', 'gGam', 'gBlack', 'pq', 'pil', 'stats'];
+const GLOBAL_KEYS = ['cleanEnds', 'format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap', 'gGain', 'gCon', 'gGam', 'gBlack', 'pq', 'pil', 'stats'];
 let loadingProject = false, saveTimer = 0;
 function getProject() {
   savePart();
@@ -2187,7 +2196,7 @@ function getProject() {
 function pushGlobals() {
   setRadio('format', S.format);
   for (const id of ['shape', 'panels', 'repeats', 'loop', 'fps', 'seed', 'range', 'faces', 'panelsIn', 'panelPx', 'gap']) $(id).value = S[id];
-  gradePush(); $('pq').value = S.pq; statsShow();
+  gradePush(); $('pq').value = S.pq; statsShow(); $('cleanEnds').checked = S.cleanEnds !== false;
   $('view3d').checked = S.view3d; $('exView').value = S.exView; if ([...$('exFmt').options].some(o => o.value === S.exFmt)) $('exFmt').value = S.exFmt;
   $('orbit').checked = S.orbit; $('invert').checked = S.invert; $('outFit').value = S.outFit;
   if (!TC_RATES[S.tcRate]) S.tcRate = '25';
@@ -2221,7 +2230,7 @@ async function applyProject(pj) {
     if (!missing) {
       parts = pj.parts.filter(p => p.t < score.D).map(p => { const o = { t: p.t, P: Object.assign(snap(), { typeStyle: 'dither', typeDen: 0.8, typeWarp: 0, fxAmt: 0, lineMode: 0, inner: 'same', pilAmt: 0, symAmt: 0, busy: 0.7, trans: 'cut', transLen: 1 }, p.P) }; if (p.Q) o.Q = Object.assign({}, o.P, p.Q, { inner: 'own' }); if (p.name) o.name = String(p.name).slice(0, 24); return o; });      // a project from before Auto clips keeps its cut
       if (!parts.length || parts[0].t !== 0) parts.unshift({ t: 0, P: snap() });
-      userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d, e.type === 'type' ? { txt: String(e.txt || ''), mode: String(e.mode || 'slam'), size: Number(e.size) || 0.5, y: e.y === undefined ? 0.5 : Number(e.y) || 0, font: ['mono', 'own'].includes(e.font) ? e.font : 'sans', x: e.x === undefined ? 0.5 : Number(e.x) || 0, caps: e.caps !== false, trk: Number(e.trk) || 0, out: e.out === 'same' ? 'same' : 'cut', ol: !!e.ol, face: e.face | 0 } : e.type === 'sym' ? { sy: String(e.sy || 'x'), step: !!e.step, echo: Math.max(0, Math.min(8, e.echo | 0)), ex: Number(e.ex) || 0, ey: Number(e.ey) || 0, size: Number(e.size) || 0.6, x: e.x === undefined ? 0.5 : Number(e.x) || 0, y: e.y === undefined ? 0.5 : Number(e.y) || 0, each: !!e.each, dl: Number(e.dl) || 0, face: e.face | 0 } : e.type === 'pillar' ? { fx: PILLAR_FX.includes(e.fx) ? e.fx : 'chase', pm: ['light', 'frame'].includes(e.pm) ? e.pm : 'mask', on: ['logo', 'glitch'].includes(e.on) ? e.on : 'all', sp: Number(e.sp) || 1, wd: Number(e.wd) || 0.25, face: e.face | 0 } : { face: e.face | 0 }));
+      userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d, e.type === 'type' ? { txt: String(e.txt || ''), mode: String(e.mode || 'slam'), size: Number(e.size) || 0.5, y: e.y === undefined ? 0.5 : Number(e.y) || 0, font: ['mono', 'own'].includes(e.font) ? e.font : 'sans', x: e.x === undefined ? 0.5 : Number(e.x) || 0, caps: e.caps !== false, trk: Number(e.trk) || 0, out: e.out === 'same' ? 'same' : 'cut', ol: !!e.ol, face: e.face | 0 } : e.type === 'sym' ? { sy: String(e.sy || 'x'), step: !!e.step, echo: Math.max(0, Math.min(8, e.echo | 0)), ex: Number(e.ex) || 0, ey: Number(e.ey) || 0, size: Number(e.size) || 0.6, x: e.x === undefined ? 0.5 : Number(e.x) || 0, y: e.y === undefined ? 0.5 : Number(e.y) || 0, each: !!e.each, dl: Number(e.dl) || 0, face: e.face | 0 } : e.type === 'pillar' ? { fx: PILLAR_FX.includes(e.fx) ? e.fx : 'chase', pm: ['light', 'frame'].includes(e.pm) ? e.pm : 'mask', on: ['logo', 'glitch'].includes(e.on) ? e.on : 'all', sp: Number(e.sp) || 1, wd: Number(e.wd) || 0.25, face: e.face | 0 } : { face: e.face | 0, clean: !!e.clean }));
       for (const [k] of AKEYS) if (pj.auto && Array.isArray(pj.auto[k])) auto[k] = pj.auto[k].filter(q => q.t <= score.D).map(q => ({ t: Number(q.t) || 0, v: Number(q.v) || 0, c: q.c | 0 })).sort((a, b) => a.t - b.t);
       if (pj.autoCut) { autoCut.base = pj.autoCut.base !== false; autoCut.fx = pj.autoCut.fx !== false; autoCut.logo = pj.autoCut.logo !== false; autoCut.pil = pj.autoCut.pil !== false; autoCut.sym = pj.autoCut.sym !== false; }
     } else $('soundNote').textContent = 'The sound for this project was not found at ' + missing + '. Drop it in again and reopen the project.';
@@ -2262,6 +2271,7 @@ if (window.nativeApp) {
 }
 // Used by the app's own start-up check: one frame, the encoders, and a project round trip.
 window.__typeShot = (mode, age, warp) => { userEv = userEv.filter(e => e.k !== 13); S.typeWarp = warp || 0; tau = 1; trigger('type', null, { mode }); const e = userEv[userEv.length - 1]; e.txt = 'MALL CALL'; e.d = 3; e.size = 0.5; mergeEv(); S.playing = false; tau = 1 + age; paint(); return stage.toDataURL('image/png'); };
+window.__cleanShot = on => { userEv = userEv.filter(e => !e.clean); if (on) { tau = 2; trigger('show', null, { clean: true }); } S.playing = false; tau = 3; paint(); return stage.toDataURL('image/png'); };
 window.__selfTest = async () => {
   const r = { native: !!window.nativeApp, muxer: !!window.Mp4Muxer, monoFont: !!(document.fonts && document.fonts.check('500 20px "DM Mono"')) };
   try { r.h264 = (await VideoEncoder.isConfigSupported({ codec: 'avc1.640034', width: 1920, height: 1080, bitrate: 8e6, framerate: 30 })).supported; } catch (e) { r.h264 = 'error: ' + e.message; }

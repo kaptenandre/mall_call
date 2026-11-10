@@ -318,8 +318,8 @@ const PIL_NEW = { fx: 'chase', pm: 'mask', sp: 1, wd: 0.25, on: 'all' };
 // trail behind it, each ex, ey further off and each showing the shape from one hit earlier. each: one in every pillar, and then
 // dl makes each pillar run that many hits behind the one before it, so the shapes chase round the ring like a delay.
 const SYM_NEW = { sy: 'x', step: true, echo: 3, ex: 0.05, ey: -0.05, size: 0.6, x: 0.5, y: 0.5, each: false, dl: 0 };
-const evMore = e => e.k === 18 ? { sy: e.sy, step: !!e.step, echo: e.echo | 0, ex: e.ex, ey: e.ey, size: e.size, x: e.x, y: e.y, each: !!e.each, dl: e.dl, face: e.face | 0 } : e.k === 13 ? { txt: e.txt, mode: e.mode, size: e.size, y: e.y, font: e.font, x: e.x, caps: e.caps, trk: e.trk, out: e.out, ol: !!e.ol, face: e.face | 0 } : e.k === 17 ? { fx: e.fx, pm: e.pm, sp: e.sp, wd: e.wd, on: e.on, face: e.face | 0 } : e.face ? { face: e.face } : null;
-const mkEv = (t, type, seed, d, more) => { const e = { t, type, k: EV[type], seed: seed | 0, d: d === undefined || d === null ? EVD[type] : d }; if (more && more.mode === 'band' && (d === undefined || d === null)) e.d = 8; if (more && more.face) e.face = more.face | 0; return e.k === 13 ? Object.assign(e, TYPE_NEW, more) : e.k === 17 ? Object.assign(e, PIL_NEW, more) : e.k === 18 ? Object.assign(e, SYM_NEW, more) : e; };
+const evMore = e => e.k === 18 ? { sy: e.sy, step: !!e.step, echo: e.echo | 0, ex: e.ex, ey: e.ey, size: e.size, x: e.x, y: e.y, each: !!e.each, dl: e.dl, face: e.face | 0 } : e.k === 13 ? { txt: e.txt, mode: e.mode, size: e.size, y: e.y, font: e.font, x: e.x, caps: e.caps, trk: e.trk, out: e.out, ol: !!e.ol, face: e.face | 0 } : e.k === 17 ? { fx: e.fx, pm: e.pm, sp: e.sp, wd: e.wd, on: e.on, face: e.face | 0 } : e.face || e.clean ? Object.assign(e.face ? { face: e.face } : {}, e.clean ? { clean: true } : {}) : null;
+const mkEv = (t, type, seed, d, more) => { const e = { t, type, k: EV[type], seed: seed | 0, d: d === undefined || d === null ? EVD[type] : d }; if (more && more.mode === 'band' && (d === undefined || d === null)) e.d = 8; if (more && more.face) e.face = more.face | 0; if (more && more.clean && e.k === 11) { e.clean = true; if (d === undefined || d === null) e.d = 4; } return e.k === 13 ? Object.assign(e, TYPE_NEW, more) : e.k === 17 ? Object.assign(e, PIL_NEW, more) : e.k === 18 ? Object.assign(e, SYM_NEW, more) : e; };
 
 // The shape of the piece, read off the score once: where it drops, the builds that lead into drops, the quiet stretches,
 // and the moments each band of the spectrum jumps. The automatic cut hangs its clips on these.
@@ -415,6 +415,8 @@ function makeEvents(sc, P, a, b, pi) {
     // the end of a quiet stretch tears before the sound comes back
     st.breaks.filter(u => u.b > a + 0.4 && u.b < b).forEach((u, i) => { if (hash(i, sd, 192) < fx) ev.push(mkEv(u.b - 0.3, 'glitch', hash(i, sd, 193) * 1e6, 0.3)); });
   }
+  // the logo plain and steady as the piece opens and as it closes (a track only: a loop has no ends)
+  if (P.cleanEnds && !cyc && P.mode !== undefined) { const len = Math.min(4, D * 0.12); if (a <= 0) ev.push(mkEv(0, 'show', 7, len, { clean: true })); if (b >= D) ev.push(mkEv(D - len, 'show', 8, len, { clean: true })); }
   const nextHit = (t, lo, hi) => { for (const h of hits) if (h.t >= t + lo && h.t <= t + hi) return h.t; return -1; };
   if (P.mode === 2) ev.push(mkEv(a, 'show', 1, whole ? D + 1 : b - a + 0.01));
   else if (P.mode === 0) {
@@ -527,7 +529,7 @@ function stateAt(sc, tau, cfg, st) {
   const pk = cv(sc.pulse);
   // everything scheduled or triggered that is live right now
   st.bn = 0; st.lsN = 0; st.tyN = 0; st.pfN = 0; st.syN = 0; st.black = false;
-  let gX = 0, cz = 0, czSeed = 0, xLo = 0, xMid = 0, xHi = 0, lg = null, lgAge = 1e9, strike = 0;
+  let gX = 0, cz = 0, czSeed = 0, xLo = 0, xMid = 0, xHi = 0, lg = null, lgAge = 1e9, clAge = 1e9, strike = 0;
   const all = sc.all;
   for (let q = 0; q < all.length; q++) {
     const e = all[q];
@@ -538,6 +540,7 @@ function stateAt(sc, tau, cfg, st) {
     if (e.k >= 14 && e.k <= 16) { if (age < e.d && st.bn < 3) { st.bt[st.bn] = e.k; st.bx[st.bn] = age / e.d; st.ba[st.bn] = age; st.bs[st.bn] = e.seed; st.bn++; } continue; }
     if (e.k === 18) { if (age < e.d && st.syN < 2) { st.syE[st.syN] = e; st.syA[st.syN] = age; st.syN++; } continue; }
     if (e.k === 13) { if (age < e.d && st.tyN < 2) { st.tyE[st.tyN] = e; st.tyX[st.tyN] = age / e.d; st.tyA[st.tyN] = age; st.tyN++; } continue; }
+    if (e.k === 11 && e.clean) { if (age < e.d && age < clAge) clAge = age; continue; }      // a clean Show wins over whatever else the logo is doing
     if (e.k >= 10) { if (age < lgAge && !(e.k === 11 && age >= e.d)) { lgAge = age; lg = e; } continue; }   // a Show that has run out hands back to whatever came before it
     if (age >= e.d) continue;
     const x = age / e.d;
@@ -557,6 +560,9 @@ function stateAt(sc, tau, cfg, st) {
     if (lg.k === 10) { if (lgAge < lg.d) { st.lv = 1; st.lp = prog(lgAge / lg.d, lg.seed); } else { st.lv = 2; st.lsince = lgAge - lg.d; } }
     else if (lg.k === 11 && lgAge < lg.d) { st.lv = 2; st.lsince = lgAge; }
   }
+  // the logo plain and steady, after the two wrong frames every cut goes through
+  st.clean = clAge < 1e8 && clAge > 0.07;
+  if (clAge < 1e8) { st.lv = 2; st.lp = 1; st.lsince = clAge; }
   const Gv = Math.min(1, Math.max(cv(sc.G) * cfg.glitch * 1.6, gX));
   // stutter: the motion freezes for a hold, or skips back and replays
   let te = tau;
@@ -682,7 +688,7 @@ function stateAt(sc, tau, cfg, st) {
   st.loK = sc.loIdx[h0] + sec * 131; st.miK = sc.miIdx[h0] + sec * 57; st.hiK = k;
   // the glitch layer steps back while the logo is up
   st.fxGain = 1 - 0.4 * (st.lv === 2 ? 1 : st.lv === 1 ? 0.4 : 0);
-  if (st.tyN) st.fxGain *= 0.4;                           // words and big base moments get the frame to themselves
+  if (st.tyN || st.clean) st.fxGain *= 0.4;                           // words and big base moments get the frame to themselves
   if (st.bn) st.fxGain *= 0.6;
   // trails smear along a direction that changes with every cut
   const fa = TAU * hash(m.i, sd, 76);
