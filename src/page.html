@@ -28,6 +28,9 @@ body{background:var(--room);color:var(--ink);font-family:var(--body);font-size:1
 h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase;margin:0;text-wrap:balance}
 .top p{margin:0;color:var(--dim);max-width:65ch}
 .tabs{display:flex;gap:4px}
+.savebtn{appearance:none;border:1px solid var(--ink);background:#000;color:var(--ink);padding:7px 12px;font:500 11px/1 var(--display);letter-spacing:.1em;text-transform:uppercase;cursor:pointer;border-radius:0;display:inline-flex;gap:8px;align-items:center}
+.savebtn:hover{background:var(--ink);color:#000}
+.savemsg{font:400 11px/1.2 var(--display);letter-spacing:.06em;color:var(--dim);text-transform:uppercase}
 .tabs button{appearance:none;border:1px solid var(--rule);background:#000;color:var(--dim);padding:7px 12px;font:500 11px/1 var(--display);letter-spacing:.1em;text-transform:uppercase;cursor:pointer;border-radius:0;display:inline-flex;gap:8px;align-items:center}
 .tabs button:hover{color:var(--ink)}
 .tabs button[aria-selected="true"]{background:var(--ink);color:#000;border-color:var(--ink)}
@@ -49,8 +52,11 @@ h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase
 .vers button:hover{border-color:var(--ink)}
 .kv{display:grid;grid-template-columns:90px minmax(0,1fr);gap:4px 10px;font-size:12.5px}
 .kv span{color:var(--dim)}
-.top{padding-right:250px}
-.smpte{position:fixed;top:8px;right:14px;z-index:20;background:#000;border:1px solid var(--rule);padding:7px 12px;font:500 24px/1 var(--display);letter-spacing:.06em;font-variant-numeric:tabular-nums;color:var(--ink)}
+.top{padding-right:500px}
+.smpte canvas{display:block;width:132px;height:24px}
+.smpte .mini{font:400 9px/1.35 var(--display);letter-spacing:.06em;color:var(--dim);white-space:pre;text-align:right;min-width:74px}
+.smpte .mini.over{color:#ff8a1e}
+.smpte{display:flex;align-items:center;gap:12px;position:fixed;top:8px;right:14px;z-index:20;background:#000;border:1px solid var(--rule);padding:7px 12px;font:500 24px/1 var(--display);letter-spacing:.06em;font-variant-numeric:tabular-nums;color:var(--ink)}
 @media (max-width:620px){.top{padding-right:16px}.smpte{font-size:16px;top:auto;bottom:8px}}
 .app{display:grid;grid-template-columns:minmax(0,1fr) 304px;gap:20px;padding:20px;align-items:start}
 .stagecol{position:sticky;top:12px;min-width:0}
@@ -114,6 +120,7 @@ h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase
 .padbtns button[aria-pressed="true"]{background:var(--ink);color:#000;border-color:var(--ink)}
 .lookflash{position:absolute;left:10px;top:44px;z-index:5;background:#000;border:1px solid var(--ink);color:var(--ink);padding:8px 12px;font:500 13px/1 var(--display);letter-spacing:.12em;text-transform:uppercase;pointer-events:none;opacity:0}
 .lookflash.on{opacity:1}
+.stats{position:absolute;left:20px;top:50px;z-index:6;margin:0;background:rgba(0,0,0,.86);border:1px solid var(--rule);color:var(--ink);padding:8px 10px;font:400 11px/1.5 var(--display);pointer-events:none;white-space:pre}
 .stagecol{position:relative}
 .padbtns button:active,.padbtns button.hit{background:var(--signal);color:#000;border-color:var(--signal)}
 .padbtns button:active kbd,.padbtns button.hit kbd{color:#000;border-color:#000}
@@ -175,9 +182,10 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 .railin{display:flex;flex-direction:column;gap:14px;min-width:0}
 .railin.two{display:block;columns:2;column-gap:14px}.railin.two fieldset{break-inside:avoid;margin-bottom:14px}
 .railin.three{columns:3}
-.monrow{display:flex;gap:0;border:1px solid var(--rule);border-bottom:0;background:#000;min-height:0}
-.monrow .ring3d{border:0;flex:1 1 0;min-width:0}
-.pilmon{flex:none;display:flex;flex-direction:column;border-left:1px solid var(--rule);background:var(--panel);min-height:0}
+.montop{display:flex;gap:0;min-height:0}
+.monleft{flex:1 1 0;min-width:0;display:flex;flex-direction:column;min-height:0}
+.monleft .ring3d{flex:1 1 0;min-height:60px;height:auto}
+.pilmon{flex:none;display:flex;flex-direction:column;border:1px solid var(--rule);border-left:0;background:var(--panel);min-height:0}
 .pilmon canvas{display:block;flex:1 1 0;min-height:0;height:0;width:auto;aspect-ratio:264/384;image-rendering:pixelated;background:#000;align-self:center}
 .pilhead,.pilfoot{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:3px 5px;font:500 10px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
 .pilhead b{font-weight:500;color:var(--ink)}
@@ -195,8 +203,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
   .top{flex:none;padding-top:10px;padding-bottom:9px}
   .app{flex:1 1 0;min-height:0;grid-template-columns:minmax(0,1fr) 5px var(--railw,320px);gap:0;padding:0;align-items:stretch}
   .stagecol{position:relative;top:0;display:flex;flex-direction:column;min-height:0;padding:10px 12px 8px;overflow:hidden}
-  .monrow{flex:1 1 0;min-height:90px}
-  .ring3d{height:auto}
+  .montop{flex:1 1 0;min-height:150px}
   .stage{flex:none;min-height:0}
   .stage.ring canvas{height:clamp(44px,11vh,130px)}
   .tlwrap{flex:0 1 auto;min-height:96px;max-height:40vh;overflow-y:auto}
@@ -208,30 +215,35 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 @media (min-width:1500px){.app{--railw:640px}}
 @media (min-width:881px) and (max-height:820px){.tlwrap{max-height:31vh}.stage.ring canvas{height:44px}}
 @media (min-width:881px) and (max-height:760px){.hud{padding:4px 2px 4px}.tlinsp{min-height:30px;padding:3px 8px}.views{padding:3px 6px}.tlbar{padding:3px 6px}}
-@media (max-width:880px){.monrow{height:46vh}.app{grid-template-columns:minmax(0,1fr)}.stagecol{position:static}.splitter{display:none}}
+@media (max-width:880px){.montop{height:60vh}.app{grid-template-columns:minmax(0,1fr)}.stagecol{position:static}.splitter{display:none}}
 @media (max-width:620px){.top,.app{padding-left:16px;padding-right:16px}.padrow{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
 <body>
-<div class="smpte" id="smpte" role="timer" aria-label="Timecode at the playhead" title="Timecode at the playhead. Set the rate and the start under Timecode.">00:00:00:00</div>
+<div class="smpte" role="timer" aria-label="Sound level and timecode at the playhead" title="Sound level, left over right, and the timecode at the playhead. Set the rate and the start under Timecode."><span class="mini" id="mini" title="Preview frames a second and milliseconds a frame; processor use and memory"></span><canvas id="vu" width="132" height="24" aria-hidden="true"></canvas><span id="smpte">00:00:00:00</span></div>
 <header class="top">
   <h1>Mall Call <span id="build" style="color:var(--dim);font-weight:400"></span></h1>
   <nav class="tabs" id="tabs" aria-label="Workspaces"></nav>
+  <button type="button" class="savebtn" id="saveNow" title="Save a new version of this project. Nothing is ever written over.">Save</button>
+  <span class="savemsg" id="saveMsg" aria-live="polite"></span>
 </header>
 
 <main class="app">
   <section class="stagecol">
     <div class="lookflash" id="lookFlash" aria-live="polite"></div>
-    <div class="views" id="views" hidden><span>View</span></div>
-    <div class="monrow">
-      <canvas id="ring3d" class="ring3d" aria-label="The ring in 3D. Drag to turn, scroll to move in and out." hidden></canvas>
+    <pre class="stats" id="stats" hidden></pre>
+    <div class="montop">
+      <div class="monleft">
+      <div class="views" id="views" hidden><span>View</span></div>
+        <canvas id="ring3d" class="ring3d" aria-label="The ring in 3D. Drag to turn, scroll to move in and out." hidden></canvas>
+      <div class="stage wide" id="stageWrap"><canvas id="stage" width="1920" height="1080" aria-label="Preview"></canvas></div>
+      </div>
       <div class="pilmon" id="pilMon">
         <div class="pilhead"><button type="button" id="pilPrev" aria-label="Previous pillar" title="Previous pillar">‹</button><b id="pilName">Pillar 1</b><button type="button" id="pilNext" aria-label="Next pillar" title="Next pillar">›</button></div>
         <canvas id="pilCv" width="264" height="384" aria-label="One pillar on its own: outside on the left, inside on the right"></canvas>
         <div class="pilfoot"><span>Out</span><span>In</span></div>
       </div>
     </div>
-    <div class="stage wide" id="stageWrap"><canvas id="stage" width="1920" height="1080" aria-label="Preview"></canvas></div>
     <div class="tlbar">
       <button type="button" id="tlPlay">Pause</button>
       <button type="button" id="tlOut" title="Zoom out">−</button>
@@ -262,9 +274,9 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
   <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-label="Drag to make the settings wider or narrower" title="Drag to make the settings wider or narrower"></div>
   <aside class="rail" id="rail">
     <fieldset>
-      <legend>Triggers</legend>
+      <legend>Palette</legend>
       <div class="pad" id="pad">
-        <div class="padfoot"><button type="button" class="plain" id="clearTrig">Clear my clips</button><p class="note" id="trigNote" aria-live="polite">Hit a button or its key to drop a clip at the playhead. It shows on the timeline, where it can be moved, and goes into the export.</p></div>
+        <div class="padfoot"><button type="button" class="plain" id="clearTrig">Clear my clips</button><p class="note" id="trigNote" aria-live="polite">Drag any of these onto the timeline: it lands where you drop it and snaps to the nearest hit. Drag a look onto a part to give that part the look. A press, or the key, drops it at the playhead instead.</p></div>
       </div>
     </fieldset>
 
@@ -440,6 +452,17 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
     </fieldset>
 
     <fieldset>
+      <legend>Player</legend>
+      <label class="row" for="plMusic"><span>Music out</span><select id="plMusic"></select></label>
+      <label class="check" for="plOut"><input type="checkbox" id="plOut"> Send timecode as sound (LTC)</label>
+      <label class="row" for="plOutDev"><span>Timecode out</span><select id="plOutDev"></select></label>
+      <label class="check" for="plIn"><input type="checkbox" id="plIn"> Follow timecode from an input (LTC)</label>
+      <label class="row" for="plInDev"><span>Timecode in</span><select id="plInDev"></select></label>
+      <button type="button" class="plain" id="plScan">Find sound devices</button>
+      <p class="note" id="plNote" aria-live="polite">For playing straight out of this app. Music goes to the output you choose. Timecode can be sent as sound (LTC) for a desk to follow, or read from an input so the piece follows the desk. Set the rate and the start under Timecode.</p>
+    </fieldset>
+
+    <fieldset>
       <legend>Output</legend>
       <label class="row" for="gGain"><span>Brightness</span><input type="range" id="gGain" min="30" max="250" value="100"></label>
       <label class="row" for="gCon"><span>Contrast</span><input type="range" id="gCon" min="50" max="300" value="100"></label>
@@ -490,7 +513,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 26;
+const BUILD = 29;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -505,7 +528,7 @@ const S = { format: 'ring', shape: 3, panels: 30, repeats: 3, orbit: true, tint:
   chaos: 0.6, trail: 0, mix: false, pshape: 0, pfill: 0.78, dither: 'bayer4', wob: 0.5, wobSize: 0.5, eqAmt: 0.6, ease: 0.85, range: 'all',
   tcRate: '25', tcStart: 0, tcShow: false, outFit: 'contain',
   faces: 2, panelsIn: 30, panelPx: 0, view3d: true, inner: 'same', exFmt: 'mp4', exView: 'flat', gap: 0,
-  gGain: 1, gCon: 1, gGam: 1, gBlack: 0, pq: 'auto', pil: 0 };
+  gGain: 1, gCon: 1, gGam: 1, gBlack: 0, pq: 'auto', pil: 0, stats: false };
 // The piece can be split into parts. Everything from the three layers down to the look is kept per part; S holds the part being edited.
 const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'logoEach', 'outline', 'symAmt', 'pilAmt', 'busy', 'trans', 'transLen', 'glitch', 'lines', 'lineMode', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxAmt', 'fxStyle', 'fxDen',
   'logoMode', 'loader', 'presence', 'eq', 'logoStyle', 'logoDen', 'chaos', 'trail', 'mix', 'pshape', 'pfill', 'dither', 'wob', 'wobSize', 'eqAmt', 'ease', 'inner'];
@@ -1034,21 +1057,38 @@ function typeField(W, H, o, st) {
 
 /* ---------- styles: five ways to draw a layer ---------- */
 let CORE = '#fff', SHAPE = 0;
+// A lit cell. Tens of thousands are drawn per frame, and telling the canvas about each one separately is what made the
+// preview slow. So between litBegin and litEnd they are gathered by brightness, in LIT_N steps, and each step is filled
+// in one go. Cells in a layer do not overlap, so the picture is the same.
+const LIT_N = 32;
+let LIT = null;
+function litBegin() { LIT = { a: new Array(LIT_N + 1), h: new Array(LIT_N + 1), tint: null }; }
+function litEnd(g) {
+  const B = LIT; LIT = null;
+  if (!B || !B.tint) return;
+  g.fillStyle = B.tint;
+  for (let i = 1; i <= LIT_N; i++) if (B.a[i]) { g.globalAlpha = i / LIT_N; g.fill(B.a[i]); }
+  g.fillStyle = CORE;
+  for (let i = 1; i <= LIT_N; i++) if (B.h[i]) { g.globalAlpha = i / LIT_N; g.fill(B.h[i]); }
+  g.globalAlpha = 1;
+}
+function litShape(p, x, y, w, h) {
+  if (SHAPE === 0) p.rect(Math.round(x), Math.round(y), Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
+  else if (SHAPE === 1) { const cx = x + w / 2, cy = y + h / 2, rx = Math.max(0.6, w / 2); p.moveTo(cx + rx, cy); p.ellipse(cx, cy, rx, Math.max(0.6, h / 2), 0, 0, TAU); }
+  else { p.moveTo(x + w / 2, y - h * 0.1); p.lineTo(x + w * 1.1, y + h / 2); p.lineTo(x + w / 2, y + h * 1.1); p.lineTo(x - w * 0.1, y + h / 2); p.closePath(); }
+}
 function lit(g, x, y, w, h, I, tint) {
   if (I < 0.03) return;
-  const hot = I > 0.55;
-  g.globalAlpha = Math.min(1, I); g.fillStyle = tint;
-  if (SHAPE === 0) {
-    x = Math.round(x); y = Math.round(y); w = Math.max(1, Math.round(w)); h = Math.max(1, Math.round(h));
-    g.fillRect(x, y, w, h);
-    if (hot) { g.globalAlpha = Math.min(1, (I - 0.55) * 1.8); g.fillStyle = CORE; g.fillRect(x, y, w, h); }
+  if (LIT) {
+    const i = Math.max(1, Math.round(Math.min(1, I) * LIT_N));
+    LIT.tint = tint; litShape(LIT.a[i] || (LIT.a[i] = new Path2D()), x, y, w, h);
+    if (I > 0.55) { const j = Math.round(Math.min(1, (I - 0.55) * 1.8) * LIT_N); if (j > 0) litShape(LIT.h[j] || (LIT.h[j] = new Path2D()), x, y, w, h); }
     return;
   }
-  g.beginPath();
-  if (SHAPE === 1) g.ellipse(x + w / 2, y + h / 2, Math.max(0.6, w / 2), Math.max(0.6, h / 2), 0, 0, TAU);
-  else { g.moveTo(x + w / 2, y - h * 0.1); g.lineTo(x + w * 1.1, y + h / 2); g.lineTo(x + w / 2, y + h * 1.1); g.lineTo(x - w * 0.1, y + h / 2); g.closePath(); }
-  g.fill();
-  if (hot) { g.globalAlpha = Math.min(1, (I - 0.55) * 1.8); g.fillStyle = CORE; g.fill(); }
+  const hot = I > 0.55, p = new Path2D();                  // outside a batch: one at a time, as before
+  litShape(p, x, y, w, h);
+  g.globalAlpha = Math.min(1, I); g.fillStyle = tint; g.fill(p);
+  if (hot) { g.globalAlpha = Math.min(1, (I - 0.55) * 1.8); g.fillStyle = CORE; g.fill(p); }
 }
 const DRAW = {};
 // Swing: each rod or wire gets its own clock that speeds up and slows down, so no two run in step and none runs at constant speed.
@@ -1254,7 +1294,11 @@ class Renderer {
         const live = fs.filter(Boolean);
         f = live.length === 1 ? live[0] : { M: (u, v) => { let m = 0; for (let i = 0; i < live.length; i++) { const x = live[i].M(u, v); if (x > m) m = x; } return m; }, B: (u, v) => { let m = 0; for (let i = 0; i < live.length; i++) { const x = live[i].B(u, v); if (x > m) m = x; } return m; } };
       }
+      const tl0 = performance.now();
+      litBegin();
       DRAW[st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style](q, W, H, t, o, f.M, f.B);
+      litEnd(q);
+      PERF.layer[L] += (performance.now() - tl0 - PERF.layer[L]) * 0.15;
       const lm = L === 1 ? st.pmFx : L === 2 ? st.pmLogo : null;          // a pattern that hides only this layer, pillar by pillar
       if (lm) { q.globalCompositeOperation = 'source-over'; q.fillStyle = '#000'; const pw = W / PN; for (let i = 0; i < PN; i++) { const a = 1 - lm[i]; if (a > 0.01) { q.globalAlpha = Math.min(1, a); q.fillRect(Math.round(i * pw), 0, Math.round((i + 1) * pw) - Math.round(i * pw), H); } } q.globalAlpha = 1; }
       g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1; g.drawImage(lc, 0, 0);
@@ -1389,6 +1433,29 @@ function gradeFrame(cv) {
   t.globalCompositeOperation = 'copy'; t.drawImage(cv, 0, 0);
   g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'copy'; g.globalAlpha = 1; g.filter = 'url(#grade)'; g.drawImage(gradeTmp, 0, 0); g.restore(); g.filter = 'none';
 }
+// The level meter by the timecode: left over right, read straight off the sound file at the playhead, so it shows what is
+// in the file, not what a loudspeaker makes of it. A tick holds the last peak for a moment.
+const VU = { hold: [0, 0], at: [0, 0] };
+function vuFrame() {
+  const c = $('vu'), g = c.getContext('2d'), W = c.width, H = c.height, now = performance.now();
+  g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+  for (let ch = 0; ch < 2; ch++) {
+    let pk = 0;
+    if (S.playing && track) {
+      const ab = track.ab, d = ab.getChannelData(Math.min(ch, ab.numberOfChannels - 1)), a = Math.max(0, Math.floor(tau * ab.sampleRate)), n = Math.min(d.length, a + 1470);
+      for (let i = a; i < n; i += 3) { const x = d[i] < 0 ? -d[i] : d[i]; if (x > pk) pk = x; }
+    } else if (S.playing) { const h = Math.min(score.nh - 1, Math.max(0, tau / score.hop | 0)); pk = 0.6 * score.pulse[h] + 0.25 * score.mid[h]; }
+    const db = pk > 1e-4 ? 20 * Math.log10(pk) : -99, x = Math.max(0, Math.min(1, (db + 48) / 48));          // the bar runs from -48 dB to full scale
+    if (x >= VU.hold[ch] || now - VU.at[ch] > 900) { VU.hold[ch] = x; VU.at[ch] = now; }
+    const y = ch * (H / 2 + 1), h = H / 2 - 1, seg = 3;
+    for (let px = 0; px < W; px += seg + 1) {
+      const f = px / W;
+      g.fillStyle = f < x ? (f > 0.96 ? '#ff2a22' : f > 0.875 ? '#ff8a1e' : '#eceaf4') : '#1b1b22';       // amber from -6 dB, red in the last 2
+      g.fillRect(px, y, seg, h);
+    }
+    g.fillStyle = VU.hold[ch] > 0.96 ? '#ff2a22' : '#eceaf4'; g.fillRect(Math.min(W - 2, Math.round(VU.hold[ch] * W)), y, 2, h);
+  }
+}
 // One pillar on its own, pixel for pixel: its outside, and beside it the inside pillar that stands at the same place on the ring.
 function pillarFrame() {
   const d = dims(), c = $('pilCv'), k = stage.width / d.W, pw = d.pw * k, hs = d.Hs * k, W = Math.round(pw), H = Math.round(hs), gap = Math.max(2, Math.round(W / 16));
@@ -1402,15 +1469,21 @@ function pillarFrame() {
   const name = 'Pillar ' + (i + 1) + ' of ' + S.panels;
   if ($('pilName').textContent !== name) $('pilName').textContent = name;
 }
+// Where a frame's time goes, in milliseconds, smoothed: drawing the layers, the grade, the monitors (output, 3D, pillar), the rest (timeline, labels).
+const PERF = { draw: 0, grade: 0, views: 0, rest: 0, all: 0, layer: [0, 0, 0], field: 0, style: 0 };
 let mainRig = null, hudTick = 0, paintFps = 30, paintAt = 0;
 // what a part is called: its own name, or its number
 const partName = i => (parts[i] && parts[i].name) || 'Part ' + (i + 1);
 function paint() {
   const two = S.format === 'ring' && S.faces === 2, P = PAt(tau, face);
+  const T0 = performance.now();
   if (two) { if (!mainRig) mainRig = mkRig(stage, ST); drawFaces(mainRig, tau, fpsNow); }
   else renderOne(main, ST, PAt(tau, 0), tau, fpsNow);
+  const T1 = performance.now();
   gradeFrame(stage);
-  outFrame(); ringFrame(); pillarFrame();
+  const T2 = performance.now();
+  outFrame(); ringFrame(); pillarFrame(); vuFrame();
+  const T3 = performance.now();
   for (const k in auto) if (auto[k].length) { const R = aRange(k), v = String(Math.round(R.back(P[k]) * 100)); if (R.el.value !== v && document.activeElement !== R.el) R.el.value = v; }   // animated sliders follow their keys
   if (S.format === 'ring') {
     const d = dims(), g = main.g, k = stage.width / d.W, pw = d.pw * k, hs = d.Hs * k, gw = Math.max(1, Math.round(hs / 200));
@@ -1427,13 +1500,25 @@ function paint() {
     hud('hudClips', userEv.length + ' yours, ' + autoEv.length + ' auto · ' + score.hits + ' hits');
   }
   drawTimeline();
+  { const T4 = performance.now(), k = 0.15; PERF.draw += (T1 - T0 - PERF.draw) * k; PERF.grade += (T2 - T1 - PERF.grade) * k; PERF.views += (T3 - T2 - PERF.views) * k; PERF.rest += (T4 - T3 - PERF.rest) * k; PERF.all += (T4 - T0 - PERF.all) * k; }
 }
 /*__TIMELINE__*/
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   if (dt > 0.001) fpsNow = Math.min(120, Math.max(20, 0.9 * fpsNow + 0.1 / dt));
   if (!busy) {
-    if (S.playing) {
+    const lead = plChase(now);                              // timecode coming in: the desk leads, the piece and the music follow
+    if (lead !== null) {
+      const t = score.cyclic ? ((lead % score.D) + score.D) % score.D : lead;
+      if (t >= 0 && t < score.D) {
+        if (!S.playing) { S.playing = true; if (track) audio.play().catch(() => {}); syncUI(); }
+        tau = t;
+        if (track && Math.abs(audio.currentTime - tau) > 0.12) { try { audio.currentTime = tau; } catch (e) {} }
+        followPart();
+      } else if (S.playing) setPlaying(false);
+    } else if (PL.inn && PL.inn.at >= 0 && S.playing && PL.inn.wasLed) setPlaying(false);       // the timecode stopped: so do we
+    if (PL.inn) PL.inn.wasLed = lead !== null;
+    if (S.playing && lead === null) {
       tau += dt;
       if (track && !audio.paused && Math.abs(audio.currentTime - tau) > 0.09) tau = audio.currentTime;
       if (loopPart && (tau >= partEnd(sel) || tau < parts[sel].t)) { tau = parts[sel].t; if (track) { try { audio.currentTime = tau; } catch (e) {} } }
@@ -1498,7 +1583,7 @@ function syncUI() {
   if (!S.playing && !busy) paint();
 }
 async function setPlaying(p) {
-  S.playing = p;
+  S.playing = p; if (!p) { VU.hold = [0, 0]; setTimeout(vuFrame, 0); }
   if (track) {
     if (p) { try { audio.currentTime = Math.min(tau, Math.max(0, score.D - 0.05)); await audio.play(); } catch (e) { S.playing = false; } }
     else audio.pause();
@@ -1522,6 +1607,9 @@ const PAD = [
   ['Symbols', [['sym', 'Symbols', 'O', { fx: 'walk', step: true }], ['sym', 'In pillars', 'P', { fx: 'each', step: true, each: true, echo: 0, size: 0.8, dl: 0.5 }]]]
 ];
 const KEYS = {};
+// anything in the palette can be dragged out onto the timeline; what it carries rides along as text
+const DRAG_TYPE = 'application/x-mallcall';
+function dragOut(el, what) { el.draggable = true; el.addEventListener('dragstart', e => { e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(what)); e.dataTransfer.effectAllowed = 'copy'; }); }
 function trigger(type, btn, more) {
   userEv.push(mkEv(tau, type, Math.floor(Math.random() * 1e6), null, more));
   mergeEv();
@@ -1541,6 +1629,7 @@ function trigger(type, btn, more) {
       const k = document.createElement('kbd'); k.textContent = key;
       b.append(label, k);
       b.addEventListener('click', () => trigger(type, b, more));
+      dragOut(b, { type, more });
       box.append(b); KEYS[key.toLowerCase()] = [type, b, more];
     }
     row.append(lab, box); pad.insertBefore(row, foot);
@@ -1573,7 +1662,7 @@ function pushAll() {
   const box = document.createElement('div'); box.className = 'padbtns';
   for (const name of Object.keys(LOOKS)) {
     const b = document.createElement('button'); b.type = 'button'; b.id = 'look-' + name.toLowerCase(); b.textContent = name;
-    b.dataset.look = name; b.setAttribute('aria-pressed', 'false');
+    b.dataset.look = name; b.setAttribute('aria-pressed', 'false'); dragOut(b, { look: name });
     b.addEventListener('click', () => { Object.assign(S, LOOKS[name]); pushAll(); syncUI(); lookFlash(name); });
     box.append(b);
   }
@@ -1665,8 +1754,9 @@ $('soundOff').addEventListener('click', () => {
   syncUI();
 });
 let dragDepth = 0;
-addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); });
-addEventListener('dragover', e => e.preventDefault());
+const isFileDrag = e => !!e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+addEventListener('dragenter', e => { if (!isFileDrag(e)) return; e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); });
+addEventListener('dragover', e => { if (isFileDrag(e)) e.preventDefault(); });
 addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); } });
 addEventListener('drop', e => {
   e.preventDefault(); dragDepth = 0; document.body.classList.remove('dragging');
@@ -2004,7 +2094,7 @@ $('save').addEventListener('click', async () => {
 });
 
 /* ---------- project files (Mac app) ---------- */
-const GLOBAL_KEYS = ['format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap', 'gGain', 'gCon', 'gGam', 'gBlack', 'pq', 'pil'];
+const GLOBAL_KEYS = ['format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap', 'gGain', 'gCon', 'gGam', 'gBlack', 'pq', 'pil', 'stats'];
 let loadingProject = false, saveTimer = 0;
 function getProject() {
   savePart();
@@ -2014,7 +2104,7 @@ function getProject() {
 function pushGlobals() {
   setRadio('format', S.format);
   for (const id of ['shape', 'panels', 'repeats', 'loop', 'fps', 'seed', 'range', 'faces', 'panelsIn', 'panelPx', 'gap']) $(id).value = S[id];
-  gradePush(); $('pq').value = S.pq;
+  gradePush(); $('pq').value = S.pq; statsShow();
   $('view3d').checked = S.view3d; $('exView').value = S.exView; if ([...$('exFmt').options].some(o => o.value === S.exFmt)) $('exFmt').value = S.exFmt;
   $('orbit').checked = S.orbit; $('invert').checked = S.invert; $('outFit').value = S.outFit;
   if (!TC_RATES[S.tcRate]) S.tcRate = '25';
@@ -2079,6 +2169,7 @@ if (window.nativeApp) {
     else if (cmd === 'new-variation') $('shuffle').click();
     else if (cmd === 'undo' || cmd === 'redo') { const a = document.activeElement; if (a && a.tagName === 'INPUT' && (a.type === 'text' || a.type === 'number')) document.execCommand(cmd); else if (cmd === 'undo') undo(); else redo(); }
     else if (cmd === 'output') $('outOpen').click();
+    else if (cmd === 'save-version') $('saveNow').click();
     else if (cmd === 'update-ready') { updatePending = true; updateReload(); }
   });
 }
@@ -2124,6 +2215,18 @@ window.__selfTest = async () => {
     r.restored = r.restored && editState() === base;
     r.tc = tcAt(0) + ' ' + tcString(parseTc('01:00:00:00', TC_RATES['29.97']) + 1800, TC_RATES['29.97']);
     r.rows = tlRows().length; r.tlHeight = $('tl').height;
+    try {                                                   // timecode out as sound, looped straight back into timecode in
+      const R = tcR(), o = plOutStart(''), tapNode = o.ctx.createMediaStreamDestination();
+      o.gain.disconnect(); o.gain.connect(tapNode); o.tap = tapNode;
+      await plInStart('', tapNode.stream);
+      S.tcStart = parseTc('01:00:00:00', R); tau = 2; S.playing = true; const began = performance.now();
+      const drive = setInterval(() => { tau = 2 + (performance.now() - began) / 1000; }, 10);
+      await new Promise(res => setTimeout(res, 1600));
+      clearInterval(drive);
+      const got = PL.inn.at >= 0 ? PL.inn.t + (performance.now() - PL.inn.at) / 1000 : -1, want = 2 + (performance.now() - began) / 1000;
+      S.playing = false; S.tcStart = 0; plOutStop(); plInStop();
+      r.ltcLoop = Math.abs(got - want) < 0.12; if (!r.ltcLoop) r.ltcWhy = [got, want];
+    } catch (e) { r.ltcLoop = 'error: ' + e.message; }
     { const lum = () => { const d = main.g.getImageData(0, 0, stage.width, stage.height).data; let lit = 0, dim = 0; for (let i = 0; i < d.length; i += 40) { if (d[i] > 200) lit++; else if (d[i] > 8) dim++; } return [lit, dim]; };
       tau = score.D * 0.3; paint(); const a = lum(); S.gCon = 2.4; S.gBlack = 0.35; gradeSet(); paint(); const b = lum(); S.gCon = 1; S.gBlack = 0; gradeSet();
       // and on a canvas that is not on the page, the way an export draws
@@ -2148,6 +2251,7 @@ function symBank() {
     const b = document.createElement('button'); b.type = 'button'; b.title = symName(id); b.setAttribute('aria-label', symName(id));
     b.append(symCanvas(id, 72));
     b.addEventListener('click', () => trigger('sym', b, { sy: id, step: false }));
+    dragOut(b, { type: 'sym', more: { sy: id, step: false } });
     box.append(b);
   }
   const add = document.createElement('button'); add.type = 'button'; add.textContent = '+'; add.title = 'Add a symbol of your own, SVG or PNG'; add.setAttribute('aria-label', 'Add a symbol of your own');
@@ -2156,6 +2260,7 @@ function symBank() {
 $('symFile').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) addSymbol(f).then(() => touch()); });
 symBank();
 /*__OUTPUT__*/
+/*__PLAYER__*/
 /*__RING__*/
 /*__UI__*/
 /*__WORK__*/

@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('nativeApp', {
   libSave: o => ipcRenderer.invoke('lib-save', o),
   libOpen: o => ipcRenderer.invoke('lib-open', o),
   libReveal: name => ipcRenderer.invoke('lib-reveal', name),
+  metrics: () => ipcRenderer.invoke('metrics'),
+  micAccess: () => ipcRenderer.invoke('mic-access'),
   ffCheck: () => ipcRenderer.invoke('ff-check'),
   ffStart: o => ipcRenderer.invoke('ff-start', o),
   ffFrame: data => ipcRenderer.invoke('ff-frame', data),

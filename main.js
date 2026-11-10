@@ -1,5 +1,5 @@
 // Mall Call: main process. One window, native menus, project files, autosave and file export.
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell, screen } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell, screen, session, systemPreferences } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
@@ -74,8 +74,8 @@ function buildMenu() {
       { label: 'New Project', accelerator: 'CmdOrCtrl+N', click: () => { projectPath = null; setTitle(); send('new-project'); } },
       { label: 'Open Project…', accelerator: 'CmdOrCtrl+O', click: () => send('open-project') },
       { type: 'separator' },
-      { label: 'Save Project', accelerator: 'CmdOrCtrl+S', click: () => send('save-project') },
-      { label: 'Save Project As…', accelerator: 'Shift+CmdOrCtrl+S', click: () => send('save-project-as') },
+      { label: 'Save a New Version', accelerator: 'CmdOrCtrl+S', click: () => send('save-version') },
+      { label: 'Save as a File…', accelerator: 'Shift+CmdOrCtrl+S', click: () => send('save-project-as') },
       { type: 'separator' },
       { label: 'Open Logo…', accelerator: 'CmdOrCtrl+L', click: () => send('open-logo') },
       { label: 'Open Sound…', accelerator: 'Shift+CmdOrCtrl+O', click: () => send('open-sound') },
@@ -152,6 +152,18 @@ ipcMain.handle('project-open', async () => {
     return { path: projectPath, json };
   } catch (e) { return null; }
 });
+// How hard the app is working: processor use as a share of one core, by process, and memory. For the Stats box.
+ipcMain.handle('metrics', () => {
+  let cpu = 0, mem = 0, gpu = 0, page = 0;
+  for (const m of app.getAppMetrics()) {
+    const c = m.cpu ? m.cpu.percentCPUUsage : 0;
+    cpu += c; mem += (m.memory ? m.memory.workingSetSize : 0) / 1024;
+    if (m.type === 'GPU') gpu += c; else if (m.type === 'Tab') page += c;
+  }
+  return { cpu, gpu, page, mem };
+});
+// macOS asks the user once before an app may listen to a sound input; timecode in needs it
+ipcMain.handle('mic-access', async () => { try { return process.platform === 'darwin' ? await systemPreferences.askForMediaAccess('microphone') : true; } catch (e) { return false; } });
 ipcMain.handle('output-displays', () => {
   const main = screen.getPrimaryDisplay().id;
   return screen.getAllDisplays().map(d => ({ width: d.size.width, height: d.size.height, primary: d.id === main }));
@@ -326,6 +338,10 @@ function smoke() {
 }
 
 app.whenReady().then(async () => {
+  // the page may use sound inputs and choose sound outputs (timecode in and out, music out); nothing else is granted
+  const OK = ['media', 'audioCapture', 'speaker-selection'];
+  session.defaultSession.setPermissionRequestHandler((wc, perm, cb) => cb(OK.includes(perm)));
+  session.defaultSession.setPermissionCheckHandler((wc, perm) => OK.includes(perm));
   if (!SMOKE) {
     await update.load();
     const first = checkUpdates(false);
