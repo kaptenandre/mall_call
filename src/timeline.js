@@ -222,7 +222,7 @@ function drawTimeline() {
             if (x > W || x + w < 0) continue;
             q.fillStyle = user ? S.tint : '#1b1b22'; q.fillRect(x, r.y + 3, w, r.h - 8);
             if (!user) { q.strokeStyle = '#5a5968'; q.lineWidth = 1; q.strokeRect(x + 0.5, r.y + 3.5, w - 1, r.h - 9); }
-            if (w > 34) { q.save(); q.beginPath(); q.rect(x, r.y, w - 3, r.h); q.clip(); q.fillStyle = user ? '#000' : '#8d8b9e'; q.fillText(e.k === 13 ? e.txt : e.k === 17 ? e.fx.toUpperCase() + (e.pm === 'light' ? ' ●' : '') : e.type.toUpperCase(), Math.max(x, 0) + 4, r.y + r.h / 2 - 0.5); q.restore(); }
+            if (w > 34) { q.save(); q.beginPath(); q.rect(x, r.y, w - 3, r.h); q.clip(); q.fillStyle = user ? '#000' : '#8d8b9e'; q.fillText(e.k === 13 ? e.txt : e.k === 17 ? e.fx.toUpperCase() + (e.pm === 'light' ? ' ●' : e.pm === 'frame' ? ' □' : '') : e.type.toUpperCase(), Math.max(x, 0) + 4, r.y + r.h / 2 - 0.5); q.restore(); }
           }
         }
       } else {
@@ -317,11 +317,13 @@ function tlInsp() {
         field('Spacing', input('inTrk', 'number', '1', el => { tlSel.e.trk = Math.min(1, Math.max(-0.1, (Number(el.value) || 0) / 100)); }));
         field('Leaves', select('inOut', [['cut', 'With a cut'], ['same', 'The way it came']], el => { tlSel.e.out = el.value; }));
         const caps = document.createElement('input'); caps.type = 'checkbox'; caps.id = 'inCaps'; caps.addEventListener('change', () => { tlSel.e.caps = caps.checked; tlChanged(); }); field('Caps', caps);
+        const ol = document.createElement('input'); ol.type = 'checkbox'; ol.id = 'inOl'; ol.addEventListener('change', () => { tlSel.e.ol = ol.checked; tlChanged(); }); field('Outline', ol);
         field('Font', select('inFont', [['sans', 'Sans'], ['mono', 'Mono'], ['own', fontFile ? fontFile.name : 'Own font…']], el => { if (el.value === 'own' && !fontFile) { el.value = tlSel.e.font; $('ffile').click(); } else tlSel.e.font = el.value; }));
         const pick = document.createElement('button'); pick.type = 'button'; pick.textContent = 'Load font'; pick.addEventListener('click', () => $('ffile').click()); box.append(pick);
       } else if (s.e.k === 17) {
         field('Pattern', select('inFx', PILLAR_FX.map(f => [f, PIL_NAMES[f]]), el => { tlSel.e.fx = el.value; }));
-        field('It', select('inPm', [['mask', 'Shows the picture where it is on'], ['light', 'Lights whole pillars']], el => { tlSel.e.pm = el.value; }));
+        field('It', select('inPm', [['mask', 'Shows the picture where it is on'], ['light', 'Lights whole pillars'], ['frame', 'Lights only the outline of pillars']], el => { tlSel.e.pm = el.value; }));
+        field('Hides', select('inOn', [['all', 'Everything'], ['logo', 'Only the logo and words'], ['glitch', 'Only the glitch layer']], el => { tlSel.e.on = el.value; }));
         field('Speed', input('inSp', 'number', '5', el => { tlSel.e.sp = Math.min(6, Math.max(0.05, (Number(el.value) || 100) / 100)); }));
         field('On', input('inWd', 'number', '5', el => { tlSel.e.wd = Math.min(1, Math.max(0.02, (Number(el.value) || 25) / 100)); }));
       } else field('Clip', select('inType', Object.keys(EV).filter(t => layerOf(EV[t]) === layerOf(s.e.k)).map(t => [t, t[0].toUpperCase() + t.slice(1)]), el => { const e = tlSel.e; e.type = el.value; e.k = EV[e.type]; e.d = e.k === 12 ? 0 : e.d || EVD[e.type]; mergeEv(); }));
@@ -343,7 +345,7 @@ function tlInsp() {
   if (!s) return;
   if (s.kind === 'ev') {
     if ($('inAuto')) $('inAuto').textContent = 'Automatic ' + s.e.type + ' at ' + s.e.t.toFixed(2) + ' s, ' + tcAt(s.e.t) + '. Press Bake on the lane to edit the automatic clips, or Auto to switch them off.';
-    else { num('inType', s.e.type); num('inTxt', s.e.txt); num('inMode', s.e.mode); num('inSize', Math.round(s.e.size * 100)); num('inY', Math.round(s.e.y * 100)); num('inFont', s.e.font); num('inX', Math.round((s.e.x === undefined ? 0.5 : s.e.x) * 100)); num('inTrk', Math.round((s.e.trk || 0) * 100)); num('inOut', s.e.out || 'cut'); if ($('inCaps')) $('inCaps').checked = s.e.caps !== false; num('inFx', s.e.fx); num('inPm', s.e.pm); num('inSp', Math.round((s.e.sp || 1) * 100)); num('inWd', Math.round((s.e.wd || 0.25) * 100)); num('inStart', s.e.t.toFixed(2)); num('inLen', s.e.d.toFixed(2)); num('inSeed', s.e.seed); num('inFace', s.e.face | 0); $('inLen').disabled = s.e.k === 12; $('inTc').textContent = tcAt(s.e.t); }
+    else { num('inType', s.e.type); num('inTxt', s.e.txt); num('inMode', s.e.mode); num('inSize', Math.round(s.e.size * 100)); num('inY', Math.round(s.e.y * 100)); num('inFont', s.e.font); num('inX', Math.round((s.e.x === undefined ? 0.5 : s.e.x) * 100)); num('inTrk', Math.round((s.e.trk || 0) * 100)); num('inOut', s.e.out || 'cut'); if ($('inCaps')) $('inCaps').checked = s.e.caps !== false; num('inFx', s.e.fx); num('inOn', s.e.on || 'all'); if ($('inOl')) $('inOl').checked = !!s.e.ol; num('inPm', s.e.pm); num('inSp', Math.round((s.e.sp || 1) * 100)); num('inWd', Math.round((s.e.wd || 0.25) * 100)); num('inStart', s.e.t.toFixed(2)); num('inLen', s.e.d.toFixed(2)); num('inSeed', s.e.seed); num('inFace', s.e.face | 0); $('inLen').disabled = s.e.k === 12; $('inTc').textContent = tcAt(s.e.t); }
   } else { num('inStart', s.k.t.toFixed(2)); num('inVal', Math.round(aRange(s.key).back(s.k.v) * 100)); num('inCurve', s.k.c); $('inTc').textContent = tcAt(s.k.t); }
 }
 
