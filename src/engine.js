@@ -532,3 +532,19 @@ function stateAt(sc, tau, cfg, st) {
   st.fbx = Math.cos(fa) * (2 + 10 * pk + 14 * b2); st.fby = Math.sin(fa) * (2 + 10 * pk + 14 * b2);
   return st;
 }
+
+/* ---------- automation: keyframes on a setting. Never linear: each key leaves with an ease, a snap or a cut ---------- */
+// keys: [{t, v, c}] sorted by t. c: 0 ease, 1 snap, 2 cut (holds until the next key). On a loop the last key runs round into the first.
+const ACURVE = [ioQuint, ioExpo, () => 0];
+function autoVal(keys, t, D, cyclic) {
+  const n = keys.length;
+  if (n === 1) return keys[0].v;
+  let i = -1;
+  for (let j = 0; j < n && keys[j].t <= t; j++) i = j;
+  let a, b, span, x;
+  if (i >= 0 && i < n - 1) { a = keys[i]; b = keys[i + 1]; span = b.t - a.t; x = t - a.t; }
+  else if (!cyclic) return i < 0 ? keys[0].v : keys[n - 1].v;
+  else { a = keys[n - 1]; b = keys[0]; span = b.t + D - a.t; x = i < 0 ? t + D - a.t : t - a.t; }
+  if (span <= 1e-6) return b.v;
+  return a.v + (b.v - a.v) * ACURVE[a.c | 0](clamp01(x / span));
+}

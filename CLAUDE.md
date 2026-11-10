@@ -8,20 +8,27 @@ Sound-driven logo animation for LED panels, made for an art installation. Electr
 npm install      # once
 npm start        # build the page, open the app
 npm run smoke    # start-up check. Prints one line starting with SMOKE and exits 0 when clean
+npm test         # node checks for automation curves and timecode maths. Prints TEST ok
 npm run dist     # package and ad-hoc sign dist/Mall Call-darwin-arm64/Mall Call.app
 ```
 
-Run `npm run smoke` after every change. A clean run has `"errors":[]`, `"roundTrip":true`, `"restored":true`, `"h264":true`.
+Run `npm run smoke` and `npm test` after every change. A clean smoke run has `"errors":[]`, `"roundTrip":true`, `"restored":true`, `"timeline":true`, `"h264":true`.
+
+On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts/build.js && xvfb-run -a npx electron . --smoke --no-sandbox`. `"aac":false` is expected there.
 
 ## Layout
 
 - `src/engine.js`: timing engine, no DOM. Sound analysis (`analyze`), hit picking, the score (`buildTrackScore`, `buildLoopScore`), scheduled events (`makeEvents`), and the per-frame state (`stateAt`).
+- `src/timeline.js`: the timeline editor. Rows, clips, keys (`auto`, `PAt`, `setKey`), zoom, snapping, the inspector strip and undo. Inlined at `/*__TIMELINE__*/`.
+- `src/timecode.js`: SMPTE maths, MIDI timecode and LTC encode and decode, no DOM. Inlined at `/*__TIMECODE__*/`. Only the maths is used by the interface so far.
+- `src/output.js`: the clean output window and the timecode settings. Inlined at `/*__OUTPUT__*/`.
+- `scripts/test.js`: node checks for the two files with no DOM.
 - `src/page.html`: interface, the three layer fields (`baseField`, `fxField`, `logoField`), the five drawing styles (`DRAW.rods`, `streaks`, `ascii`, `ridge`, `dither`), `Renderer`, export, parts, trigger pad, project files. The engine is inlined at the `/*__SCORE__*/` marker.
 - `main.js`, `preload.js`: the Mac app. The page sees the bridge as `window.nativeApp` and behaves as a normal web page without it.
 - `scripts/build.js`: writes `app/index.html` (offline, bundled fonts and encoder) and `web/index.html` (CDN links).
 - `scripts/dist.js`: packaging, icon, signing.
 
-`src/page.html` is one large file. Splitting it into modules is a sensible early step, but keep both build targets working.
+`src/page.html` is still large. New areas go in their own file under `src/`, added to the marker list in `scripts/build.js`. All files share the page's one script scope, so order matters only for code that runs at load.
 
 ## How it works
 
@@ -30,6 +37,9 @@ Run `npm run smoke` after every change. A clean run has `"errors":[]`, `"roundTr
 - **Events** (`EV`) are things that happen at a time: base sweeps and strobes, glitch bursts, chases, logo load, show and hide. The engine schedules some (`makeEvents`); the trigger pad adds more, pinned to the timeline and included in export.
 - **Parts** split the piece. Layer, look, pixel and colour settings are kept per part (`PART_KEYS`); `S` always holds the part under the playhead.
 - Each layer returns how lit a point is, 0 to 1. A style draws that field. The renderer adds the layers, then gain, trails, flash and glow.
+- **The timeline** is where the piece is programmed. Nothing is performed live: the show is pre-programmed and played back. Clips on the three layer lanes are events; the dim ones are the automatic cut (`autoEv`), the filled ones are the user's (`userEv`). `autoCut` switches the automatic cut off per layer, and Bake turns it into user clips.
+- **Keys** animate a setting over time (`auto[key] = [{ t, v, c }]`). `PAt(t)` gives the settings in force at a time: the part's, with animated ones read off their keys. Use `PAt`, never `parts[...].P`, when drawing. Settings that change the schedule (How often, How much, Chaos, Easing) and Logo size are not animatable.
+- Timecode: the piece has a rate and a start timecode (`S.tcRate`, `S.tcStart` in frames) so the ruler reads like the lighting desk.
 - Export renders every frame offline with WebCodecs and muxes MP4 with `mp4-muxer`.
 
 ## Design rules. These came from the director and are not up for change without asking
@@ -45,7 +55,15 @@ Run `npm run smoke` after every change. A clean run has `"errors":[]`, `"roundTr
 9. Interface text is English, short, and never uses em dashes.
 10. The app ships with a placeholder ring. The real logo is dropped in by the user as a file. Do not draw brand logos in code.
 
+## How it is meant to run at the show
+
+Known, 2026-11: everything is pre-programmed, nothing is performed live, and the show has to follow SMPTE from the lighting desk. Proposed and not yet confirmed: Mall Call is the tool that makes and programs the content, and the plan is to export a file and let a playback tool (Resolume or TouchDesigner) chase SMPTE from the lighting desk and handle mapping, Syphon and the screen outputs. So the timeline and the export matter most. Timecode chase and Syphon inside this app are optional extras, not the main path. Confirm before building them.
+
 ## Not verified yet
+
+- The timeline editor has been driven with a mouse in Chromium on Linux only. Trackpad pinch and scroll, and Cmd+Z through the Edit menu, are untried on the Mac.
+- The output window works in Chromium. Full screen on a chosen screen (`output-place` in `main.js`) is untried on any machine.
+- LTC and MTC are tested as maths only (encode, decode, round trip). No audio or MIDI device is wired up.
 
 - On macOS (Apple silicon) the smoke check passes with H.264 and AAC, and the packaged app builds and launches. Nobody has looked closely at the window yet, so the interface itself is unchecked on the Mac.
 - Save and open dialogs and a real export have not been exercised by hand.
@@ -54,7 +72,7 @@ Run `npm run smoke` after every change. A clean run has `"errors":[]`, `"roundTr
 ## Next, roughly in order
 
 1. Use it on the Mac for a real session and fix whatever that shows.
-2. Syphon output to Resolume. Candidate: the `node-syphon` package, built against this Electron version. Either read frames back from the canvas and publish them from the main process, or use Electron offscreen rendering with a shared texture. Test against Resolume Arena.
-3. MIDI on the trigger pad (Web MIDI works in Electron; needs a permission handler in `main.js`).
-4. A clean output window for a second display.
-5. ProRes or HAP export through ffmpeg (Homebrew ffmpeg is installed on the main machine).
+2. ProRes or HAP export through ffmpeg (Homebrew ffmpeg is installed on the main machine), with the start timecode written into the file.
+3. More in the timeline: select and move several clips, copy and paste, loop a range, markers with names.
+4. If wanted: chase LTC or MTC for previewing against the desk (the maths is in `src/timecode.js`; needs Web MIDI and microphone permission handlers in `main.js`).
+5. If wanted: Syphon output. `node-syphon` 1.5.x ships a prebuilt binary and `SyphonMetalServer.publishImageData(data, region, size, flipped)`. Test against Resolume Arena.

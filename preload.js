@@ -10,5 +10,7 @@ contextBridge.exposeInMainWorld('nativeApp', {
   projectOpen: () => ipcRenderer.invoke('project-open'),
   autosave: json => ipcRenderer.invoke('autosave', json),
   autosaveLoad: () => ipcRenderer.invoke('autosave-load'),
+  outputDisplays: () => ipcRenderer.invoke('output-displays'),
+  outputPlace: where => ipcRenderer.invoke('output-place', where),
   onMenu: fn => { ipcRenderer.on('menu', (event, cmd) => fn(cmd)); }
 });

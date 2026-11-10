@@ -31,11 +31,27 @@ h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase
 .stagecol{position:sticky;top:12px;min-width:0}
 .stage{background:#000;border:1px solid var(--rule);display:flex;justify-content:center;align-items:center;min-height:180px;overflow-x:auto}
 .stage canvas{display:block}
-.stage.wide canvas{width:100%;height:auto}
-.stage.panel canvas{height:min(64vh,640px);width:auto;max-width:100%}
+.stage.wide canvas{width:auto;height:auto;max-width:100%;max-height:44vh}
+.stage.panel canvas{height:min(44vh,640px);width:auto;max-width:100%}
 .stage.ring{justify-content:flex-start}
 .stage.ring canvas{height:240px;width:auto;max-width:none}
-.tl{display:block;width:100%;height:48px;border:1px solid var(--rule);border-top:0;background:#000;cursor:pointer;touch-action:none}
+.tlbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid var(--rule);border-top:0;background:var(--panel);padding:6px}
+.tlbar button,.tlinsp button,.tlhead button{appearance:none;border:1px solid var(--rule);background:#000;color:var(--ink);padding:6px 8px;font:500 10px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-radius:0}
+.tlbar button:hover,.tlinsp button:hover,.tlhead button:hover{border-color:var(--ink)}
+.tlbar button[aria-pressed="true"],.tlhead button[aria-pressed="true"]{background:var(--ink);color:#000;border-color:var(--ink)}
+.tlbar select,.tlinsp select,.tlinsp input{width:auto;padding:4px 6px;font-size:11px}
+.tlbar .tc{margin-left:auto;font:500 13px/1 var(--display);letter-spacing:.06em;font-variant-numeric:tabular-nums;padding:0 4px}
+.tlwrap{display:grid;grid-template-columns:136px minmax(0,1fr);border:1px solid var(--rule);border-top:0;background:#000}
+.tlhead{border-right:1px solid var(--rule);background:var(--panel)}
+.tlhead div{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:0 4px 0 8px;font:500 10px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border-top:1px solid var(--rule);overflow:hidden;white-space:nowrap}
+.tlhead div:first-child{border-top:0}
+.tlhead button{padding:3px 4px;font-size:9px}
+.tl{display:block;width:100%;background:#000;cursor:default;touch-action:none}
+.tlinsp{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--rule);border-top:0;background:var(--panel);padding:6px 8px;min-height:38px;font-size:12.5px;color:var(--dim)}
+.tlinsp label{display:flex;gap:6px;align-items:center}
+.tlinsp input[type=number]{width:74px}
+.tlinsp input[type=text]{width:104px}
+.row.anim>span:first-child::after{content:" ◆";color:var(--signal);font-size:9px}
 .hud{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;font:400 11px/1.3 var(--display);letter-spacing:.07em;text-transform:uppercase;color:var(--dim);padding:8px 2px 10px;font-variant-numeric:tabular-nums}
 .hud b{font-weight:500;color:var(--ink)}
 .parts{display:flex;gap:2px;margin-top:2px}
@@ -117,8 +133,19 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 <main class="app">
   <section class="stagecol">
     <div class="stage wide" id="stageWrap"><canvas id="stage" width="1920" height="1080" aria-label="Preview"></canvas></div>
-    <canvas class="tl" id="tl" tabindex="0" role="slider" aria-label="Position in the piece" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></canvas>
-    <div class="parts" id="parts" role="tablist" aria-label="Parts of the piece"></div>
+    <div class="tlbar">
+      <button type="button" id="tlPlay">Pause</button>
+      <button type="button" id="tlOut" title="Zoom out">−</button>
+      <button type="button" id="tlIn" title="Zoom in">+</button>
+      <button type="button" id="tlFit">Fit</button>
+      <button type="button" id="tlSnap" aria-pressed="true" title="Clips and keys snap to hits, part edges and the playhead. Hold Cmd or Ctrl to move freely.">Snap</button>
+      <select id="tlAdd" aria-label="Animate a setting"></select>
+      <button type="button" id="tlUndo" title="Undo">Undo</button>
+      <button type="button" id="tlRedo" title="Redo">Redo</button>
+      <span class="tc" id="tlTc">00:00:00:00</span>
+    </div>
+    <div class="tlwrap"><div class="tlhead" id="tlHead"></div><canvas class="tl" id="tl" tabindex="0" role="slider" aria-label="Timeline" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></canvas></div>
+    <div class="tlinsp" id="tlInsp"></div>
     <div class="hud"><span><b id="hudState">Logo out</b></span><span id="hudRes">1920 × 1080 · 30 fps</span><span id="hudTime">0.00 / 8 s</span></div>
     <div class="partbar">
       <button type="button" class="plain" id="split">Split at playhead</button>
@@ -128,7 +155,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
       <p class="note" id="partNote" aria-live="polite"></p>
     </div>
     <div class="pad" id="pad">
-      <div class="padfoot"><button type="button" class="plain" id="clearTrig">Clear my triggers</button><p class="note" id="trigNote" aria-live="polite">Hit a button or its key while it plays. Each trigger is pinned to that moment, shows on the timeline and goes into the export.</p></div>
+      <div class="padfoot"><button type="button" class="plain" id="clearTrig">Clear my clips</button><p class="note" id="trigNote" aria-live="polite">Hit a button or its key to drop a clip at the playhead. It shows on the timeline, where it can be moved, and goes into the export.</p></div>
     </div>
   </section>
 
@@ -260,6 +287,22 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
     </fieldset>
 
     <fieldset>
+      <legend>Timecode</legend>
+      <label class="row" for="tcRate"><span>Rate</span><select id="tcRate"><option value="24">24</option><option value="25">25</option><option value="29.97">29.97 drop</option><option value="30">30</option></select></label>
+      <label class="row" for="tcStart"><span>Starts at</span><input type="text" id="tcStart" value="00:00:00:00" spellcheck="false" autocomplete="off"></label>
+      <label class="check" for="tcShow"><input type="checkbox" id="tcShow"> Ruler shows timecode</label>
+      <p class="note">The timecode the first frame of the piece sits on. Set it to the cue time on the lighting desk and the ruler reads the same numbers as the desk.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Output</legend>
+      <button type="button" class="plain" id="outOpen">Open output window</button>
+      <label class="row" for="outFit"><span>Picture</span><select id="outFit"><option value="contain">Fit</option><option value="fill">Stretch</option><option value="none">Pixel for pixel</option></select></label>
+      <label class="row" for="outDisp" id="outDispRow" hidden><span>Put it on</span><select id="outDisp"></select></label>
+      <p class="note" id="outNote">A clean window with only the picture, for a second screen. Double-click it for full screen.</p>
+    </fieldset>
+
+    <fieldset>
       <legend>Export</legend>
       <label class="row" for="range"><span>What</span><select id="range"><option value="all">Whole piece</option><option value="part">This part only</option></select></label>
       <button type="button" class="primary" id="save">Save as MP4</button>
@@ -274,6 +317,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 (() => {
 'use strict';
 /*__SCORE__*/
+/*__TIMECODE__*/
 
 const $ = id => document.getElementById(id);
 const rnd = (i, k) => hash(i, k, 7);
@@ -286,7 +330,8 @@ const S = { format: 'wide', shape: 3, panels: 30, repeats: 3, orbit: true, tint:
   baseAmt: 0.45, baseStyle: 'dither', baseDen: 0.304,
   glitch: 0.7, lines: 0.8, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxStyle: 'rods', fxDen: 0.784,
   logoMode: 0, loader: 0, presence: 0.5, eq: 1, logoStyle: 'dither', logoDen: 0.64,
-  chaos: 0.6, trail: 0.2, mix: false, pshape: 0, pfill: 0.78, dither: 'bayer4', wob: 0.5, wobSize: 0.5, eqAmt: 0.6, ease: 0.85, range: 'all' };
+  chaos: 0.6, trail: 0.2, mix: false, pshape: 0, pfill: 0.78, dither: 'bayer4', wob: 0.5, wobSize: 0.5, eqAmt: 0.6, ease: 0.85, range: 'all',
+  tcRate: '25', tcStart: 0, tcShow: false, outFit: 'contain' };
 // The piece can be split into parts. Everything from the three layers down to the look is kept per part; S holds the part being edited.
 const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'glitch', 'lines', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxStyle', 'fxDen',
   'logoMode', 'loader', 'presence', 'eq', 'logoStyle', 'logoDen', 'chaos', 'trail', 'mix', 'pshape', 'pfill', 'dither', 'wob', 'wobSize', 'eqAmt', 'ease'];
@@ -295,6 +340,9 @@ let parts = [{ t: 0, P: snap() }], sel = 0, loopPart = false;
 const partIdx = t => { let i = 0; while (i + 1 < parts.length && parts[i + 1].t <= t) i++; return i; };
 const partEnd = i => i + 1 < parts.length ? parts[i + 1].t : score.D;
 const savePart = () => { parts[sel].P = snap(); };
+// Animated settings: keys per setting, { glitch: [{ t, v, c }] }. autoCut: whether the engine schedules its own clips on a layer.
+let auto = {};
+const autoCut = { base: true, logo: true };
 
 /* ---------- logo mask ---------- */
 let mask = null, logoSrc = null, maskN = 0;
@@ -781,7 +829,7 @@ function rebuildScore() {
   const chAt = t => parts[partIdx(t)].P.chaos;
   score = track ? buildTrackScore(track.an, S.seed, chAt) : buildLoopScore(S.loop, S.seed, chAt);
   autoEv = [];
-  parts.forEach((p, i) => { for (const e of makeEvents(score, { base: p.P.baseAmt, mode: p.P.logoMode, presence: p.P.presence }, p.t, partEnd(i), i)) autoEv.push(e); });
+  parts.forEach((p, i) => { for (const e of makeEvents(score, { base: p.P.baseAmt, mode: p.P.logoMode, presence: p.P.presence }, p.t, partEnd(i), i)) if (e.k < 4 ? autoCut.base : autoCut.logo) autoEv.push(e); });
   mergeEv();
   if (tau >= score.D) tau = 0;
 }
@@ -794,10 +842,12 @@ function sizeStage() {
   if (stage.width !== w || stage.height !== h) { stage.width = w; stage.height = h; }
 }
 function paint() {
-  const P = parts[partIdx(tau)].P, tw = warp(tau, P), LO = layerOpts(fpsNow, P);
+  const P = PAt(tau), tw = warp(tau, P), LO = layerOpts(fpsNow, P);
   LO[1].tw = tw;
   stateAt(score, tau, motion(P, tw), ST);
   main.draw(phase(tw), LO, ST);
+  outFrame();
+  for (const k in auto) if (auto[k].length) { const R = aRange(k), v = String(Math.round(R.back(P[k]) * 100)); if (R.el.value !== v && document.activeElement !== R.el) R.el.value = v; }   // animated sliders follow their keys
   if (S.format === 'ring') {
     const g = main.g, pw = stage.width / S.panels, gw = Math.max(1, Math.round(stage.height / 200));
     g.globalAlpha = 1; g.fillStyle = '#3a3947';
@@ -807,45 +857,7 @@ function paint() {
   $('hudState').textContent = (parts.length > 1 ? 'Part ' + (partIdx(tau) + 1) + ' · ' : '') + (ST.lv === 1 ? 'Logo loading ' + Math.round(ST.lp * 100) + ' %' : ST.lv === 2 ? 'Logo up' : 'Logo out');
   drawTimeline();
 }
-// Logo state at a time, for the timeline strip: 0 gone, 1 loading, 2 up.
-function logoAt(t) {
-  let best = null, age = 1e9;
-  for (const e of score.all) { if (e.k < 10) continue; let a = t - e.t; if (a < 0) { if (!score.cyclic) continue; a += score.D; } if (a < age && !(e.k === 11 && a >= e.d)) { age = a; best = e; } }
-  if (!best) return 0;
-  return best.k === 10 ? (age < best.d ? 1 : 2) : best.k === 11 && age < best.d ? 2 : 0;
-}
-// Timeline: level as height, glitch stretches in the tint, logo strip along the top, base events as full-height marks, your triggers as squares.
-function drawTimeline() {
-  const c = $('tl'), dpr = Math.min(2, window.devicePixelRatio || 1), W = Math.max(50, Math.round(c.clientWidth * dpr)), H = Math.round(48 * dpr);
-  if (c.width !== W || c.height !== H) { c.width = W; c.height = H; tlCache = null; }
-  const g = c.getContext('2d');
-  if (!tlCache) {
-    tlCache = document.createElement('canvas'); tlCache.width = W; tlCache.height = H;
-    const q = tlCache.getContext('2d'), top = Math.round(7 * dpr), D = score.D;
-    q.fillStyle = '#000'; q.fillRect(0, 0, W, H);
-    for (let x = 0; x < W; x++) {
-      const a = Math.floor(x / W * score.nh), b = Math.max(a + 1, Math.floor((x + 1) / W * score.nh));
-      let lv = 0, gl = 0;
-      for (let h = a; h < b && h < score.nh; h++) { lv = Math.max(lv, score.gain[h] + 0.3 * score.pulse[h]); gl = Math.max(gl, score.G[h]); }
-      const hh = Math.max(1, Math.round(Math.min(1, lv) * (H - top - 6 * dpr))), Pp = parts[partIdx((x + 0.5) / W * D)].P;
-      q.fillStyle = gl * Pp.glitch * 1.6 > 0.4 ? Pp.tint : '#34333f'; q.fillRect(x, H - hh, 1, hh);
-      const ls = logoAt((x + 0.5) / W * D);
-      if (ls) { q.fillStyle = ls === 2 ? '#eceaf4' : (x & 2 ? '#eceaf4' : '#000'); q.fillRect(x, 0, 1, Math.round(4 * dpr)); }
-    }
-    for (const e of score.all) {
-      if (e.k >= 10) continue;
-      const x = Math.round(e.t / D * W), user = userEv.includes(e);
-      if (e.k < 4) { q.fillStyle = '#fff'; q.fillRect(x, top, Math.max(1, Math.round(1.5 * dpr)), H - top); q.fillRect(x, top, Math.round(6 * dpr), Math.round(3 * dpr)); }
-      if (user) { q.fillStyle = S.tint; q.fillRect(x - Math.round(2 * dpr), H - Math.round(8 * dpr), Math.round(5 * dpr), Math.round(5 * dpr)); q.strokeStyle = '#000'; q.strokeRect(x - Math.round(2 * dpr) + 0.5, H - Math.round(8 * dpr) + 0.5, Math.round(5 * dpr), Math.round(5 * dpr)); }
-    }
-    q.fillStyle = '#8d8b9e';
-    for (let i = 1; i < parts.length; i++) { const x = Math.round(parts[i].t / D * W); for (let y = 0; y < H; y += Math.round(6 * dpr)) q.fillRect(x, y, Math.max(1, Math.round(dpr)), Math.round(3 * dpr)); }
-    for (const e of userEv) if (e.k >= 10 && e.t < D) { const x = Math.round(e.t / D * W); q.fillStyle = S.tint; q.fillRect(x - Math.round(2 * dpr), H - Math.round(8 * dpr), Math.round(5 * dpr), Math.round(5 * dpr)); }
-  }
-  g.drawImage(tlCache, 0, 0);
-  g.fillStyle = '#fff'; g.fillRect(Math.round(tau / score.D * W), 0, Math.max(1, Math.round(1.5 * dpr)), H);
-  c.setAttribute('aria-valuenow', String(Math.round(tau / score.D * 100)));
-}
+/*__TIMELINE__*/
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   if (dt > 0.001) fpsNow = Math.min(120, Math.max(20, 0.9 * fpsNow + 0.1 / dt));
@@ -859,7 +871,7 @@ function frame(now) {
     }
     const t0 = performance.now();
     paint();
-    if (performance.now() - t0 > 34) { if (++slowFrames > 20 && pscale === 1) { pscale = 0.5; sizeStage(); } } else slowFrames = Math.max(0, slowFrames - 1);
+    if (performance.now() - t0 > 34) { if (++slowFrames > 20 && pscale === 1 && !outLive()) { pscale = 0.5; sizeStage(); } } else slowFrames = Math.max(0, slowFrames - 1);
   }
   requestAnimationFrame(frame);
 }
@@ -874,17 +886,8 @@ function renderParts() {
   const sig = parts.map(p => p.t.toFixed(2)).join(',') + '|' + sel + '|' + score.D.toFixed(2);
   if (sig === partsSig) return;
   partsSig = sig;
-  const box = $('parts'); box.textContent = '';
-  parts.forEach((p, i) => {
-    const b = document.createElement('button'), end = partEnd(i);
-    b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(i === sel)); b.id = 'part-' + (i + 1);
-    b.style.flexGrow = String(Math.max(0.05, end - p.t)); b.title = p.t.toFixed(1) + ' to ' + end.toFixed(1) + ' s';
-    b.textContent = 'Part ' + (i + 1);
-    b.addEventListener('click', () => { tau = Math.min(score.D * 0.9999, p.t + 0.001); if (track) { try { audio.currentTime = tau; } catch (e) {} } followPart(); if (!S.playing && !busy) paint(); });
-    box.append(b);
-  });
   $('partNote').textContent = parts.length === 1 ? 'One part covers the whole piece. Split at the playhead to give a stretch of the song its own layers, look and colour.'
-    : 'Editing part ' + (sel + 1) + ' of ' + parts.length + ', ' + parts[sel].t.toFixed(1) + ' to ' + partEnd(sel).toFixed(1) + ' s. The layers, variation, pixels and look below belong to it.';
+    : 'Editing part ' + (sel + 1) + ' of ' + parts.length + ', ' + parts[sel].t.toFixed(1) + ' to ' + partEnd(sel).toFixed(1) + ' s. The layers, variation, pixels and look below belong to it. Drag a part edge on the timeline to move it.';
 }
 function syncUI() {
   const { W, H, pw } = dims();
@@ -902,7 +905,7 @@ function syncUI() {
     : S.logoMode === 1 ? 'The logo stays out and cuts in on some of the hits.' : 'The logo is up the whole time and cuts between poses on the hits.';
   $('loader').disabled = S.logoMode !== 0;
   $('presence').disabled = S.logoMode === 2;
-  $('play').textContent = S.playing ? 'Pause' : 'Play';
+  $('play').textContent = $('tlPlay').textContent = S.playing ? 'Pause' : 'Play';
   $('loop').disabled = !!track;
   $('soundOff').hidden = !track;
   $('seed').value = S.seed;
@@ -938,7 +941,7 @@ function trigger(type, btn) {
   userEv.push(mkEv(tau, type, Math.floor(Math.random() * 1e6)));
   mergeEv();
   const n = userEv.length;
-  $('trigNote').textContent = n + (n === 1 ? ' trigger' : ' triggers') + ' pinned to the timeline. They play back at the same moment every time and go into the export.';
+  $('trigNote').textContent = n + (n === 1 ? ' clip' : ' clips') + ' of your own on the timeline. They play back at the same moment every time and go into the export.';
   if (btn) { btn.classList.add('hit'); setTimeout(() => btn.classList.remove('hit'), 140); }
   if (!S.playing && !busy) paint();
 }
@@ -986,13 +989,15 @@ function pushAll() {
   }
   row.append(lab, box); $('pad').insertBefore(row, $('pad').lastElementChild);
 }
-$('clearTrig').addEventListener('click', () => { userEv = []; mergeEv(); $('trigNote').textContent = 'Triggers cleared. Only the automatic cut is left.'; if (!S.playing && !busy) paint(); });
+$('clearTrig').addEventListener('click', () => { userEv = []; tlSel = null; mergeEv(); tlInsp(); $('trigNote').textContent = 'Your clips are cleared. Only the automatic cut is left.'; if (!S.playing && !busy) paint(); });
 addEventListener('keydown', e => {
-  if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
   const tag = e.target && e.target.tagName;
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'z' && !window.nativeApp && !(tag === 'INPUT' && (e.target.type === 'text' || e.target.type === 'number'))) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+  if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
   if (tag === 'INPUT' && e.target.type !== 'range' && e.target.type !== 'checkbox' && e.target.type !== 'radio') return;
   if (tag === 'SELECT' || tag === 'TEXTAREA') return;
   if (e.code === 'Space' && tag !== 'BUTTON') { e.preventDefault(); setPlaying(!S.playing); return; }
+  if ((e.key === 'Backspace' || e.key === 'Delete') && tlSel) { e.preventDefault(); tlDelete(); return; }
   const hit = KEYS[e.key.toLowerCase()];
   if (hit) { e.preventDefault(); trigger(hit[0], hit[1]); }
 });
@@ -1046,7 +1051,7 @@ async function loadSound(file, quiet, knownPath) {
     soundUrl = URL.createObjectURL(file); audio.src = soundUrl;
     track = { name: file.name, ab, an };
     soundPath = knownPath || (window.nativeApp ? window.nativeApp.pathFor(file) : '');
-    tau = 0; userEv = []; resetParts(); rebuildScore();
+    tau = 0; userEv = []; auto = {}; tlSel = null; tlv.z = 1; tlv.x0 = 0; resetParts(); rebuildScore(); undoReset(); tlInsp();
     note.textContent = file.name + ', ' + ab.duration.toFixed(1) + ' s. ' + score.moves.length + ' cuts land on its hits, ' + autoEv.filter(e => e.k < 4).length + ' base moments on the biggest ones.';
     if (quiet) { S.playing = false; syncUI(); return; }
     await setPlaying(true);
@@ -1062,7 +1067,7 @@ $('file').addEventListener('change', e => { const f = e.target.files && e.target
 $('sfile').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) loadSound(f); e.target.value = ''; });
 $('soundOff').addEventListener('click', () => {
   audio.pause(); audio.removeAttribute('src'); if (soundUrl) { URL.revokeObjectURL(soundUrl); soundUrl = null; }
-  track = null; soundPath = ''; tau = 0; userEv = []; resetParts(); rebuildScore();
+  track = null; soundPath = ''; tau = 0; userEv = []; auto = {}; tlSel = null; tlv.z = 1; tlv.x0 = 0; resetParts(); rebuildScore(); undoReset(); tlInsp();
   $('soundNote').textContent = 'No sound yet. The piece runs as a seamless loop on a built-in half-second beat.';
   syncUI();
 });
@@ -1082,7 +1087,7 @@ const px2den = v => 1 - 1.2 * v, den2px = d => (1 - d) / 1.2;
 // id, state key, value from 0..1 slider position, and back; rebuild = the schedule depends on it
 const RANGES = [['baseAmt', 'baseAmt', 1], ['basePx', 'baseDen', 0, px2den, den2px], ['glitch', 'glitch'], ['lines', 'lines'], ['chase', 'chase'], ['bgLo', 'bgLo'], ['bgMid', 'bgMid'], ['bgHi', 'bgHi'],
   ['fxPx', 'fxDen', 0, px2den, den2px], ['wob', 'wob'], ['wobSize', 'wobSize'], ['eqAmt', 'eqAmt'], ['ease', 'ease'], ['presence', 'presence', 1], ['logoPx', 'logoDen', 0, px2den, den2px], ['size', 'size'], ['chaos', 'chaos', 1], ['trail', 'trail'], ['pfill', 'pfill'], ['glow', 'glow']];
-for (const [id, key, rebuild, to] of RANGES) $(id).addEventListener('input', e => { const v = e.target.value / 100; S[key] = to ? to(v) : v; if (rebuild) rebuildScore(); syncUI(); });
+for (const [id, key, rebuild, to] of RANGES) $(id).addEventListener('input', e => { const v = e.target.value / 100, x = to ? to(v) : v; if (auto[key] && auto[key].length) setKey(key, tau, x); else S[key] = x; if (rebuild) rebuildScore(); syncUI(); });
 function pushRanges() { for (const [id, key, , , back] of RANGES) $(id).value = Math.round((back ? back(S[key]) : S[key]) * 100); }
 for (const id of ['baseStyle', 'fxStyle', 'logoStyle']) {
   for (const s of STYLES) { const o = document.createElement('option'); o.value = s; o.textContent = STYLE_NAMES[s]; $(id).append(o); }
@@ -1130,16 +1135,11 @@ $('randAll').addEventListener('click', () => {
   pushAll();
   rebuildScore(); syncUI();
 });
-$('loop').addEventListener('change', e => { S.loop = Number(e.target.value); if (!track) { userEv = []; resetParts(); rebuildScore(); } syncUI(); });
+$('loop').addEventListener('change', e => { S.loop = Number(e.target.value); if (!track) { userEv = []; auto = {}; tlSel = null; resetParts(); rebuildScore(); } syncUI(); tlInsp(); });
 $('range').addEventListener('change', e => { S.range = e.target.value; });
 function resetParts() { parts = [{ t: 0, P: snap() }]; sel = 0; loopPart = false; $('loopPart').setAttribute('aria-pressed', 'false'); }
 const partSay = s => { partsSig = ''; renderParts(); $('partNote').textContent = s; };
-$('split').addEventListener('click', () => {
-  const t = tau, i = partIdx(t);
-  if (t - parts[i].t < 0.5 || partEnd(i) - t < 0.5) { partSay('Move the playhead at least half a second away from a part edge, then split.'); return; }
-  savePart(); parts.splice(i + 1, 0, { t, P: Object.assign({}, parts[i].P) }); sel = i + 1; Object.assign(S, parts[sel].P);
-  rebuildScore(); pushAll(); syncUI();
-});
+$('split').addEventListener('click', () => splitAt(tau));
 $('merge').addEventListener('click', () => {
   if (sel === 0) { partSay('The first part has nothing before it to merge with.'); return; }
   parts.splice(sel, 1); sel--; Object.assign(S, parts[sel].P);
@@ -1149,20 +1149,11 @@ $('loopPart').addEventListener('click', e => { loopPart = !loopPart; e.currentTa
 $('copyAll').addEventListener('click', () => { savePart(); for (const p of parts) p.P = snap(); rebuildScore(); syncUI(); partSay('All ' + parts.length + ' parts now share the settings of part ' + (sel + 1) + '.'); });
 $('fps').addEventListener('change', e => { S.fps = Number(e.target.value); syncUI(); });
 $('play').addEventListener('click', () => setPlaying(!S.playing));
-{
-  const tl = $('tl'); let down = false;
-  const at = e => { const r = tl.getBoundingClientRect(); seek((e.clientX - r.left) / r.width); };
-  tl.addEventListener('pointerdown', e => { down = true; tl.setPointerCapture(e.pointerId); at(e); });
-  tl.addEventListener('pointermove', e => { if (down) at(e); });
-  tl.addEventListener('pointerup', () => { down = false; });
-  tl.addEventListener('pointercancel', () => { down = false; });
-  tl.addEventListener('keydown', e => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); seek(tau / score.D + (e.key === 'ArrowRight' ? 0.02 : -0.02)); } });
-}
 
 /* ---------- export ---------- */
 let rendered = null, dlPromise = null, stop = false;
 // A finished render is kept and offered again until something that changes the picture or the sound changes.
-const renderKey = () => JSON.stringify([Object.assign({}, S, { playing: 0 }), parts, S.range === 'part' ? sel : -1, maskN, track ? track.name + track.ab.length : 0, userEv.map(e => e.type + e.t.toFixed(3) + e.seed)]);
+const renderKey = () => JSON.stringify([Object.assign({}, S, { playing: 0 }), parts, S.range === 'part' ? sel : -1, maskN, track ? track.name + track.ab.length : 0, userEv.map(e => e.type + e.t.toFixed(3) + e.seed + e.d.toFixed(3)), auto, autoCut]);
 // Resolves to the save capability, null when this view cannot save, or undefined when the page runs outside Claude.
 function getDownloads() {
   if (window.nativeApp) return Promise.resolve({ save: async ({ filename, data }) => {      // the Mac app writes straight to disk through a save dialog
@@ -1222,11 +1213,11 @@ async function renderFile() {
       aenc.encode(ad); ad.close(); aPos += len;
     }
   };
-  const us = 1e6 / fps, one = i => { const tf = t0 + i / fps, P = parts[partIdx(tf)].P, tw = warp(tf, P), LO = layerOpts(fps, P); LO[1].tw = tw; stateAt(sc, tf, motion(P, tw), st); r.draw(phase(tw), LO, st); return tf - t0; };
+  const us = 1e6 / fps, one = i => { const tf = t0 + i / fps, P = PAt(tf), tw = warp(tf, P), LO = layerOpts(fps, P); LO[1].tw = tw; stateAt(sc, tf, motion(P, tw), st); r.draw(phase(tw), LO, st); return tf - t0; };
   sc._i = 0; sc._k = 0;
   try {
     // a loop with trails has to start with the tail of its own ending already on screen
-    if (sc.cyclic && whole && parts[partIdx(D - 0.01)].P.trail > 0.01) for (let i = Math.max(0, N - Math.round(fps * 0.8)); i < N; i++) one(i);
+    if (sc.cyclic && whole && PAt(D - 0.01).trail > 0.01) for (let i = Math.max(0, N - Math.round(fps * 0.8)); i < N; i++) one(i);
     for (let i = 0; i < N; i++) {
       if (failed) throw failed;
       if (stop) throw new Error('stop');
@@ -1294,17 +1285,19 @@ $('save').addEventListener('click', async () => {
 });
 
 /* ---------- project files (Mac app) ---------- */
-const GLOBAL_KEYS = ['format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range'];
+const GLOBAL_KEYS = ['format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit'];
 let loadingProject = false, saveTimer = 0;
 function getProject() {
   savePart();
   const g = {}; for (const k of GLOBAL_KEYS) g[k] = S[k];
-  return { v: 1, app: 'mall-call', S: g, parts: parts.map(p => ({ t: p.t, P: p.P })), userEv: userEv.map(e => ({ t: e.t, type: e.type, seed: e.seed, d: e.d })), logo: logoFile, soundPath: soundPath || null };
+  return { v: 1, app: 'mall-call', S: g, parts: parts.map(p => ({ t: p.t, P: p.P })), userEv: userEv.map(e => ({ t: e.t, type: e.type, seed: e.seed, d: e.d })), auto, autoCut: Object.assign({}, autoCut), logo: logoFile, soundPath: soundPath || null };
 }
 function pushGlobals() {
   setRadio('format', S.format);
   for (const id of ['shape', 'panels', 'repeats', 'loop', 'fps', 'seed', 'range']) $(id).value = S[id];
-  $('orbit').checked = S.orbit; $('invert').checked = S.invert;
+  $('orbit').checked = S.orbit; $('invert').checked = S.invert; $('outFit').value = S.outFit;
+  if (!TC_RATES[S.tcRate]) S.tcRate = '25';
+  tcPush(); outSync();
 }
 async function applyProject(pj) {
   if (!pj || pj.v !== 1 || !Array.isArray(pj.parts) || !pj.parts.length) return false;
@@ -1312,7 +1305,7 @@ async function applyProject(pj) {
   try {
     audio.pause(); S.playing = false;
     for (const k of GLOBAL_KEYS) if (k in pj.S) S[k] = pj.S[k];
-    pushGlobals();
+    pushGlobals(); undoReset(); tlSel = null; auto = {}; autoCut.base = autoCut.logo = true;
     if (!pj.soundPath && track) { audio.removeAttribute('src'); track = null; soundPath = ''; resetParts(); }
     if (pj.logo && pj.logo.dataUrl) { const blob = await (await fetch(pj.logo.dataUrl)).blob(); await loadLogo(new File([blob], pj.logo.name, { type: blob.type })); }
     let missing = '';
@@ -1325,14 +1318,17 @@ async function applyProject(pj) {
       parts = pj.parts.filter(p => p.t < score.D).map(p => ({ t: p.t, P: Object.assign(snap(), p.P) }));
       if (!parts.length || parts[0].t !== 0) parts.unshift({ t: 0, P: snap() });
       userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d));
+      for (const [k] of AKEYS) if (pj.auto && Array.isArray(pj.auto[k])) auto[k] = pj.auto[k].filter(q => q.t <= score.D).map(q => ({ t: Number(q.t) || 0, v: Number(q.v) || 0, c: q.c | 0 })).sort((a, b) => a.t - b.t);
+      if (pj.autoCut) { autoCut.base = pj.autoCut.base !== false; autoCut.logo = pj.autoCut.logo !== false; }
     } else $('soundNote').textContent = 'The sound for this project was not found at ' + missing + '. Drop it in again and reopen the project.';
     sel = 0; tau = 0; Object.assign(S, parts[0].P);
-    rebuildScore(); pushAll(); syncUI();
+    rebuildScore(); pushAll(); syncUI(); tlInsp();
     return true;
   } finally { loadingProject = false; }
 }
 // The Mac app keeps the session on disk a moment after every change, and brings it back on launch.
 function touch() {
+  if (score && !loadingProject) undoCommit();
   if (!window.nativeApp || loadingProject || !score) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => { try { window.nativeApp.autosave(JSON.stringify(getProject())); } catch (e) {} }, 1200);
@@ -1349,11 +1345,13 @@ if (window.nativeApp) {
       const r = await window.nativeApp.projectOpen();
       if (r && !(await applyProject(JSON.parse(r.json)))) say('That file is not a project from this app.');
     } else if (cmd === 'new-project') {
-      audio.pause(); audio.removeAttribute('src'); track = null; soundPath = ''; userEv = []; tau = 0; resetParts(); rebuildScore(); syncUI();
+      audio.pause(); audio.removeAttribute('src'); track = null; soundPath = ''; userEv = []; tau = 0; auto = {}; autoCut.base = autoCut.logo = true; tlSel = null; resetParts(); rebuildScore(); syncUI(); undoReset(); tlInsp();
       $('soundNote').textContent = 'No sound yet. The piece runs as a seamless loop on a built-in half-second beat.';
     } else if (cmd === 'export') $('save').click();
     else if (cmd === 'play') setPlaying(!S.playing);
     else if (cmd === 'new-variation') $('shuffle').click();
+    else if (cmd === 'undo' || cmd === 'redo') { const a = document.activeElement; if (a && a.tagName === 'INPUT' && (a.type === 'text' || a.type === 'number')) document.execCommand(cmd); else if (cmd === 'undo') undo(); else redo(); }
+    else if (cmd === 'output') $('outOpen').click();
   });
 }
 // Used by the app's own start-up check: one frame, the encoders, and a project round trip.
@@ -1371,8 +1369,33 @@ window.__selfTest = async () => {
   r.roundTrip = (await applyProject(JSON.parse(pj))) && parts.length === 2 && userEv.length === 1 && parts[1].P.fxStyle === 'dither';
   await applyProject(JSON.parse(before));
   r.restored = parts.length === 1 && userEv.length === 0;
+  // timeline: a key animates a setting, a clip moves, bake takes over the automatic cut, and undo walks all of it back
+  try {
+    const base = editState();
+    undoReset(); undoMark();
+    setKey('glow', 1, 0); setKey('glow', 3, 1, 2); tlChanged();
+    const mid = PAt(2).glow, held = PAt(score.D - 0.5).glow;
+    undoMark(); trigger('sweep'); userEv[0].t = 2; userEv[0].d = 1.5; mergeEv();
+    const autos = autoEv.filter(e => e.k < 4).length;
+    undoMark(); tlBake(0);
+    const pj2 = JSON.stringify(getProject());
+    const baked = !autoCut.base && userEv.length === 1 + autos && autoEv.every(e => e.k >= 4);
+    tau = 2; paint();
+    const kept = (await applyProject(JSON.parse(pj2))) && auto.glow && auto.glow.length === 2 && auto.glow[1].c === 2 && !autoCut.base && userEv.length === 1 + autos;
+    await applyProject(JSON.parse(pj2)); undoReset();
+    undoMark(); tlSel = { kind: 'ev', e: userEv[0] }; tlDelete();
+    const n1 = userEv.length; undo(); const n2 = userEv.length; redo(); const n3 = userEv.length;
+    r.timeline = mid === 0.5 && held === 1 && baked && kept && n1 === autos && n2 === autos + 1 && n3 === autos;
+    if (!r.timeline) r.timelineWhy = [mid, held, baked, kept, n1, n2, n3, autos];
+    await applyProject(JSON.parse(before)); undoReset();
+    r.restored = r.restored && editState() === base;
+    r.tc = tcAt(0) + ' ' + tcString(parseTc('01:00:00:00', TC_RATES['29.97']) + 1800, TC_RATES['29.97']);
+    r.rows = tlRows().length; r.tlHeight = $('tl').height;
+  } catch (e) { r.timeline = 'error: ' + e.message; }
   return r;
 };
+
+/*__OUTPUT__*/
 
 /* ---------- start ---------- */
 logoSrc = placeholder();
@@ -1380,7 +1403,9 @@ mask = buildMask(logoSrc.img, logoSrc.w, logoSrc.h, false);
 rebuildScore();
 if (matchMedia('(prefers-reduced-motion: reduce)').matches) { S.playing = false; tau = 3.6; }
 pushRanges();
+tcPush();
 syncUI();
+tlInsp();
 if (document.fonts && document.fonts.load) document.fonts.load('500 20px "DM Mono"').then(() => { if (!S.playing) syncUI(); }, () => {});
 addEventListener('resize', () => { tlCache = null; });
 getDownloads();

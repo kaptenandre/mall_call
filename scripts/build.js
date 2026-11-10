@@ -7,9 +7,12 @@ const root = path.join(__dirname, '..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8');
 
 let page = read('src/page.html');
-const engine = read('src/engine.js');
-if (page.split('/*__SCORE__*/').length !== 2) throw new Error('src/page.html must contain the /*__SCORE__*/ marker exactly once');
-page = page.replace('/*__SCORE__*/', () => engine);
+// each marker in the page is replaced by one source file; they all share the page's one script scope
+for (const [mark, file] of [['/*__SCORE__*/', 'src/engine.js'], ['/*__TIMECODE__*/', 'src/timecode.js'], ['/*__TIMELINE__*/', 'src/timeline.js'], ['/*__OUTPUT__*/', 'src/output.js']]) {
+  if (page.split(mark).length !== 2) throw new Error('src/page.html must contain the ' + mark + ' marker exactly once');
+  const code = read(file);
+  page = page.replace(mark, () => code);
+}
 
 fs.mkdirSync(path.join(root, 'web'), { recursive: true });
 fs.writeFileSync(path.join(root, 'web/index.html'), page);

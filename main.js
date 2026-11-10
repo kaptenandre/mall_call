@@ -1,12 +1,12 @@
 // Mall Call: main process. One window, native menus, project files, autosave and file export.
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
 
 const NAME = 'Mall Call';
 const SMOKE = process.argv.includes('--smoke');   // start-up check: load hidden, test, print one line, quit
-let win = null, projectPath = null, lastDir = null;
+let win = null, outWin = null, projectPath = null, lastDir = null;
 
 app.setName(NAME);
 if (SMOKE) app.setPath('userData', path.join(app.getPath('temp'), 'mallcall-smoke-' + process.pid));   // never touch the real session
@@ -33,8 +33,18 @@ function createWindow() {
     }
   });
   win.on('page-title-updated', e => e.preventDefault());
-  win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
-  win.on('closed', () => { win = null; });
+  win.webContents.setWindowOpenHandler(({ url, frameName }) => {
+    // the page opens exactly one window of its own: the clean output. It paints into it directly.
+    if ((url === '' || url === 'about:blank') && frameName === 'mallcall-output') return { action: 'allow', overrideBrowserWindowOptions: { width: 960, height: 540, backgroundColor: '#000000', title: NAME + ' Output', autoHideMenuBar: true, show: !SMOKE, webPreferences: { backgroundThrottling: false } } };
+    if (/^https?:/.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('did-create-window', w => {
+    outWin = w;
+    w.on('page-title-updated', e => e.preventDefault());
+    w.on('closed', () => { if (outWin === w) outWin = null; });
+  });
+  win.on('closed', () => { win = null; if (outWin && !outWin.isDestroyed()) outWin.close(); });
   if (SMOKE) smoke();
   win.loadFile(path.join(__dirname, 'app', 'index.html'));
   setTitle();
@@ -57,10 +67,16 @@ function buildMenu() {
       { label: 'Export MP4…', accelerator: 'CmdOrCtrl+E', click: () => send('export') },
       ...(mac ? [] : [{ type: 'separator' }, { role: 'quit' }])
     ] },
-    { role: 'editMenu' },
+    { label: 'Edit', submenu: [
+      { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: () => send('undo') },
+      { label: 'Redo', accelerator: 'Shift+CmdOrCtrl+Z', click: () => send('redo') },
+      { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }
+    ] },
     { label: 'Playback', submenu: [
       { label: 'Play / Pause', accelerator: 'CmdOrCtrl+Return', click: () => send('play') },
-      { label: 'New Variation', accelerator: 'CmdOrCtrl+G', click: () => send('new-variation') }
+      { label: 'New Variation', accelerator: 'CmdOrCtrl+G', click: () => send('new-variation') },
+      { type: 'separator' },
+      { label: 'Output Window', accelerator: 'Shift+CmdOrCtrl+F', click: () => send('output') }
     ] },
     { label: 'View', submenu: [
       { role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' },
@@ -108,6 +124,20 @@ ipcMain.handle('project-open', async () => {
     projectPath = r.filePaths[0]; lastDir = path.dirname(projectPath); setTitle();
     return { path: projectPath, json };
   } catch (e) { return null; }
+});
+ipcMain.handle('output-displays', () => {
+  const main = screen.getPrimaryDisplay().id;
+  return screen.getAllDisplays().map(d => ({ width: d.size.width, height: d.size.height, primary: d.id === main }));
+});
+// where the output window sits: 'window' for a normal window, 'toggle' to flip full screen, or a screen number to fill that screen
+ipcMain.handle('output-place', (event, where) => {
+  if (!outWin || outWin.isDestroyed()) return false;
+  if (where === 'toggle') { outWin.setFullScreen(!outWin.isFullScreen()); return true; }
+  if (where === 'window') { outWin.setFullScreen(false); return true; }
+  const d = screen.getAllDisplays()[Number(where)];
+  if (!d) return false;
+  outWin.setFullScreen(false); outWin.setBounds(d.bounds); outWin.setFullScreen(true);
+  return true;
 });
 ipcMain.handle('autosave', async (event, json) => {
   await fsp.mkdir(path.dirname(autosaveFile()), { recursive: true });
