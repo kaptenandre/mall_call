@@ -224,6 +224,10 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 @media (min-width:881px) and (max-height:760px){.hud{padding:4px 2px 4px}.tlinsp{min-height:30px;padding:3px 8px}.views{padding:3px 6px}.tlbar{padding:3px 6px}}
 @media (max-width:880px){.montop{height:60vh}.app{grid-template-columns:minmax(0,1fr)}.stagecol{position:static}.splitter{display:none}}
 @media (max-width:620px){.top,.app{padding-left:16px;padding-right:16px}.padrow{grid-template-columns:minmax(0,1fr)}}
+/* while a film is being written nothing in the piece can be changed: only Stop answers */
+body.rendering * { pointer-events: none; }
+body.rendering #save, body.rendering .rail, body.rendering .railin { pointer-events: auto; }
+body.rendering .rail fieldset { opacity: .55; }
 </style>
 </head>
 <body>
@@ -232,7 +236,6 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
   <h1>Mall Call <span id="build" style="color:var(--dim);font-weight:400"></span></h1>
   <nav class="tabs" id="tabs" aria-label="Workspaces"></nav>
   <button type="button" class="savebtn" id="saveNow" title="Save a new version of this project. Nothing is ever written over.">Save</button>
-  <button type="button" class="savebtn" id="reportBtn" style="border-color:var(--rule)" title="Copy a report of how the app is running: timings, settings, anything that went wrong. Paste it to whoever is helping.">Report</button>
   <span class="savemsg" id="saveMsg" aria-live="polite"></span>
 </header>
 
@@ -521,7 +524,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 31;
+const BUILD = 32;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -881,12 +884,12 @@ function symMask(id) {
   symMasks.set(id, m);
   return m;
 }
-async function addSymbol(file, known) {
+async function addSymbol(file, known, id) {
   try {
     const dataUrl = known || await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(file); });
     const img = await loadImg(dataUrl), w = img.naturalWidth || 512, h = img.naturalHeight || 512;
     let n = 1; while (userSyms.some(u => u.id === 'u' + n)) n++;
-    userSyms.push({ id: 'u' + n, name: file.name.replace(/\.[^.]+$/, ''), dataUrl, img, mask: buildMask(img, w, h, false) });
+    userSyms.push({ id: id && /^u\d+$/.test(id) && !userSyms.some(u => u.id === id) ? id : 'u' + n, name: file.name.replace(/\.[^.]+$/, ''), dataUrl, img, mask: buildMask(img, w, h, false) });
     symBank(); tlInspSig = ''; tlInsp();
     return true;
   } catch (e) { $('trigNote').textContent = 'That file could not be read as a picture. Try an SVG or a PNG.'; return false; }
@@ -931,6 +934,7 @@ function symField(W, H, o, st, per, N) {
 // roll (the picture loses vertical hold, rolls and locks), ticker (runs across, surging with the sound).
 const TYPE_FONTS = { sans: '600 120px "Instrument Sans", system-ui, sans-serif', mono: '500 120px "DM Mono", ui-monospace, monospace' };
 const typeMasks = new Map();
+let typeBytes = 0;
 function typeMask(text, font, trk) {
   const key = font + '|' + (trk || 0) + '|' + text;
   let m = typeMasks.get(key);
@@ -945,7 +949,8 @@ function typeMask(text, font, trk) {
   for (let i = 0; i < data.length; i++) data[i] = px[i * 4 + 3] / 255;
   for (let i = 0; i <= text.length; i++) adv.push((4 + g.measureText(text.slice(0, i)).width * k) / w);
   m = { w, h, data, adv, blur: null };
-  if (typeMasks.size > 300) typeMasks.clear();
+  typeBytes += data.length * 4;
+  for (const [k, old] of typeMasks) { if (typeBytes < 48e6) break; typeBytes -= old.data.length * 4 + (old.blur ? old.blur.length * 4 : 0); typeMasks.delete(k); }      // keep about 48 MB of words, oldest out first
   typeMasks.set(key, m);
   return m;
 }
@@ -960,7 +965,7 @@ async function loadFont(file) {
     document.fonts.add(face); fontFace = face;
     TYPE_FONTS.own = '120px "MallCallOwn", "Instrument Sans", sans-serif';
     fontFile = { name: file.name, dataUrl: await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(file); }) };
-    typeMasks.clear(); tlInspSig = ''; tlInsp(); syncUI();
+    { typeMasks.clear(); typeBytes = 0; } tlInspSig = ''; tlInsp(); syncUI();
     return true;
   } catch (e) { $('trigNote').textContent = 'That file could not be read as a font. Try a TTF, OTF or WOFF.'; return false; }
 }
@@ -994,11 +999,13 @@ function typeField(W, H, o, st) {
       continue;
     }
     let lines = text.split(/\s*\|\s*/).filter(Boolean), grow = 1, jx = 0, jy = 0;
+    if (!lines.length) continue;
     if (mode === 'slam') {                               // which word is up, and how long it has been
       const words = text.replace(/\|/g, ' ').split(/\s+/).filter(Boolean), wt = words.map(w => 1 + 0.25 * w.length), tot = wt.reduce((a, b) => a + b, 0);
       let acc = 0, wi = 0;
       for (; wi < words.length - 1 && x * tot >= acc + wt[wi]; wi++) acc += wt[wi];
       const fr = Math.floor((x * tot - acc) / tot * e.d * 30 + 1e-4);
+      if (!words.length) continue;                       // nothing but line breaks
       lines = [words[wi]];
       if (fr === 0) { grow = 1.3 + 0.3 * hash(wi, sd, 220); jx = (hash(wi, sd, 221) - 0.5) * 0.12; jy = (hash(wi, sd, 222) - 0.5) * 0.1; }
       else if (fr === 1) { grow = 0.9; jx = (hash(wi, sd, 223) - 0.5) * 0.04; }
@@ -1370,10 +1377,11 @@ const motion = (P, tw) => ({ glitch: P.glitch, eq: track ? P.eq : 0, chaos: P.ch
 const warp = (tau, P) => tau + (phiAt(score, tau) - tau) * P.ease;
 const phase = tw => score.cyclic ? tw / score.D : tw / 8;
 function mergeEv() { score.all = autoEv.concat(userEv.filter(e => e.t < score.D)).sort((a, b) => a.t - b.t); tlCache = null; touch(); }
-function rebuildScore() {
+// eventsOnly: the score itself (hits, curves, moves) is unchanged, only what is scheduled on it has to be redone
+function rebuildScore(eventsOnly) {
   savePart();
   const chAt = t => parts[partIdx(t)].P.chaos;
-  score = track ? buildTrackScore(track.an, S.seed, chAt) : buildLoopScore(S.loop, S.seed, chAt);
+  if (!eventsOnly || !score) score = track ? buildTrackScore(track.an, S.seed, chAt) : buildLoopScore(S.loop, S.seed, chAt);
   autoEv = [];
   parts.forEach((p, i) => { for (const e of makeEvents(score, { base: p.P.baseAmt, fx: Math.min(1, p.P.fxAmt * busyK(p.P)), mode: p.P.logoMode, presence: p.P.presence, pil: Math.min(1, p.P.pilAmt * busyK(p.P)), sym: Math.min(1, (p.P.symAmt || 0) * busyK(p.P)), ring: S.format === 'ring' }, p.t, partEnd(i), i)) if (e.k === 18 ? autoCut.sym : e.k === 17 ? autoCut.pil : isBase(e.k) ? autoCut.base : e.k < 10 ? autoCut.fx : autoCut.logo) autoEv.push(e); });
   // how each part comes in: a short move across the edge between it and the part before
@@ -1417,7 +1425,8 @@ function drawFaces(rig, tf, fps) {
   const size = (c, w, h) => { if (c.width !== w || c.height !== h) { c.width = w; c.height = h; } };
   const P = PAt(tf, 0), mode = P.inner;
   // In the preview, when two different faces do not fit in a frame's time, they take turns: each is redrawn every other frame.
-  const own = mode === 'own' || userEv.some(e => e.face), turns = rig === mainRig && own && PERF.all > 1000 / PREVIEW_FPS() && rig.b.cv.width === wi;
+  // the inside needs its own drawing when it has its own look, a different number of pillars, or a clip for one face is live right now
+  const own = mode === 'own' || wi !== wo || userEv.some(e => e.face && tf >= e.t && tf < e.t + Math.max(e.d, 0.05)), turns = rig === mainRig && S.playing && own && PERF.all > 1000 / PREVIEW_FPS() && rig.b.cv.width === wi;
   rig.turn = turns ? !rig.turn : false;
   size(rig.a.cv, wo, hs); if (!turns || rig.turn) renderOne(rig.a, rig.stA, P, tf, fps, 0);
   g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.fillStyle = '#000'; g.fillRect(0, 0, rig.cv.width, rig.cv.height);
@@ -1545,7 +1554,7 @@ function frame(now) {
     if (S.playing && paintAt) paintFps = 0.9 * paintFps + 0.1 * Math.min(120, 1000 / Math.max(1, now - paintAt));
     paintAt = now;
     const t0 = performance.now();
-    paint();
+    try { paint(); } catch (e) { if (!frame.told || now - frame.told > 5000) { frame.told = now; console.error('frame: ' + (e && e.message)); } }      // one bad frame must not end the preview
     if (S.pq !== 'auto') { const want = Number(S.pq) || 1; if (pscale !== want) { pscale = want; sizeStage(); } }
     else if (performance.now() - t0 > 34) { if (++slowFrames > 20 && pscale === 1 && !outLive()) { pscale = 0.5; sizeStage(); } } else slowFrames = Math.max(0, slowFrames - 1);
   }
@@ -1555,7 +1564,7 @@ function frame(now) {
 function followPart() {
   const i = partIdx(tau);
   if (i === sel) return;
-  sel = i; loadPart(); pushAll(); syncUI();
+  sel = i; loadPart(); pushAll(); syncUI(S.playing);
 }
 let partsSig = '';
 function renderParts() {
@@ -1567,7 +1576,8 @@ function renderParts() {
   $('partNote').textContent = parts.length === 1 ? 'One part covers the whole piece. Split at the playhead to give a stretch of the song its own layers, look and colour.'
     : 'Editing ' + partName(sel) + ', ' + (sel + 1) + ' of ' + parts.length + ', ' + parts[sel].t.toFixed(1) + ' to ' + partEnd(sel).toFixed(1) + ' s. The layers, variation, pixels and look below belong to it. Drag a part edge on the timeline to move it.';
 }
-function syncUI() {
+// quiet: nothing was changed, the controls only need to show another part (the playhead crossed an edge)
+function syncUI(quiet) {
   const { W, H, pw } = dims();
   savePart();
   renderParts();
@@ -1591,6 +1601,7 @@ function syncUI() {
   document.querySelectorAll('input[name=eq]').forEach(r => { r.disabled = !track; });
   document.documentElement.style.setProperty('--signal', S.tint);
   { const now = lookName(); $('hudLook').textContent = 'Look: ' + (now || 'your own'); document.querySelectorAll('[data-look]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.look === now))); }
+  if (quiet === true) return;
   tlCache = null;
   touch();
   workRefresh();
@@ -1683,7 +1694,9 @@ function pushAll() {
   row.append(lab, box); $('pad').insertBefore(row, $('pad').lastElementChild);
 }
 $('clearTrig').addEventListener('click', () => { userEv = []; tlSel = null; mergeEv(); tlInsp(); $('trigNote').textContent = 'Your clips are cleared. Only the automatic cut is left.'; if (!S.playing && !busy) paint(); });
+addEventListener('keydown', e => { if (busy && e.target.id !== 'save') { e.preventDefault(); e.stopImmediatePropagation(); } }, true);      // nor from the keyboard
 addEventListener('keydown', e => {
+  if (busy) return;                                       // an export is running: the piece is locked
   const tag = e.target && e.target.tagName;
   if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'z' && !window.nativeApp && !(tag === 'INPUT' && (e.target.type === 'text' || e.target.type === 'number'))) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
   if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
@@ -1784,7 +1797,7 @@ const px2den = v => 1 - 1.2 * v, den2px = d => (1 - d) / 1.2;
 // id, state key, value from 0..1 slider position, and back; rebuild = the schedule depends on it
 const RANGES = [['baseAmt', 'baseAmt', 1], ['basePx', 'baseDen', 0, px2den, den2px], ['glitch', 'glitch'], ['lines', 'lines'], ['chase', 'chase'], ['bgLo', 'bgLo'], ['bgMid', 'bgMid'], ['bgHi', 'bgHi'], ['fxAmt', 'fxAmt', 1],
   ['fxPx', 'fxDen', 0, px2den, den2px], ['wob', 'wob'], ['wobSize', 'wobSize'], ['eqAmt', 'eqAmt'], ['ease', 'ease'], ['presence', 'presence', 1], ['pilAmt', 'pilAmt', 1], ['symAmt', 'symAmt', 1], ['busy', 'busy', 1], ['logoPx', 'logoDen', 0, px2den, den2px], ['size', 'size'], ['chaos', 'chaos', 1], ['trail', 'trail'], ['pfill', 'pfill'], ['glow', 'glow']];
-for (const [id, key, rebuild, to] of RANGES) $(id).addEventListener('input', e => { const v = e.target.value / 100, x = to ? to(v) : v; if (auto[key] && auto[key].length) setKey(key, tau, x); else S[key] = x; if (rebuild) rebuildScore(); syncUI(); });
+for (const [id, key, rebuild, to] of RANGES) $(id).addEventListener('input', e => { const v = e.target.value / 100, x = to ? to(v) : v; if (auto[key] && auto[key].length) setKey(key, tau, x); else S[key] = x; if (rebuild) rebuildScore(key !== 'chaos'); syncUI(); });      // only Chaos changes the score itself
 function pushRanges() { for (const [id, key, , , back] of RANGES) $(id).value = Math.round((back ? back(S[key]) : S[key]) * 100); }
 for (const id of ['baseStyle', 'fxStyle', 'logoStyle']) {
   for (const s of STYLES) { const o = document.createElement('option'); o.value = s; o.textContent = STYLE_NAMES[s]; $(id).append(o); }
@@ -2086,9 +2099,9 @@ $('save').addEventListener('click', async () => {
     if (S.exFmt !== 'mp4' && window.nativeApp && window.nativeApp.ffStart) {
       const wasPlaying = S.playing;
       if (track) audio.pause();
-      busy = true; stop = false; btn.textContent = 'Stop rendering'; $('bar').hidden = false; $('barFill').style.width = '0%';
+      busy = true; stop = false; document.body.classList.add('rendering'); btn.textContent = 'Stop rendering'; $('bar').hidden = false; $('barFill').style.width = '0%';
       try { const f = await renderMov(); say('Saved ' + f.path + '. It starts at timecode ' + f.tc + (track && !f.sound ? '. The sound file was not found, so the film is silent.' : '.')); }
-      finally { busy = false; btn.textContent = 'Save'; $('bar').hidden = true; last = performance.now(); if (track && wasPlaying) setPlaying(true); updateReload(); }
+      finally { busy = false; document.body.classList.remove('rendering'); btn.textContent = 'Save'; $('bar').hidden = true; last = performance.now(); if (track && wasPlaying) setPlaying(true); updateReload(); }
       return;
     }
     const key = renderKey();
@@ -2096,9 +2109,9 @@ $('save').addEventListener('click', async () => {
       rendered = null;
       const wasPlaying = S.playing;
       if (track) audio.pause();
-      busy = true; stop = false; btn.textContent = 'Stop rendering'; $('bar').hidden = false; $('barFill').style.width = '0%';
+      busy = true; stop = false; document.body.classList.add('rendering'); btn.textContent = 'Stop rendering'; $('bar').hidden = false; $('barFill').style.width = '0%';
       try { rendered = await renderFile(); rendered.key = key; }
-      finally { busy = false; btn.textContent = 'Save'; $('bar').hidden = true; last = performance.now(); if (track && wasPlaying) setPlaying(true); updateReload(); }
+      finally { busy = false; document.body.classList.remove('rendering'); btn.textContent = 'Save'; $('bar').hidden = true; last = performance.now(); if (track && wasPlaying) setPlaying(true); updateReload(); }
     }
     await offer(rendered, downloads);
   } catch (e) {
@@ -2113,7 +2126,7 @@ let loadingProject = false, saveTimer = 0;
 function getProject() {
   savePart();
   const g = {}; for (const k of GLOBAL_KEYS) g[k] = S[k];
-  return { v: 1, app: 'mall-call', S: g, parts: parts.map(p => { const o = { t: p.t, P: p.P }; if (p.Q) o.Q = p.Q; if (p.name) o.name = p.name; return o; }), userEv: userEv.map(e => Object.assign({ t: e.t, type: e.type, seed: e.seed, d: e.d }, evMore(e))), auto, autoCut: Object.assign({}, autoCut), logo: logoFile, pool: logoPool, font: fontFile, syms: userSyms.map(u => ({ name: u.name, dataUrl: u.dataUrl })), soundPath: soundPath || null };
+  return { v: 1, app: 'mall-call', S: g, parts: parts.map(p => { const o = { t: p.t, P: p.P }; if (p.Q) o.Q = p.Q; if (p.name) o.name = p.name; return o; }), userEv: userEv.map(e => Object.assign({ t: e.t, type: e.type, seed: e.seed, d: e.d }, evMore(e))), auto, autoCut: Object.assign({}, autoCut), logo: logoFile, pool: logoPool, font: fontFile, syms: userSyms.map(u => ({ id: u.id, name: u.name, dataUrl: u.dataUrl })), soundPath: soundPath || null };
 }
 function pushGlobals() {
   setRadio('format', S.format);
@@ -2126,6 +2139,11 @@ function pushGlobals() {
 }
 async function applyProject(pj) {
   if (!pj || pj.v !== 1 || !Array.isArray(pj.parts) || !pj.parts.length) return false;
+  let soundFile = null;
+  if (pj.soundPath && window.nativeApp) {                 // look for the sound before touching anything, so a project that cannot open leaves the one in hand alone
+    soundFile = await window.nativeApp.readFile(pj.soundPath);
+    if (!soundFile) { $('soundNote').textContent = 'That project was not opened: its sound was not found at ' + pj.soundPath + '. If it is in iCloud or Dropbox, let it download and try again.'; return false; }
+  }
   loadingProject = true;
   try {
     audio.pause(); S.playing = false;
@@ -2134,21 +2152,20 @@ async function applyProject(pj) {
     pushGlobals(); undoReset(); tlSel = null; auto = {}; autoCut.base = autoCut.fx = autoCut.logo = autoCut.pil = autoCut.sym = true;
     if (!pj.soundPath && track) { audio.removeAttribute('src'); track = null; soundPath = ''; resetParts(); }
     userSyms = []; symMasks.clear();
-    for (const u of (Array.isArray(pj.syms) ? pj.syms : [])) if (u && u.dataUrl) await addSymbol({ name: String(u.name || 'symbol') }, u.dataUrl);
+    for (const u of (Array.isArray(pj.syms) ? pj.syms : [])) if (u && u.dataUrl) await addSymbol({ name: String(u.name || 'symbol') }, u.dataUrl, u.id);
     symBank();
     if (pj.font && pj.font.dataUrl) { const blob = await (await fetch(pj.font.dataUrl)).blob(); await loadFont(new File([blob], pj.font.name)); }
+    else if (fontFile) { if (fontFace) document.fonts.delete(fontFace); fontFace = null; fontFile = null; delete TYPE_FONTS.own; { typeMasks.clear(); typeBytes = 0; } }      // the last project's font does not carry over
     logoPool = (Array.isArray(pj.pool) ? pj.pool : []).filter(q => q && q.dataUrl).map(q => ({ name: String(q.name || 'logo'), dataUrl: q.dataUrl }));
     if (pj.logo && pj.logo.dataUrl) { const blob = await (await fetch(pj.logo.dataUrl)).blob(); await loadLogo(new File([blob], pj.logo.name, { type: blob.type })); }
-    let missing = '';
-    if (pj.soundPath && window.nativeApp) {
-      const f = await window.nativeApp.readFile(pj.soundPath);
-      if (f) await loadSound(new File([f.data], f.name), true, pj.soundPath); else missing = pj.soundPath;
-    }
+    else { logoSrc = placeholder(); logoFile = null; mask = buildMask(logoSrc.img, logoSrc.w, logoSrc.h, S.invert); maskN++; $('logoNote').textContent = 'Showing a placeholder ring. Only the shape is used, so a one-colour logo on a transparent background works best.'; }      // nor does its logo
+    const missing = '';
+    if (soundFile) await loadSound(new File([soundFile.data], soundFile.name), true, pj.soundPath);
     if (!track) { soundPath = ''; rebuildScore(); }
     if (!missing) {
       parts = pj.parts.filter(p => p.t < score.D).map(p => { const o = { t: p.t, P: Object.assign(snap(), { fxAmt: 0, lineMode: 0, inner: 'same', pilAmt: 0, symAmt: 0, busy: 0.7, trans: 'cut', transLen: 1 }, p.P) }; if (p.Q) o.Q = Object.assign({}, o.P, p.Q, { inner: 'own' }); if (p.name) o.name = String(p.name).slice(0, 24); return o; });      // a project from before Auto clips keeps its cut
       if (!parts.length || parts[0].t !== 0) parts.unshift({ t: 0, P: snap() });
-      userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d, e.type === 'type' ? { txt: String(e.txt || ''), mode: String(e.mode || 'slam'), size: Number(e.size) || 0.5, y: Number(e.y) || 0.5, font: ['mono', 'own'].includes(e.font) ? e.font : 'sans', x: e.x === undefined ? 0.5 : Number(e.x) || 0, caps: e.caps !== false, trk: Number(e.trk) || 0, out: e.out === 'same' ? 'same' : 'cut', ol: !!e.ol, face: e.face | 0 } : e.type === 'sym' ? { sy: String(e.sy || 'x'), step: !!e.step, echo: Math.max(0, Math.min(8, e.echo | 0)), ex: Number(e.ex) || 0, ey: Number(e.ey) || 0, size: Number(e.size) || 0.6, x: e.x === undefined ? 0.5 : Number(e.x) || 0, y: e.y === undefined ? 0.5 : Number(e.y) || 0, each: !!e.each, dl: Number(e.dl) || 0, face: e.face | 0 } : e.type === 'pillar' ? { fx: PILLAR_FX.includes(e.fx) ? e.fx : 'chase', pm: ['light', 'frame'].includes(e.pm) ? e.pm : 'mask', on: ['logo', 'glitch'].includes(e.on) ? e.on : 'all', sp: Number(e.sp) || 1, wd: Number(e.wd) || 0.25, face: e.face | 0 } : { face: e.face | 0 }));
+      userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d, e.type === 'type' ? { txt: String(e.txt || ''), mode: String(e.mode || 'slam'), size: Number(e.size) || 0.5, y: e.y === undefined ? 0.5 : Number(e.y) || 0, font: ['mono', 'own'].includes(e.font) ? e.font : 'sans', x: e.x === undefined ? 0.5 : Number(e.x) || 0, caps: e.caps !== false, trk: Number(e.trk) || 0, out: e.out === 'same' ? 'same' : 'cut', ol: !!e.ol, face: e.face | 0 } : e.type === 'sym' ? { sy: String(e.sy || 'x'), step: !!e.step, echo: Math.max(0, Math.min(8, e.echo | 0)), ex: Number(e.ex) || 0, ey: Number(e.ey) || 0, size: Number(e.size) || 0.6, x: e.x === undefined ? 0.5 : Number(e.x) || 0, y: e.y === undefined ? 0.5 : Number(e.y) || 0, each: !!e.each, dl: Number(e.dl) || 0, face: e.face | 0 } : e.type === 'pillar' ? { fx: PILLAR_FX.includes(e.fx) ? e.fx : 'chase', pm: ['light', 'frame'].includes(e.pm) ? e.pm : 'mask', on: ['logo', 'glitch'].includes(e.on) ? e.on : 'all', sp: Number(e.sp) || 1, wd: Number(e.wd) || 0.25, face: e.face | 0 } : { face: e.face | 0 }));
       for (const [k] of AKEYS) if (pj.auto && Array.isArray(pj.auto[k])) auto[k] = pj.auto[k].filter(q => q.t <= score.D).map(q => ({ t: Number(q.t) || 0, v: Number(q.v) || 0, c: q.c | 0 })).sort((a, b) => a.t - b.t);
       if (pj.autoCut) { autoCut.base = pj.autoCut.base !== false; autoCut.fx = pj.autoCut.fx !== false; autoCut.logo = pj.autoCut.logo !== false; autoCut.pil = pj.autoCut.pil !== false; autoCut.sym = pj.autoCut.sym !== false; }
     } else $('soundNote').textContent = 'The sound for this project was not found at ' + missing + '. Drop it in again and reopen the project.';
@@ -2247,6 +2264,19 @@ window.__selfTest = async () => {
       const oc = document.createElement('canvas'); oc.width = oc.height = 8; const og = oc.getContext('2d'); og.fillStyle = 'rgb(60,60,60)'; og.fillRect(0, 0, 8, 8);
       S.gCon = 2.4; S.gBlack = 0.35; gradeSet(); gradeFrame(oc); const px = og.getImageData(4, 4, 1, 1).data[0]; S.gCon = 1; S.gBlack = 0; gradeSet();
       r.grade = b[1] < a[1] * 0.7 && a[0] + a[1] > 20 && px < 10; if (!r.grade) r.gradeWhy = [a, b, px]; }
+    try {                                                   // the fixes from the review of build 31
+      const why = [];
+      tau = 1; trigger('type'); const bar = userEv[userEv.length - 1]; bar.txt = ' | '; bar.mode = 'slam'; bar.y = 0; mergeEv(); tau = 1.2; paint();      // words that are only line breaks
+      await applyProject(JSON.parse(JSON.stringify(getProject())));
+      const top = userEv.find(e => e.k === 13); if (!top || top.y !== 0) why.push('y');
+      const was = S.panelsIn; S.faces = 2; S.panelsIn = S.panels - 6; sizeStage(); tau = score.D * 0.45; paint();      // fewer pillars inside: drawn, not stretched
+      const fw = stage.width, fh = stage.height, dd = main.g.getImageData(0, fh / 2 | 0, fw, fh / 2 | 0).data; let inLit = 0; for (let i = 0; i < dd.length; i += 400) if (dd[i] > 40) inLit++;
+      if (!inLit) why.push('inside');
+      S.panelsIn = was; sizeStage();
+      const sc0 = score, n0 = score.all.length; rebuildScore(true); if (score !== sc0 || score.all.length !== n0) why.push('events');
+      await applyProject(JSON.parse(before)); undoReset();
+      r.review = !why.length; if (!r.review) r.reviewWhy = why;
+    } catch (e) { r.review = 'error: ' + e.message; }
     if (window.nativeApp && window.nativeApp.libSave) {     // two versions of a project into the library, then the first one back
       $('libName').value = 'Smoke test'; $('look-chunky').click(); await libSave('first');
       $('look-wire').click(); const two = await libSave('second');
@@ -2286,6 +2316,7 @@ window.__exportTest = async (fmt, ringView) => {
   const set = (id, v) => { $(id).value = v; $(id).dispatchEvent(new Event('change')); };
   set('loop', '4'); $('tcStart').value = '01:00:00:00'; $('tcStart').dispatchEvent(new Event('change'));
   if (ringView) { set('faces', '2'); set('panelsIn', '24'); set('exView', ringView); }
+  else set('exView', 'flat');                             // whatever the last session left chosen
   if (![...$('exFmt').options].some(o => o.value === fmt)) return { failed: 'format ' + fmt + ' is not offered' };
   set('exFmt', fmt);
   $('save').click();
@@ -2304,11 +2335,12 @@ tcPush();
 syncUI();
 tlInsp();
 if (document.fonts && document.fonts.load) document.fonts.load('500 20px "DM Mono"').then(() => { if (!S.playing) syncUI(); }, () => {});
-if (document.fonts && document.fonts.load) document.fonts.load('600 20px "Instrument Sans"').then(() => { typeMasks.clear(); }, () => {});
+if (document.fonts && document.fonts.load) document.fonts.load('600 20px "Instrument Sans"').then(() => { { typeMasks.clear(); typeBytes = 0; } }, () => {});
 addEventListener('resize', () => { tlCache = null; if (!S.playing && !busy) paint(); });
 getDownloads();
 if (window.nativeApp) window.nativeApp.autosaveLoad().then(j => { if (j) { try { applyProject(JSON.parse(j)); } catch (e) {} } }, () => {});
 requestAnimationFrame(frame);
+if (window.nativeApp && window.nativeApp.pageOk) window.nativeApp.pageOk(BUILD);
 })();
 </script>
 </body>

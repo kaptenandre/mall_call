@@ -48,14 +48,24 @@ function createWindow() {
   });
   win.on('closed', () => { win = null; if (outWin && !outWin.isDestroyed()) outWin.close(); });
   if (SMOKE) smoke();
-  win.loadFile(SMOKE ? path.join(__dirname, 'app', 'index.html') : update.pagePath());
+  win.webContents.on('did-start-navigation', (e, url, inPlace, main) => { if (main && !inPlace) ffDrop(); });      // a reload in the middle of an export must not leave ffmpeg holding the job
+  if (SMOKE) win.loadFile(path.join(__dirname, 'app', 'index.html')); else openPage();
   setTitle();
 }
+// Open the page and, when it is a fetched one, wait for it to say it started. One that does not is dropped for the built-in page.
+let okTimer = null;
+function openPage() {
+  clearTimeout(okTimer);
+  if (!win || win.isDestroyed()) return;
+  if (update.reports()) okTimer = setTimeout(async () => { if (await update.markBad()) { buildMenu(); if (win && !win.isDestroyed()) win.loadFile(update.pagePath()); } }, 12000);
+  win.loadFile(update.pagePath());
+}
+ipcMain.on('page-ok', () => clearTimeout(okTimer));
 
 // Updates: look once at launch without holding the window up for long. A check from the menu loads what it finds at once;
 // one that finishes late waits for Reload With Update, so work in the window is never thrown away unasked.
 let updateWaiting = false;
-function loadPage() { updateWaiting = false; buildMenu(); if (win && !win.isDestroyed()) win.loadFile(update.pagePath()); }
+function loadPage() { updateWaiting = false; buildMenu(); openPage(); }
 async function checkUpdates(reload, quick) {
   const got = await update.check(quick);
   if (got && reload === true) return loadPage();
@@ -181,6 +191,7 @@ ipcMain.handle('output-place', (event, where) => {
 // Export through ffmpeg: ProRes or HAP in a .mov, with the start timecode and the sound. The page sends raw frames.
 const FF_PATHS = ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg', 'ffmpeg'];
 let ffPath = null, ffJob = null;
+function ffDrop() { const job = ffJob; if (!job) return; ffJob = null; try { job.proc.kill('SIGKILL'); } catch (e) {} job.done.then(() => fsp.unlink(job.out).catch(() => {})); }
 const ffFind = async () => {
   for (const p of FF_PATHS) {
     const out = await new Promise(res => execFile(p, ['-hide_banner', '-encoders'], { maxBuffer: 4e6 }, (err, so) => res(err ? null : String(so))));
@@ -219,8 +230,8 @@ ipcMain.handle('ff-start', async (event, o) => {
 ipcMain.handle('ff-frame', async (event, data) => {
   const job = ffJob;
   if (!job || job.proc.exitCode !== null) return false;
-  if (!job.proc.stdin.write(Buffer.from(data))) await new Promise(res => job.proc.stdin.once('drain', res));   // ffmpeg sets the pace
-  return true;
+  if (!job.proc.stdin.write(Buffer.from(data))) await Promise.race([new Promise(res => job.proc.stdin.once('drain', res)), job.done]);   // ffmpeg sets the pace; if it dies, stop waiting
+  return job.proc.exitCode === null;
 });
 ipcMain.handle('ff-end', async (event, abort) => {
   const job = ffJob;
@@ -258,12 +269,23 @@ ipcMain.handle('lib-pick-root', async () => {
 ipcMain.handle('lib-reveal', async (event, name) => { const root = await libRoot(), dir = path.join(root, safeName(name)); await fsp.mkdir(root, { recursive: true }); shell.openPath(name && fs.existsSync(dir) ? dir : root); return true; });
 // The app's own running record, for whoever is helping: the latest state, and a line a write so there is a history.
 // It stays in the library folder. Nothing leaves the computer unless that folder is one the user syncs.
+// Dropbox folders on this computer, if it has any (the old place and the one macOS uses now)
+function dropboxDirs() {
+  const home = app.getPath('home'), out = [];
+  try { if (fs.statSync(path.join(home, 'Dropbox')).isDirectory()) out.push(path.join(home, 'Dropbox')); } catch (e) {}
+  try { for (const n of fs.readdirSync(path.join(home, 'Library', 'CloudStorage'))) if (/^Dropbox/.test(n)) out.push(path.join(home, 'Library', 'CloudStorage', n)); } catch (e) {}
+  return out.slice(0, 2);
+}
 ipcMain.handle('diag-write', async (event, json) => {
   try {
     const dir = path.join(await libRoot(), '_diagnostics'), text = String(json).slice(0, 200000);
     await fsp.mkdir(dir, { recursive: true });
     const o = JSON.parse(text); o.computer = { platform: process.platform + ' ' + process.arch, os: process.getSystemVersion ? process.getSystemVersion() : '', electron: process.versions.electron, cpus: require('os').cpus().length, cpu: (require('os').cpus()[0] || {}).model, memGB: Math.round(require('os').totalmem() / 1073741824) };
     await fsp.writeFile(path.join(dir, 'latest.json'), JSON.stringify(o, null, 1), 'utf8');
+    for (const box of dropboxDirs()) {                     // and a copy where whoever is helping can read it without being sent anything
+      const dd = path.join(box, 'Mall Call', '_diagnostics');
+      try { await fsp.mkdir(dd, { recursive: true }); await fsp.writeFile(path.join(dd, 'latest.json'), JSON.stringify(o, null, 1), 'utf8'); } catch (e) {}
+    }
     const log = path.join(dir, 'history.log'), line = [o.at, 'build ' + o.build, o.frameMs + ' ms', o.preview, o.playing ? 'playing' : 'paused', (o.errors || []).length + ' errors'].join('  ') + '\n';
     const st = await fsp.stat(log).catch(() => null);
     if (st && st.size > 400000) await fsp.writeFile(log, line, 'utf8'); else await fsp.appendFile(log, line, 'utf8');
@@ -293,9 +315,15 @@ ipcMain.handle('lib-save', async (event, o) => {
   const pj = JSON.parse(String(o.json));
   pj.savedAt = new Date().toISOString(); pj.note = String(o.note || '').slice(0, 200); pj.soundAsset = null;
   if (pj.soundPath) {                                     // the sound travels with the project
-    const src = String(pj.soundPath), dst = path.join(dir, 'assets', safeName(path.basename(src)) || 'sound');
+    const src = String(pj.soundPath); let dst = path.join(dir, 'assets', safeName(path.basename(src)) || 'sound');
     try {
-      const a = await fsp.stat(src), b = await fsp.stat(dst).catch(() => null);
+      const a = await fsp.stat(src);
+      let b = await fsp.stat(dst).catch(() => null);
+      if (b && b.size !== a.size) {                         // another sound under the same name: older versions keep theirs, this one gets its own copy
+        const ext = path.extname(dst);
+        dst = dst.slice(0, dst.length - ext.length) + '-' + a.size.toString(36) + ext;
+        b = await fsp.stat(dst).catch(() => null);
+      }
       if (!b || b.size !== a.size) await fsp.copyFile(src, dst);
       pj.soundAsset = path.basename(dst);
     } catch (e) { return { error: 'sound' }; }
@@ -316,9 +344,12 @@ ipcMain.handle('lib-open', async (event, o) => {
     return { json: JSON.stringify(pj), n, name };
   } catch (e) { return null; }
 });
+let saveN = 0;
 ipcMain.handle('autosave', async (event, json) => {
   await fsp.mkdir(path.dirname(autosaveFile()), { recursive: true });
-  await fsp.writeFile(autosaveFile(), String(json), 'utf8');
+  const tmp = autosaveFile() + '.' + (++saveN) + '.tmp';      // written beside and swapped in, so a crash never leaves half a session
+  await fsp.writeFile(tmp, String(json), 'utf8');
+  await fsp.rename(tmp, autosaveFile());
   return true;
 });
 ipcMain.handle('autosave-load', async () => {
@@ -354,16 +385,19 @@ function smoke() {
 app.whenReady().then(async () => {
   // the page may use sound inputs and choose sound outputs (timecode in and out, music out); nothing else is granted
   const OK = ['media', 'audioCapture', 'speaker-selection'];
-  session.defaultSession.setPermissionRequestHandler((wc, perm, cb) => cb(OK.includes(perm)));
+  session.defaultSession.setPermissionRequestHandler((wc, perm, cb, d) => cb(OK.includes(perm) && !(perm === 'media' && d && d.mediaTypes && d.mediaTypes.includes('video'))));      // sound only, never the camera
   session.defaultSession.setPermissionCheckHandler((wc, perm) => OK.includes(perm));
+  let first = null;
   if (!SMOKE) {
     await update.load();
-    const first = checkUpdates(false);
+    first = checkUpdates(false);
     await Promise.race([first, new Promise(r => setTimeout(r, 2500))]);      // offline or slow: open with what we have
     if (update.takeFresh()) updateWaiting = false;
   }
   buildMenu(); createWindow();
-  if (!SMOKE) setInterval(() => { if (update.state().channel !== 'off' && !updateWaiting) checkUpdates('ask', true); }, 180000);
+  // an update that arrived after the window opened, or that the page has not taken yet, is offered again
+  if (first) first.then(() => setTimeout(() => { if (updateWaiting) send('update-ready'); }, 8000));
+  if (!SMOKE) setInterval(() => { if (update.state().channel === 'off') return; if (updateWaiting) send('update-ready'); else checkUpdates('ask', true); }, 180000);
   if (process.env.MALLCALL_EXPORT_TEST) win.webContents.once('did-finish-load', async () => {      // e.g. MALLCALL_EXPORT_TEST=prores or hap:3d, with MALLCALL_FF_OUT=/path/out.mov
     const [fmt, view] = process.env.MALLCALL_EXPORT_TEST.split(':');
     await new Promise(r => setTimeout(r, 1500));
