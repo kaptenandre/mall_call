@@ -52,6 +52,9 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 - Glow follows the bass (`st.pulse`) so it reads as light thrown by a hit. Trails are off by default. The user called constant glow and trails the softest part of the look.
 - **The piece is always the double ring** (user, 2026-11: "everything will be this double circle"). The Wide and Panel formats are gone from the interface; `S.format` is always `ring` and `S.faces` starts at 2. Do not add flat or square formats back. The 3D view is the main monitor, with set views (`RING_VIEWS`: outside, eye level, close, inside, centre, above) and Turn, which walks round the ring and also turns a 3D film.
 - **Workspaces**: Edit is the piece. Media is the pool of what the project holds: every logo it has been given (`logoPool`, press one to use it), the sound, the user's own symbols and font. Versions is the project library as a page with a history table.
+- **The window is a shell that does not scroll** (above 880 px wide): the monitor, the timeline and the part controls keep their place on the left, and only the rail of settings scrolls. The rail's width is dragged with the splitter and remembered; it lays itself out in one, two or three columns as it fits. The trigger pad lives at the top of the rail. Short windows squeeze the timeline and the strips so the 3D view keeps some room.
+- **The preview only paints when it must**: at the piece's frame rate while playing, and when something changes while paused (plus a slow safety repaint). It used to repaint 60 times a second even standing still, which made scrolling lag. `S.pq` is the preview size: auto, full, half or quarter. Anything that changes the picture while paused must call `paint()` itself.
+- **Parts have names** (`parts[i].name`, typed in the part bar; `partName(i)` falls back to the number). Split by sound names them Intro, Build, Drop, Quiet, Back in.
 - **The output grade** (`gGain`, `gCon`, `gGam`, `gBlack`) is the last thing done to the frame, in the preview, the output window and every export (`gradeFrame`, an SVG filter). It exists because the screens are see-through LED mesh, where dim grey pixels read as haze: contrast and the black floor push them to black.
 - The looks on the trigger pad show which one is in force, on the button and in the line under the monitor.
 - **The ring has two faces.** `S.faces` 1 or 2, `S.panels` outside and `S.panelsIn` inside, `S.panelPx` for a panel's pixel width (0 picks one). With two faces the frame holds two strips: outside on top, inside under it, both from the left (`dims`, `drawFaces`). Each part says what the inside shows, `P.inner`: `same`, `mirror`, `off`, or `own`, which keeps a second set of settings `Q` beside `P`. `face` is which one the controls edit; `PAt(t, face)` reads it. A clip can play on both faces, the outside or the inside (`e.face` 0, 1, 2). The inside is only rendered separately when it really differs. The ring is pillars with air between them: `S.gap` is that air in pillar widths. With it set, each layer's field is as wide as the whole ring, air included, and every pillar is a window onto its own stretch (`Renderer.draw`), so a sweep travels at the right speed and the logo keeps its shape across pillars. The frame that goes out still holds only the pillars, packed side by side. All of these numbers are guesses until the real ring is known, which is why they are settings.
@@ -107,6 +110,7 @@ Only the page updates this way. A change to `main.js`, `preload.js`, `update.js`
 - Following `latest` and the three-minute check are untested against GitHub.
 - Pillar patterns, part transitions, the At once control and the new Type modes have been seen as still frames in Chromium. None of them has been judged in motion.
 - The library is checked in smoke without a sound (two versions saved, the first reopened). Copying a sound file into a project, and the folder living in iCloud Drive or Dropbox, are untried.
+- The shell layout has been looked at in Chromium at 1280 x 720, 1512 x 945 and 2560 x 1300. Whether scrolling is smooth again on the Mac is unknown.
 - LTC and MTC are tested as maths only (encode, decode, round trip). No audio or MIDI device is wired up.
 
 - On macOS (Apple silicon) the smoke check passes with H.264 and AAC, and the packaged app builds and launches. Nobody has looked closely at the window yet, so the interface itself is unchecked on the Mac.
@@ -124,11 +128,9 @@ Kept current so a new session can pick up without the old conversation. Update i
 
 Asked for and not done yet, newest first:
 
-1. A layout that scales between a small laptop screen and a large one, showing a bit more data. The user also wrote "få med poser.global också": unclear, ask what they meant.
-2. Names for parts (they asked how parts are named; today they are only numbered).
-3. Scrolling has become laggy. Likely the preview painting a 3840 wide two-face frame plus the 3D view every frame on the main thread. Ideas: let only the rail scroll inside a fixed app shell, cap the preview rate, a preview quality setting.
-4. Icons on the trigger pad, if they want them.
-5. The real room from Vectorworks in the 3D view: waiting for an OBJ export from their collaborator.
+1. The user wrote "få med poser.global också" while asking for the layout work. It is not clear what that means; ask.
+2. Icons on the trigger pad, if they want them.
+3. The real room from Vectorworks in the 3D view: waiting for an OBJ export from their collaborator.
 
 ## Next, roughly in order
 ## Next, roughly in order
