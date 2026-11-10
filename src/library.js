@@ -13,8 +13,9 @@ async function libRefresh(keep) {
 async function libVersionsFill() {
   const ver = $('libVer'), name = $('libPick').value;
   ver.textContent = '';
-  if (!name) return;
+  if (!name) { versTable('', []); return; }
   const vs = (await window.nativeApp.libVersions(name)).reverse();
+  versTable(name, vs);
   for (const v of vs) { const o = document.createElement('option'); o.value = v.n; const d = v.at ? new Date(v.at) : null; o.textContent = 'v' + v.n + (d && !isNaN(d) ? ', ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '') + (v.note ? ': ' + v.note : ''); ver.append(o); }
 }
 // every save is a new version; nothing already saved is ever written over

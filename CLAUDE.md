@@ -14,7 +14,7 @@ npm run dist     # package and ad-hoc sign dist/Mall Call-darwin-arm64/Mall Call
 
 Raise `BUILD` in `src/page.html` by one with every push. It shows in the page header ("build 12") and is how the user tells whether the app has updated.
 
-Run `npm run smoke` and `npm test` after every change. A clean smoke run has `"errors":[]`, `"roundTrip":true`, `"restored":true`, `"timeline":true`, `"type":true`, `"library":true`, `"h264":true`.
+Run `npm run smoke` and `npm test` after every change. A clean smoke run has `"errors":[]`, `"roundTrip":true`, `"restored":true`, `"timeline":true`, `"type":true`, `"grade":true`, `"library":true`, `"h264":true`.
 
 On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts/build.js && xvfb-run -a npx electron . --smoke --no-sandbox`. `"aac":false` is expected there.
 
@@ -25,6 +25,7 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 - `src/timecode.js`: SMPTE maths, MIDI timecode and LTC encode and decode, no DOM. Inlined at `/*__TIMECODE__*/`. Only the maths is used by the interface so far.
 - `src/ring.js`: the ring in 3D, plain WebGL with no library so it updates with the page. Inlined at `/*__RING__*/`.
 - `src/ui.js`: the interface pass over the rail: an icon on every section name, explaining notes folded behind an i, sections that shut (remembered). Notes with `aria-live` report things and stay in view. Inlined at `/*__UI__*/`. The user wants icons in place of text wherever a picture says it.
+- `src/work.js`: the workspaces (Edit, Media, Versions), the media pool and the version history page. Inlined at `/*__WORK__*/`.
 - `src/library.js`: the project library in the rail. Inlined at `/*__LIBRARY__*/`.
 - `src/output.js`: the clean output window and the timecode settings. Inlined at `/*__OUTPUT__*/`.
 - `scripts/test.js`: node checks for the two files with no DOM.
@@ -49,6 +50,10 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 - **Lines** in the glitch layer move one of two ways (`lineMode`, per part). **Pulse**, the default, follows a reference film the user likes: a rack of twelve parallel bars, each a short lit stretch with a hot middle and tapering tips, that strikes out in length and light within a frame of a hit and sinks back over about half a second, each bar slightly its own. Nothing glides; the stretches stand somewhere else after the next hit. **Slide** is the older full-frame hairlines easing from place to place. The user finds Slide too digital.
 - **Type** clips (`EV.type`, the fourth lane) put words on screen: `txt`, `mode` (slam, typeon, roll, ticker), `size`, `y`, `font`. `typeField` draws them in the logo layer with its style and its glitch. They only come from the user, never from the automatic cut.
 - Glow follows the bass (`st.pulse`) so it reads as light thrown by a hit. Trails are off by default. The user called constant glow and trails the softest part of the look.
+- **The piece is always the double ring** (user, 2026-11: "everything will be this double circle"). The Wide and Panel formats are gone from the interface; `S.format` is always `ring` and `S.faces` starts at 2. Do not add flat or square formats back. The 3D view is the main monitor, with set views (`RING_VIEWS`: outside, eye level, close, inside, centre, above) and Turn, which walks round the ring and also turns a 3D film.
+- **Workspaces**: Edit is the piece. Media is the pool of what the project holds: every logo it has been given (`logoPool`, press one to use it), the sound, the user's own symbols and font. Versions is the project library as a page with a history table.
+- **The output grade** (`gGain`, `gCon`, `gGam`, `gBlack`) is the last thing done to the frame, in the preview, the output window and every export (`gradeFrame`, an SVG filter). It exists because the screens are see-through LED mesh, where dim grey pixels read as haze: contrast and the black floor push them to black.
+- The looks on the trigger pad show which one is in force, on the button and in the line under the monitor.
 - **The ring has two faces.** `S.faces` 1 or 2, `S.panels` outside and `S.panelsIn` inside, `S.panelPx` for a panel's pixel width (0 picks one). With two faces the frame holds two strips: outside on top, inside under it, both from the left (`dims`, `drawFaces`). Each part says what the inside shows, `P.inner`: `same`, `mirror`, `off`, or `own`, which keeps a second set of settings `Q` beside `P`. `face` is which one the controls edit; `PAt(t, face)` reads it. A clip can play on both faces, the outside or the inside (`e.face` 0, 1, 2). The inside is only rendered separately when it really differs. The ring is pillars with air between them: `S.gap` is that air in pillar widths. With it set, each layer's field is as wide as the whole ring, air included, and every pillar is a window onto its own stretch (`Renderer.draw`), so a sweep travels at the right speed and the logo keeps its shape across pillars. The frame that goes out still holds only the pillars, packed side by side. All of these numbers are guesses until the real ring is known, which is why they are settings.
 - **Base looks for a ring**: `orbit` (a wall of light runs a lap), `spokes` (a few bars turning together), `meet` (two fronts leave one point and close on the far side). They treat the frame's left and right edges as the same place. On a ring the automatic cut uses them where it would sweep. `isBase(k)` says which clips are base.
 - The Sound row of the timeline is a waveform in three colours like a DJ player: bass blue, mids amber, highs white. The user asked for this instead of a spectrogram.
@@ -108,6 +113,24 @@ Only the page updates this way. A change to `main.js`, `preload.js`, `update.js`
 - Save and open dialogs and a real export have not been exercised by hand.
 - Preview performance with three layers at 1920 x 1080 on real hardware.
 
+## Where the work stands (handover)
+
+Kept current so a new session can pick up without the old conversation. Update it with every merge.
+
+- Everything is on `main`. The user asked in the session of 2026-11-10 for each finished piece to be merged to `main` as it is done; ask again in a new session before merging.
+- The user runs the packaged app on a MacBook from `~/mall_call` (cloned 2026-11-10). They are not a developer: give exact Terminal commands, one per block. A change to `main.js`, `preload.js`, `update.js` or `assemble.js` means they must run `git checkout main`, `git pull`, `npm run dist` and open the app in `dist/`. They have had trouble telling whether the app updated: the build number in the header is how.
+- Nothing built since the first commit has been seen running on their Mac by us. They report back in screenshots and short Swedish messages. Reply in Swedish, never with em dashes.
+- The look they are after: analog, hard, lamp-like. Not soft, not "digital". Two reference films shaped the pulse lines and the symbols with echoes.
+
+Asked for and not done yet, newest first:
+
+1. A layout that scales between a small laptop screen and a large one, showing a bit more data. The user also wrote "få med poser.global också": unclear, ask what they meant.
+2. Names for parts (they asked how parts are named; today they are only numbered).
+3. Scrolling has become laggy. Likely the preview painting a 3840 wide two-face frame plus the 3D view every frame on the main thread. Ideas: let only the rail scroll inside a fixed app shell, cap the preview rate, a preview quality setting.
+4. Icons on the trigger pad, if they want them.
+5. The real room from Vectorworks in the 3D view: waiting for an OBJ export from their collaborator.
+
+## Next, roughly in order
 ## Next, roughly in order
 
 1. The real room in the 3D view. The user's collaborator draws in Vectorworks. Load a model exported from there (OBJ first, it is easy to read; glTF after) and put the frame on its LED faces, so the piece is seen in the space as drawn. Also save the 3D view as a film.

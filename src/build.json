@@ -7,6 +7,7 @@
     ["/*__OUTPUT__*/", "src/output.js"],
     ["/*__RING__*/", "src/ring.js"],
     ["/*__LIBRARY__*/", "src/library.js"],
-    ["/*__UI__*/", "src/ui.js"]
+    ["/*__UI__*/", "src/ui.js"],
+    ["/*__WORK__*/", "src/work.js"]
   ]
 }
