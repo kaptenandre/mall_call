@@ -85,6 +85,9 @@ for (const r of Object.keys(M.TC_RATES)) {
   ok(pe.some(e => e.fx === 'build' && Math.abs(e.t + e.d - 12) < 0.3), 'the picture builds up pillar by pillar into the drop');
   ok(pe.every((e, i) => i === 0 || e.t >= pe[i - 1].t) || true, 'ordered');
   ok(pe.filter(e => e.fx !== 'build' && e.t > 20.3 && e.t < 23.2).length === 0, 'no patterns start in the break');
+  const se = M.makeEvents(sc, { base: 0.45, fx: 0.3, mode: 0, presence: 0.5, sym: 0.8 }, 0, sc.D, 0).filter(e => e.type === 'sym');
+  ok(se.length >= 1 && se.every(e => e.step && e.d >= 0.8 && e.t + e.d <= sc.D), 'symbols are placed by the automatic cut: ' + se.length);
+  ok(M.makeEvents(sc, { base: 0.45, fx: 0.3, mode: 0, presence: 0.5 }, 0, sc.D, 0).every(e => e.type !== 'sym' && e.type !== 'pillar'), 'and not without being asked');
   console.log('structure: ' + (Date.now() - t0) + ' ms, ' + ev.length + ' clips: ' + Object.keys(M.EV).map(k => k + ' ' + of(k).length).filter(x => !x.endsWith(' 0')).join(', '));
 }
 console.log('TEST ok, ' + n + ' checks');
