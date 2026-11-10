@@ -1,0 +1,21 @@
+{
+  "name": "mall-call",
+  "productName": "Mall Call",
+  "version": "0.1.0",
+  "description": "Three-layer, sound-driven logo animation for LED panels: base, glitch and logo layers with a trigger pad.",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.js",
+    "start": "node scripts/build.js && electron .",
+    "smoke": "node scripts/build.js && electron . --smoke",
+    "dist": "node scripts/build.js && node scripts/dist.js"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "@fontsource/dm-mono": "5.3.0",
+    "@fontsource/instrument-sans": "5.3.0",
+    "electron": "45.2.3",
+    "mp4-muxer": "5.2.2"
+  }
+}

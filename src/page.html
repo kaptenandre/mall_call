@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mall Call</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Layout: the stage sits left with its timeline and the trigger pad beneath it; the control rail on the right,
+     one fieldset per layer. Single dark theme on purpose: the page is a blacked-out room and the content is the only light. */
+  --room:#07070a;
+  --panel:#0f0f15;
+  --rule:#25252f;
+  --ink:#eceaf4;
+  --dim:#8d8b9e;
+  --signal:#ffffff;
+  --display:"DM Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--room);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.top{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 20px;padding:18px 20px 14px;border-bottom:1px solid var(--rule)}
+h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase;margin:0;text-wrap:balance}
+.top p{margin:0;color:var(--dim);max-width:65ch}
+.app{display:grid;grid-template-columns:minmax(0,1fr) 304px;gap:20px;padding:20px;align-items:start}
+.stagecol{position:sticky;top:12px;min-width:0}
+.stage{background:#000;border:1px solid var(--rule);display:flex;justify-content:center;align-items:center;min-height:180px;overflow-x:auto}
+.stage canvas{display:block}
+.stage.wide canvas{width:100%;height:auto}
+.stage.panel canvas{height:min(64vh,640px);width:auto;max-width:100%}
+.stage.ring{justify-content:flex-start}
+.stage.ring canvas{height:240px;width:auto;max-width:none}
+.tl{display:block;width:100%;height:48px;border:1px solid var(--rule);border-top:0;background:#000;cursor:pointer;touch-action:none}
+.hud{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;font:400 11px/1.3 var(--display);letter-spacing:.07em;text-transform:uppercase;color:var(--dim);padding:8px 2px 10px;font-variant-numeric:tabular-nums}
+.hud b{font-weight:500;color:var(--ink)}
+.parts{display:flex;gap:2px;margin-top:2px}
+.parts button{appearance:none;flex:1 1 0;min-width:26px;border:1px solid var(--rule);background:#000;color:var(--dim);padding:6px 4px;font:400 11px/1 var(--display);letter-spacing:.06em;text-transform:uppercase;cursor:pointer;border-radius:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.parts button:hover{color:var(--ink)}
+.parts button[aria-selected="true"]{background:var(--ink);color:#000;border-color:var(--ink)}
+.partbar{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin-bottom:12px}
+.partbar .note{flex:1 1 260px}
+.partbar button[aria-pressed="true"]{background:var(--signal);color:#000;border-color:var(--signal)}
+.pad{display:flex;flex-direction:column;gap:8px;border:1px solid var(--rule);background:var(--panel);padding:12px}
+.padrow{display:grid;grid-template-columns:64px minmax(0,1fr);gap:10px;align-items:center}
+.padrow>span{font:500 11px/1 var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.padbtns{display:flex;flex-wrap:wrap;gap:8px}
+.padbtns button{appearance:none;border:1px solid var(--rule);background:#000;color:var(--ink);padding:9px 10px 9px 12px;font:500 11px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-radius:0;display:flex;gap:10px;align-items:center}
+.padbtns button kbd{font:400 10px/1 var(--display);color:var(--dim);border:1px solid var(--rule);padding:3px 4px}
+.padbtns button:hover{border-color:var(--ink)}
+.padbtns button:active,.padbtns button.hit{background:var(--signal);color:#000;border-color:var(--signal)}
+.padbtns button:active kbd,.padbtns button.hit kbd{color:#000;border-color:#000}
+.padfoot{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding-top:4px}
+.rail{display:flex;flex-direction:column;gap:14px;min-width:0}
+fieldset{margin:0;padding:14px;border:1px solid var(--rule);background:var(--panel);display:flex;flex-direction:column;gap:12px;min-width:0}
+legend{font:500 11px/1 var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--dim);padding:0 6px;margin-left:-6px}
+fieldset.layer{border-left:2px solid var(--signal)}
+.note{margin:0;color:var(--dim);font-size:12.5px}
+.row{display:grid;grid-template-columns:104px minmax(0,1fr);align-items:center;gap:10px}
+.row>span:first-child{color:var(--dim)}
+.stack{display:flex;flex-direction:column;gap:12px}
+.rowv{display:flex;flex-direction:column;gap:6px}
+.rowv>span:first-child{color:var(--dim)}
+input[type=range]{width:100%;accent-color:var(--signal);margin:0}
+input[type=number],input[type=text],select{width:100%;background:#000;color:var(--ink);border:1px solid var(--rule);padding:6px 8px;font:400 13px var(--display);border-radius:0}
+input[type=color]{appearance:none;-webkit-appearance:none;width:38px;height:32px;padding:0;border:1px solid var(--rule);background:#000;cursor:pointer;border-radius:0}
+input[type=color]::-webkit-color-swatch-wrapper{padding:4px}
+input[type=color]::-webkit-color-swatch{border:0;border-radius:0}
+.own{display:grid;grid-template-columns:38px minmax(0,1fr);gap:8px}
+.check{display:flex;align-items:center;gap:8px;cursor:pointer}
+.check input{accent-color:var(--signal);margin:0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.drop{display:flex;flex-direction:column;gap:2px;padding:14px 12px;border:1px dashed #4a4958;text-align:center;cursor:pointer;background:#000}
+.drop strong{font-weight:600}
+.drop span{color:var(--dim);font-size:12.5px}
+.drop:hover,body.dragging .drop{border-color:var(--signal)}
+.sr:focus-visible+.drop{outline:2px solid var(--signal);outline-offset:2px}
+.seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--rule)}
+.seg.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+.seg label{position:relative;cursor:pointer}
+.seg label+label{border-left:1px solid var(--rule)}
+.seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.seg span{display:block;text-align:center;padding:8px 4px;font:400 11px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);background:#000}
+.seg input:checked+span{background:var(--ink);color:#000}
+.seg input:disabled+span{opacity:.4}
+.seg input:focus-visible+span{outline:2px solid var(--signal);outline-offset:-2px}
+.tints{display:flex;gap:10px;align-items:center}
+.tints label{position:relative;cursor:pointer;display:block;width:30px;height:30px}
+.tints input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.tints i{display:block;width:100%;height:100%;border:1px solid var(--rule);background:var(--c);box-shadow:inset 0 0 0 4px #000}
+.tints input:checked+i{border-color:var(--ink)}
+.tints input:focus-visible+i{outline:2px solid var(--signal);outline-offset:2px}
+button.plain,button.primary{appearance:none;border:1px solid var(--rule);background:#000;color:var(--ink);padding:10px 12px;font:500 11px/1 var(--display);letter-spacing:.1em;text-transform:uppercase;cursor:pointer;border-radius:0}
+button.primary{background:var(--ink);color:#000;border-color:var(--ink)}
+button.plain:hover{border-color:var(--ink)}
+button:disabled,select:disabled{opacity:.45;cursor:default}
+button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.bar{height:3px;background:var(--rule)}
+.bar i{display:block;height:100%;width:0;background:var(--signal)}
+[hidden]{display:none!important}
+@media (min-width:1500px){.app{grid-template-columns:minmax(0,1fr) 628px}.rail{display:grid;grid-template-columns:1fr 1fr;align-items:start}}
+@media (max-width:880px){.app{grid-template-columns:minmax(0,1fr)}.stagecol{position:static}}
+@media (max-width:620px){.top,.app{padding-left:16px;padding-right:16px}.padrow{grid-template-columns:minmax(0,1fr)}}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Mall Call</h1>
+  <p>Three layers cut to your sound. A base layer for the rare big sweep or strobe, a glitch layer of lines, chases and debris, and the logo on top as a loader or popping through. Trigger any of it by hand.</p>
+</header>
+
+<main class="app">
+  <section class="stagecol">
+    <div class="stage wide" id="stageWrap"><canvas id="stage" width="1920" height="1080" aria-label="Preview"></canvas></div>
+    <canvas class="tl" id="tl" tabindex="0" role="slider" aria-label="Position in the piece" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></canvas>
+    <div class="parts" id="parts" role="tablist" aria-label="Parts of the piece"></div>
+    <div class="hud"><span><b id="hudState">Logo out</b></span><span id="hudRes">1920 × 1080 · 30 fps</span><span id="hudTime">0.00 / 8 s</span></div>
+    <div class="partbar">
+      <button type="button" class="plain" id="split">Split at playhead</button>
+      <button type="button" class="plain" id="merge">Merge with previous</button>
+      <button type="button" class="plain" id="loopPart" aria-pressed="false">Loop this part</button>
+      <button type="button" class="plain" id="copyAll">Copy to all parts</button>
+      <p class="note" id="partNote" aria-live="polite"></p>
+    </div>
+    <div class="pad" id="pad">
+      <div class="padfoot"><button type="button" class="plain" id="clearTrig">Clear my triggers</button><p class="note" id="trigNote" aria-live="polite">Hit a button or its key while it plays. Each trigger is pinned to that moment, shows on the timeline and goes into the export.</p></div>
+    </div>
+  </section>
+
+  <aside class="rail">
+    <fieldset>
+      <legend>Logo file</legend>
+      <input type="file" id="file" class="sr" accept=".svg,.png,.jpg,.jpeg,.webp,image/svg+xml,image/png,image/jpeg,image/webp">
+      <label class="drop" for="file"><strong>Drop a logo file here</strong><span>or click to choose. SVG or PNG.</span></label>
+      <p class="note" id="logoNote">Showing a placeholder ring. Only the shape is used, so a one-colour logo on a transparent background works best.</p>
+      <label class="check" for="invert"><input type="checkbox" id="invert"> Invert the shape</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Sound</legend>
+      <input type="file" id="sfile" class="sr" accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.flac,.ogg,.mp4,.mov">
+      <label class="drop" for="sfile"><strong>Drop audio or a video here</strong><span>or click to choose. It is read on this computer only.</span></label>
+      <p class="note" id="soundNote" aria-live="polite">No sound yet. The piece runs as a seamless loop on a built-in half-second beat.</p>
+      <button type="button" class="plain" id="soundOff" hidden>Remove sound</button>
+    </fieldset>
+
+    <fieldset class="layer">
+      <legend>1 Base layer</legend>
+      <p class="note">Big and rare: a wall of light sweeping through, a full strobe, a flood, a blackout. Lands on the strongest hits only.</p>
+      <label class="row" for="baseAmt"><span>How often</span><input type="range" id="baseAmt" min="0" max="100" value="45"></label>
+      <label class="row" for="baseStyle"><span>Drawn as</span><select id="baseStyle"></select></label>
+      <label class="row" for="basePx"><span>Pixel size</span><input type="range" id="basePx" min="0" max="100" value="58"></label>
+    </fieldset>
+
+    <fieldset class="layer">
+      <legend>2 Glitch layer</legend>
+      <label class="row" for="glitch"><span>Glitch</span><input type="range" id="glitch" min="0" max="100" value="70"></label>
+      <label class="row" for="lines"><span>Lines</span><input type="range" id="lines" min="0" max="100" value="80"></label>
+      <label class="row" for="chase"><span>Chases</span><input type="range" id="chase" min="0" max="100" value="40"></label>
+      <label class="row" for="bgLo"><span>Bass blocks</span><input type="range" id="bgLo" min="0" max="100" value="60"></label>
+      <label class="row" for="bgMid"><span>Mid bars</span><input type="range" id="bgMid" min="0" max="100" value="50"></label>
+      <label class="row" for="bgHi"><span>High sparks</span><input type="range" id="bgHi" min="0" max="100" value="60"></label>
+      <label class="row" for="wob"><span>Wobble</span><input type="range" id="wob" min="0" max="100" value="50"></label>
+      <label class="row" for="wobSize"><span>Wobble size</span><input type="range" id="wobSize" min="0" max="100" value="50"></label>
+      <p class="note">Lines carry the fast ease in and out. Blocks, bars and sparks each listen to their own part of the spectrum. Wobble is how far the picture tears and slips, from none to always moving; size runs from tight ripples to long waves.</p>
+      <label class="row" for="fxStyle"><span>Drawn as</span><select id="fxStyle"></select></label>
+      <label class="row" for="fxPx"><span>Pixel size</span><input type="range" id="fxPx" min="0" max="100" value="18"></label>
+    </fieldset>
+
+    <fieldset class="layer">
+      <legend>3 Logo layer</legend>
+      <div class="seg" role="radiogroup" aria-label="Logo behaviour">
+        <label><input type="radio" name="logoMode" id="lmLoader" value="0" checked><span>Loader</span></label>
+        <label><input type="radio" name="logoMode" id="lmAppear" value="1"><span>Appear</span></label>
+        <label><input type="radio" name="logoMode" id="lmAlways" value="2"><span>Always</span></label>
+      </div>
+      <p class="note" id="modeNote"></p>
+      <label class="row" for="loader"><span>Loader fills</span><select id="loader"><option value="0">Bottom up</option><option value="1">In blocks</option><option value="2">Line by line</option></select></label>
+      <label class="row" for="presence"><span>How much</span><input type="range" id="presence" min="0" max="100" value="50"></label>
+      <div class="rowv"><span>EQ on the logo</span>
+        <div class="seg four" role="radiogroup" aria-label="EQ on the logo">
+          <label><input type="radio" name="eq" id="eqOff" value="0"><span>Off</span></label>
+          <label><input type="radio" name="eq" id="eqWarp" value="1" checked><span>Warp</span></label>
+          <label><input type="radio" name="eq" id="eqReveal" value="2"><span>Reveal</span></label>
+          <label><input type="radio" name="eq" id="eqBars" value="3"><span>Bars</span></label>
+        </div>
+      </div>
+      <label class="row" for="eqAmt"><span>EQ strength</span><input type="range" id="eqAmt" min="0" max="100" value="60"></label>
+      <label class="row" for="logoStyle"><span>Drawn as</span><select id="logoStyle"></select></label>
+      <label class="row" for="logoPx"><span>Pixel size</span><input type="range" id="logoPx" min="0" max="100" value="30"></label>
+      <label class="row" for="size"><span>Logo size</span><input type="range" id="size" min="30" max="100" value="78"></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Variation</legend>
+      <label class="row" for="ease"><span>Easing</span><input type="range" id="ease" min="0" max="100" value="85"></label>
+      <label class="row" for="chaos"><span>Chaos</span><input type="range" id="chaos" min="0" max="100" value="60"></label>
+      <label class="row" for="trail"><span>Trails</span><input type="range" id="trail" min="0" max="100" value="20"></label>
+      <label class="check" for="mix"><input type="checkbox" id="mix"> Each section redraws the layers in other styles</label>
+      <label class="row" for="seed"><span>Seed</span><input type="number" id="seed" min="1" max="9999" value="1"></label>
+      <div class="two"><button type="button" class="plain" id="shuffle">New variation</button><button type="button" class="plain" id="randAll">Randomise all</button></div>
+      <p class="note">Easing sets how much everything that moves surges on a hit and settles after it, instead of running at one speed. A seed always gives the same cut, so note the number when you like one.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Pixels</legend>
+      <div class="seg" role="radiogroup" aria-label="Pixel shape">
+        <label><input type="radio" name="pshape" id="psSquare" value="0" checked><span>Square</span></label>
+        <label><input type="radio" name="pshape" id="psDot" value="1"><span>Dot</span></label>
+        <label><input type="radio" name="pshape" id="psDiamond" value="2"><span>Diamond</span></label>
+      </div>
+      <label class="row" for="pfill"><span>Pixel fill</span><input type="range" id="pfill" min="35" max="100" value="78"></label>
+      <label class="row" for="dither"><span>Dither</span><select id="dither"><option value="bayer2">Bayer 2 × 2</option><option value="bayer4" selected>Bayer 4 × 4</option><option value="bayer8">Bayer 8 × 8</option><option value="halftone">Halftone</option><option value="lines">Scanlines</option><option value="noise">Noise</option><option value="diffusion">Error diffusion</option></select></label>
+      <p class="note">Dither type applies to any layer drawn as Dither. Pixel size is set per layer.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Format</legend>
+      <div class="seg" role="radiogroup" aria-label="Format">
+        <label><input type="radio" name="format" id="fmtWide" value="wide" checked><span>Wide</span></label>
+        <label><input type="radio" name="format" id="fmtPanel" value="panel"><span>Panel</span></label>
+        <label><input type="radio" name="format" id="fmtRing" value="ring"><span>Ring</span></label>
+      </div>
+      <label class="row" for="shape" id="shapeRow" hidden><span>Panel shape</span><select id="shape"><option value="2">1 × 2</option><option value="3" selected>1 × 3</option><option value="4">1 × 4</option></select></label>
+      <p class="note" id="fmtNote"></p>
+      <div id="ringOpts" class="stack" hidden>
+        <label class="row" for="panels"><span>Panels in ring</span><input type="number" id="panels" min="4" max="64" value="30"></label>
+        <label class="row" for="repeats"><span>Logos in ring</span><input type="number" id="repeats" min="1" max="12" value="3"></label>
+        <label class="check" for="orbit"><input type="checkbox" id="orbit" checked> Logos travel around the ring</label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Look</legend>
+      <div class="row"><span>Tint</span>
+        <div class="tints" role="radiogroup" aria-label="Tint">
+          <label title="White"><input type="radio" name="tint" id="tintWhite" value="#ffffff" checked><i style="--c:#ffffff"></i></label>
+          <label title="Teal"><input type="radio" name="tint" id="tintTeal" value="#4fe8c0"><i style="--c:#4fe8c0"></i></label>
+          <label title="Red"><input type="radio" name="tint" id="tintRed" value="#ff2a22"><i style="--c:#ff2a22"></i></label>
+          <label title="Violet"><input type="radio" name="tint" id="tintViolet" value="#a58cff"><i style="--c:#a58cff"></i></label>
+        </div>
+      </div>
+      <div class="row"><span>Own colour</span>
+        <div class="own"><input type="color" id="tintPick" value="#ffffff" aria-label="Pick your own colour"><input type="text" id="tintHex" value="#FFFFFF" maxlength="7" spellcheck="false" autocomplete="off" aria-label="Colour as hex"></div>
+      </div>
+      <label class="check" for="hot"><input type="checkbox" id="hot" checked> Brightest points burn to white</label>
+      <label class="row" for="glow"><span>Glow</span><input type="range" id="glow" min="0" max="100" value="55"></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Playback</legend>
+      <label class="row" for="loop"><span>Loop length</span><select id="loop"><option value="4">4 s</option><option value="8" selected>8 s</option><option value="16">16 s</option></select></label>
+      <label class="row" for="fps"><span>Frame rate</span><select id="fps"><option value="25">25 fps</option><option value="30" selected>30 fps</option><option value="50">50 fps</option><option value="60">60 fps</option></select></label>
+      <button type="button" class="plain" id="play">Pause</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>Export</legend>
+      <label class="row" for="range"><span>What</span><select id="range"><option value="all">Whole piece</option><option value="part">This part only</option></select></label>
+      <button type="button" class="primary" id="save">Save as MP4</button>
+      <div class="bar" id="bar" hidden><i id="barFill"></i></div>
+      <p class="note" id="saveNote" aria-live="polite">Every frame is rendered once at full size. Without sound the file loops seamlessly; with sound it runs the length of the track and carries the audio.</p>
+    </fieldset>
+  </aside>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.2/build/mp4-muxer.js"></script>
+<script>
+(() => {
+'use strict';
+/*__SCORE__*/
+
+const $ = id => document.getElementById(id);
+const rnd = (i, k) => hash(i, k, 7);
+const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
+
+const STYLES = ['rods', 'streaks', 'ascii', 'ridge', 'dither'];
+const STYLE_NAMES = { rods: 'LED rods', streaks: 'Light streaks', ascii: 'ASCII', ridge: 'Ridge lines', dither: 'Dither' };
+const S = { format: 'wide', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.55, size: 0.78, invert: false,
+  loop: 8, fps: 30, playing: true, seed: 1,
+  baseAmt: 0.45, baseStyle: 'dither', baseDen: 0.304,
+  glitch: 0.7, lines: 0.8, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxStyle: 'rods', fxDen: 0.784,
+  logoMode: 0, loader: 0, presence: 0.5, eq: 1, logoStyle: 'dither', logoDen: 0.64,
+  chaos: 0.6, trail: 0.2, mix: false, pshape: 0, pfill: 0.78, dither: 'bayer4', wob: 0.5, wobSize: 0.5, eqAmt: 0.6, ease: 0.85, range: 'all' };
+// The piece can be split into parts. Everything from the three layers down to the look is kept per part; S holds the part being edited.
+const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'glitch', 'lines', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxStyle', 'fxDen',
+  'logoMode', 'loader', 'presence', 'eq', 'logoStyle', 'logoDen', 'chaos', 'trail', 'mix', 'pshape', 'pfill', 'dither', 'wob', 'wobSize', 'eqAmt', 'ease'];
+const snap = () => { const o = {}; for (const k of PART_KEYS) o[k] = S[k]; return o; };
+let parts = [{ t: 0, P: snap() }], sel = 0, loopPart = false;
+const partIdx = t => { let i = 0; while (i + 1 < parts.length && parts[i + 1].t <= t) i++; return i; };
+const partEnd = i => i + 1 < parts.length ? parts[i + 1].t : score.D;
+const savePart = () => { parts[sel].P = snap(); };
+
+/* ---------- logo mask ---------- */
+let mask = null, logoSrc = null, maskN = 0;
+
+function buildMask(src, sw, sh, invert) {
+  const k = Math.min(1, 512 / Math.max(sw, sh));
+  const w = Math.max(2, Math.round(sw * k)), h = Math.max(2, Math.round(sh * k));
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(src, 0, 0, w, h);
+  const px = g.getImageData(0, 0, w, h).data;
+  let clear = 0;
+  for (let i = 3; i < px.length; i += 4) if (px[i] < 128) clear++;
+  const raw = new Float32Array(w * h);
+  if (clear > w * h * 0.02) {
+    for (let i = 0; i < raw.length; i++) raw[i] = px[i * 4 + 3] / 255;
+  } else {
+    const lum = i => (0.2126 * px[i * 4] + 0.7152 * px[i * 4 + 1] + 0.0722 * px[i * 4 + 2]) / 255;
+    const bg = (lum(0) + lum(w - 1) + lum((h - 1) * w) + lum(h * w - 1)) / 4;
+    for (let i = 0; i < raw.length; i++) raw[i] = bg > 0.5 ? 1 - lum(i) : lum(i);
+  }
+  if (invert) for (let i = 0; i < raw.length; i++) raw[i] = 1 - raw[i];
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (raw[y * w + x] > 0.12) {
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  if (x1 < x0) { x0 = 0; y0 = 0; x1 = w - 1; y1 = h - 1; }
+  const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+  const s = Math.min(1, 256 / Math.max(bw, bh));
+  const ow = Math.max(2, Math.round(bw * s)), oh = Math.max(2, Math.round(bh * s));
+  const data = new Float32Array(ow * oh);
+  for (let y = 0; y < oh; y++) for (let x = 0; x < ow; x++) {
+    const sx = Math.min(w - 1, x0 + Math.floor((x + 0.5) / ow * bw));
+    const sy = Math.min(h - 1, y0 + Math.floor((y + 0.5) / oh * bh));
+    data[y * ow + x] = raw[sy * w + sx];
+  }
+  const r = Math.max(1, Math.round(Math.max(ow, oh) * 0.02));
+  let blur = data;
+  for (let pass = 0; pass < 2; pass++) blur = boxBlur(blur, ow, oh, r);
+  return { w: ow, h: oh, data, blur };
+}
+function boxBlur(src, w, h, r) {
+  const tmp = new Float32Array(w * h), out = new Float32Array(w * h), n = 2 * r + 1;
+  for (let y = 0; y < h; y++) {
+    let acc = 0;
+    for (let x = -r; x <= r; x++) acc += src[y * w + Math.min(w - 1, Math.max(0, x))];
+    for (let x = 0; x < w; x++) {
+      tmp[y * w + x] = acc / n;
+      acc += src[y * w + Math.min(w - 1, x + r + 1)] - src[y * w + Math.max(0, x - r)];
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    let acc = 0;
+    for (let y = -r; y <= r; y++) acc += tmp[Math.min(h - 1, Math.max(0, y)) * w + x];
+    for (let y = 0; y < h; y++) {
+      out[y * w + x] = acc / n;
+      acc += tmp[Math.min(h - 1, y + r + 1) * w + x] - tmp[Math.max(0, y - r) * w + x];
+    }
+  }
+  return out;
+}
+function sample(arr, m, u, v) {
+  if (u < 0 || u > 1 || v < 0 || v > 1) return 0;
+  const x = u * (m.w - 1), y = v * (m.h - 1), xa = x | 0, ya = y | 0;
+  const xb = Math.min(m.w - 1, xa + 1), yb = Math.min(m.h - 1, ya + 1), fx = x - xa, fy = y - ya;
+  const a = arr[ya * m.w + xa], b = arr[ya * m.w + xb], c = arr[yb * m.w + xa], d = arr[yb * m.w + xb];
+  return (a + (b - a) * fx) * (1 - fy) + (c + (d - c) * fx) * fy;
+}
+function placeholder() {
+  const c = document.createElement('canvas'); c.width = c.height = 512;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff';
+  g.beginPath(); g.arc(256, 256, 250, 0, TAU); g.arc(256, 256, 158, 0, TAU, true); g.fill('evenodd');
+  return { img: c, w: 512, h: 512 };
+}
+
+/* ---------- the three layers: each says how lit a point of the frame is, 0 to 1 ---------- */
+// Glitch displacement shared by the glitch and logo layers: crushed resolution, sideways tear, slipping columns, sliced bands.
+let DU = 0, DV = 0;
+function mkDisp(st, W, H, amt, o) {
+  const cy = st.crush, cx = cy ? Math.max(2, Math.round(cy * W / H)) : 0, n = st.nSl, wf = o.wobF;
+  const tA = (st.tearA * o.wobA + o.wobB) * amt, dA = (st.dropA * o.wobA + o.wobB * 0.7) * amt;
+  return (u, v) => {
+    if (cy) { u = (Math.floor(u * cx) + 0.5) / cx; v = (Math.floor(v * cy) + 0.5) / cy; }
+    if (tA > 0.002) u += tA * nz(v * st.tearF * wf + st.tearP, 11);
+    if (dA > 0.002) v += dA * nz(u * st.dropF * wf + st.dropP, 12);
+    for (let i = 0; i < n; i++) { const s = st.sl[i]; if (v >= s.a && v < s.b) { u += s.d * amt; break; } }
+    DU = u; DV = v;
+  };
+}
+// 1 Base: sweeps, strobes and floods. Clean and large, never displaced.
+function baseField(W, H, st) {
+  const n = st.bn, asp = W / H;
+  const f = (u, v) => {
+    let val = 0;
+    for (let i = 0; i < n; i++) {
+      const x = st.bx[i], sd = st.bs[i];
+      let b = 0;
+      if (st.bt[i] === 0) {
+        const dir = sd % 6, w = 0.14 + 0.16 * hash(sd, 1, 181), e = ioExpo(x);
+        let d;
+        if (dir < 4) { let c = dir < 2 ? u : v; if (dir & 1) c = 1 - c; d = -0.02 + (1.04 + w) * e - c; }
+        else if (dir === 4) d = Math.abs(u - 0.5) * 2 - (1.05 - (1.05 + w) * e);                  // both sides closing on the centre
+        else { const dx = (u - 0.5) * asp, dy = v - 0.5; d = (0.6 * Math.max(1, asp) + w) * e - Math.sqrt(dx * dx + dy * dy); }   // ring out from the centre
+        b = d >= 0 && d < w ? 1 - 0.85 * d / w : 0;
+      } else if (st.bt[i] === 1) {
+        const fr = Math.floor(st.ba[i] * 30 + 1e-4), pat = sd % 3;
+        if ((fr & 1) === 0 && hash(fr, sd, 182) > 0.15) {
+          b = pat === 0 ? 1 : pat === 1 ? ((u < 0.5) === ((fr >> 1 & 1) === 0) ? 1 : 0) : (hash(Math.floor(u * 6), Math.floor(v * 3) + fr * 7, sd) < 0.5 ? 1 : 0);
+          b *= 1 - 0.5 * x;
+        }
+      } else b = Math.pow(1 - x, 2.2);
+      if (b > val) val = b;
+    }
+    return val;
+  };
+  return { M: f, B: f };
+}
+// 2 Glitch: eased lines, chases along lanes, and debris driven by bass, mids and highs.
+function fxField(W, H, t, o, st) {
+  const unit = Math.min(W, H) / lerp(22, 96, o.density), thV = unit * 0.6 / H, thU = unit * 1.3 / W;
+  const disp = mkDisp(st, W, H, 0.6, o);
+  const rodN = Math.max(6, Math.round(W / (unit * 2.4)));
+  const slabA = st.slabW > 0 ? st.slabX - st.slabW / 2 : 9, slabB = st.slabX + st.slabW / 2;
+  const bN = Math.max(4, Math.round(W / (unit * 6))), mN = Math.max(6, Math.round(H / (unit * 1.6))), hN = Math.max(8, Math.round(W / unit)), hM = Math.max(6, Math.round(H / unit));
+  const lines = st.lines, bLo = st.bLo, bMid = st.bMid, bHi = st.bHi, fxg = st.fxGain;
+  // chase lanes: a lit run stepping along a row or a column, a few of them at different speeds
+  const lanes = [];
+  if (st.chase) {
+    const cs = st.chSeed, nl = 2 + Math.floor(hash(cs, 1, 190) * 4), D = o.loopD;
+    for (let j = 0; j < nl; j++) {
+      const n = 8 + Math.floor(hash(cs, j, 192) * 28);
+      let lapHz = (6 + Math.floor(hash(cs, j, 193) * 20)) / n; if (D) lapHz = Math.max(1, Math.round(lapHz * D)) / D;
+      const lap = o.tw * lapHz + hash(cs, j, 198), fl = Math.floor(lap), k = lap - fl;
+      const run = fl + (o.ease > 0.02 ? k + (ioQuint(k) - k) * Math.min(1, o.ease * 1.2) : k);      // each pass eases in and out
+      lanes.push({ hz: hash(cs, j, 191) < 0.6, pos: 0.06 + 0.88 * hash(cs, j, 194), n, head: Math.floor(run * n + 1e-4), dir: hash(cs, j, 195) < 0.5 ? 1 : -1, len: 2 + Math.floor(hash(cs, j, 196) * 6), th: 1 + Math.floor(hash(cs, j, 197) * 2.5) });
+    }
+  }
+  // one-shot line volleys from the Lines trigger
+  const shots = [];
+  for (let i = 0; i < st.lsN; i++) {
+    const sd = st.lsS[i], hz = sd % 2 === 0, rev = (sd >> 1) % 2 === 0;
+    for (let j = 0; j < 4; j++) { const e = ioExpo(clamp01((st.lsX[i] - 0.1 * j) / 0.7)); shots.push({ hz, pos: rev ? 1.05 - 1.1 * e : -0.05 + 1.1 * e }); }
+  }
+  const f = (u0, v0) => {
+    disp(u0, v0);
+    const u = DU, v = DV;
+    let val = 0;
+    if (lines) for (let j = 0; j < 4; j++) {
+      if (st.hI[j] > val && Math.abs(v - st.hl[j]) < thV) val = st.hI[j];
+      if (st.vI[j] > val && Math.abs(u - st.vl[j]) < thU) val = st.vI[j];
+    }
+    for (let j = 0; j < shots.length; j++) { const s = shots[j]; if (Math.abs((s.hz ? v : u) - s.pos) < (s.hz ? thV : thU)) val = 1; }
+    if (u >= slabA && u < slabB) val = 1;
+    else if (st.rods > 0 && hash(Math.floor(u * rodN), st.seed, 3) < st.rods) val = 1;
+    for (let j = 0; j < lanes.length; j++) {
+      const L = lanes[j], across = L.hz ? v : u, along = L.hz ? u : v;
+      if (Math.abs(across - L.pos) < (L.hz ? thV : thU) * L.th) {
+        const d = (((L.head - Math.floor(along * L.n) * L.dir) % L.n) + L.n) % L.n;
+        if (d < L.len) { const c = st.chI * (1 - 0.75 * d / L.len); if (c > val) val = c; }
+      }
+    }
+    if (bLo > 0.02) {
+      const g = Math.floor(u * bN), h1 = hash(g, st.loK, 81);
+      if (h1 < 0.22) { const len = (0.15 + 0.6 * hash(g, st.loK, 83)) * (0.35 + 0.65 * Math.min(1, bLo * 1.5)), a = hash(g, st.loK, 82) * (1 - len); if (v >= a && v < a + len) { const b = bLo * (0.5 + 0.45 * h1 / 0.22); if (b > val) val = b; } }
+    }
+    if (bMid > 0.02) {
+      const r = Math.floor(v * mN), h2 = hash(r, st.miK, 84);
+      if (h2 < 0.14) { const len = (0.1 + 0.5 * hash(r, st.miK, 86)) * (0.35 + 0.65 * Math.min(1, bMid * 1.6)), a = hash(r, st.miK, 85) * (1 - len); if (u >= a && u < a + len) { const b = bMid * 0.75; if (b > val) val = b; } }
+    }
+    if (bHi > 0.02 && hash(Math.floor(u * hN), Math.floor(v * hM), st.hiK) < 0.05 * bHi) { const b = 0.55 + 0.4 * bHi; if (b > val) val = b; }
+    return val * fxg;
+  };
+  return { M: f, B: f };
+}
+// 3 Logo: pose, lit window, EQ, ghost, and the loader that builds it.
+function logoField(W, H, t, o, st) {
+  const R = o.repeats * st.tx, TY = st.ty, cellW = W / R, cellH = H / TY, la = mask.w / mask.h;
+  const box = o.size * st.s * Math.min(cellW, cellH);
+  const lw = (la >= 1 ? box : box * la) * st.kx, lh = la >= 1 ? box / la : box;
+  const cxp = cellW / 2 + st.ox * cellW, cyp = cellH / 2 + st.oy * cellH, shift = o.travel * t * st.tx;
+  const cr = Math.cos(st.rot), sr = Math.sin(st.rot), sk = st.sk;
+  const unit = Math.min(W, H) / lerp(22, 96, o.density), thLv = unit * 0.6 / lh, thLu = unit * 1.5 / lw;
+  const eq = st.eq, eqv = st.eqv, lay = st.eqLay, gI = st.gI;
+  const planeY = eq === 2 ? 0 : Math.min(1, (st.y0 + 1 - st.y1) * 6), planeX = Math.min(1, (st.x0 + 1 - st.x1) * 6);
+  const disp = mkDisp(st, W, H, 1, o), eqK = o.eqAmt / 0.6;
+  const loading = st.lv === 1, lp = st.lp, lt = o.loader, ls = st.lseed, barA = 1.1, barB = 1.1 + Math.max(thLv * 2.2, 0.035), by = Math.max(4, Math.round(14 / la));
+  const f = arr => (u0, v0) => {
+    disp(u0, v0);
+    const v = DV;
+    let c = DU * R - shift; c -= Math.floor(c);
+    let r = v * TY; r -= Math.floor(r);
+    const dx = c * cellW - cxp, dy = r * cellH - cyp, ry = dy * cr - dx * sr, lu = (dx * cr + dy * sr + ry * sk) / lw + 0.5;
+    let lv = ry / lh + 0.5, y0 = st.y0, y1 = st.y1, lev = 0, val = 0;
+    if (eq) { let q = Math.abs(c - 0.5) * 2; if (lay === 1) q = 1 - q; else if (lay === 2) q = c; const p = q * (NB - 1), b0 = Math.min(NB - 2, p | 0); lev = eqv[b0] + (eqv[b0 + 1] - eqv[b0]) * (p - b0); }
+    if (eq === 1) lv = 0.5 + (lv - 0.5) / Math.max(0.3, 1 + (lev - 0.5) * eqK);
+    else if (eq === 2) { const hh = Math.max(0.03, 0.5 * (1 - eqK * 0.78 * (1 - lev))); y0 = 0.5 - hh; y1 = 0.5 + hh; }
+    if (!st.hide && lu >= st.x0 && lu <= st.x1 && lv >= y0 && lv <= y1) {
+      let show = true;
+      if (loading) show = lt === 0 ? lv > 1 - lp : lt === 1 ? hash(Math.floor(lu * 14), Math.floor(lv * by), ls) < lp : hash(Math.floor(lv * 44), ls, 9) < lp;
+      if (show) val = sample(arr, mask, lu, lv);
+    }
+    if (gI > 0.02) { const g2 = sample(arr, mask, lu + st.gx, lv + st.gy) * gI; if (g2 > val) val = g2; }
+    if (loading) {      // loader furniture: the fill edge, and a progress bar under the logo
+      if (lt === 0 && lu > -0.04 && lu < 1.04 && Math.abs(lv - (1 - lp)) < thLv) val = 1;
+      if (lv > barA && lv < barB && lu >= 0 && lu <= 1) val = lu < lp ? 1 : 0.24;
+    }
+    if (eq === 2) { if (Math.abs(lv - y0) < thLv || Math.abs(lv - y1) < thLv) val = Math.max(val, 0.85); }
+    else if (eq === 3) { const len = 0.34 * lev * eqK; if (v < len || v > 1 - len) val = 1; }
+    if (planeY > 0.02 && (Math.abs(lv - st.y0) < thLv || Math.abs(lv - st.y1) < thLv)) val = Math.max(val, planeY);
+    if (planeX > 0.02 && (Math.abs(lu - st.x0) < thLu || Math.abs(lu - st.x1) < thLu)) val = Math.max(val, planeX);
+    if (st.inv && lu > -0.12 && lu < 1.12 && lv > -0.12 && lv < 1.12) val = 1 - val;
+    return val;
+  };
+  return { M: f(mask.data), B: f(mask.blur) };
+}
+
+/* ---------- styles: five ways to draw a layer ---------- */
+let CORE = '#fff', SHAPE = 0;
+function lit(g, x, y, w, h, I, tint) {
+  if (I < 0.03) return;
+  const hot = I > 0.55;
+  g.globalAlpha = Math.min(1, I); g.fillStyle = tint;
+  if (SHAPE === 0) {
+    x = Math.round(x); y = Math.round(y); w = Math.max(1, Math.round(w)); h = Math.max(1, Math.round(h));
+    g.fillRect(x, y, w, h);
+    if (hot) { g.globalAlpha = Math.min(1, (I - 0.55) * 1.8); g.fillStyle = CORE; g.fillRect(x, y, w, h); }
+    return;
+  }
+  g.beginPath();
+  if (SHAPE === 1) g.ellipse(x + w / 2, y + h / 2, Math.max(0.6, w / 2), Math.max(0.6, h / 2), 0, 0, TAU);
+  else { g.moveTo(x + w / 2, y - h * 0.1); g.lineTo(x + w * 1.1, y + h / 2); g.lineTo(x + w / 2, y + h * 1.1); g.lineTo(x - w * 0.1, y + h / 2); g.closePath(); }
+  g.fill();
+  if (hot) { g.globalAlpha = Math.min(1, (I - 0.55) * 1.8); g.fillStyle = CORE; g.fill(); }
+}
+const DRAW = {};
+// Swing: each rod or wire gets its own clock that speeds up and slows down, so no two run in step and none runs at constant speed.
+const swing = (t, i, o) => { const c = cyc(3, o); return t + 0.85 * o.ease * Math.sin(TAU * (c * t + rnd(i, 50))) / (TAU * c); };
+
+// Vertical rods with LED dots. On the glitch layer, light packets also run along each rod.
+DRAW.rods = (g, W, H, t, o, M) => {
+  const unit = Math.min(W, H) / lerp(22, 96, o.density);
+  const rows = Math.max(6, Math.round(H / unit)), py = H / rows;
+  const cols = Math.max(3, Math.round(W / (unit * 2.4))), px = W / cols;
+  const dw = py * 0.56 * o.pfill, dh = py * 0.82 * o.pfill, lw = Math.max(1, Math.min(W, H) / 900);
+  const c2 = cyc(2, o), c1 = cyc(1, o), fq = 0.6 + 1.8 * o.va, dir = o.vb < 0.5 ? -1 : 1, amb = o.amb;
+  for (let c = 0; c < cols; c++) {
+    const x = (c + 0.5) * px, u = x / W;
+    if (amb) { g.globalAlpha = 0.08; g.fillStyle = o.tint; g.fillRect(Math.round(x - lw / 2), 0, Math.max(1, Math.round(lw)), H); }
+    const sp = cyc(1 + Math.floor(rnd(c, 1) * 2), o) * (rnd(c, 2) < 0.5 ? -1 : 1), ph = rnd(c, 3), ts = swing(t, c, o);
+    for (let r = 0; r < rows; r++) {
+      const v = (r + 0.5) / rows, m = M(u, v);
+      const wave = Math.pow(0.5 + 0.5 * Math.cos(TAU * (v * fq - dir * t * c2 + 0.12 * Math.sin(TAU * (u * 1.5 + t * c1)))), 2);
+      const d = wrapd(v - ph - sp * ts), pk = Math.exp(-(d * d) / 0.003);
+      lit(g, x - dw / 2, v * H - dh / 2, dw, dh, m * (0.4 + 0.6 * wave) + pk * (0.2 * amb + 0.6 * m), o.tint);
+    }
+  }
+};
+
+// Thin wires with tapered light dashes travelling along them. The dashes flare where the layer is lit.
+DRAW.streaks = (g, W, H, t, o, M) => {
+  const unit = Math.min(W, H) / lerp(22, 90, o.density), fan = o.fan, amb = o.amb;
+  const n = Math.max(3, Math.round(W / (unit * 2.6) * (fan ? 1.5 : 1)));
+  const steps = Math.max(16, Math.round(H / (unit * 0.55)));
+  const lw = Math.max(1, Math.min(W, H) / 600), cx = W / 2, top = fan ? 2.1 : 1, bot = fan ? 0.16 : 1;
+  const c1 = cyc(1, o), p = [0, 0, 0], L = [0, 0, 0];
+  g.lineCap = 'butt';
+  for (let i = 0; i < n; i++) {
+    const a = (i + 0.5) / n - 0.5, xt = cx + a * W * top, xb = cx + a * W * bot, dx = xb - xt;
+    if (amb) { g.globalAlpha = 0.07; g.strokeStyle = o.tint; g.lineWidth = lw; g.beginPath(); g.moveTo(xt, 0); g.lineTo(xb, H); g.stroke(); }
+    const dir = fan || rnd(i, 5) < 0.5 ? -1 : 1;
+    for (let k = 0; k < 3; k++) {
+      p[k] = rnd(i, 20 + k) + dir * cyc(1 + Math.floor(rnd(i, 10 + k) * 2), o) * swing(t, i * 3 + k, o);
+      L[k] = 0.018 + 0.04 * rnd(i, 30 + k);
+    }
+    const breath = 0.72 + 0.28 * Math.sin(TAU * (t * c1 + rnd(i, 40)));
+    for (let j = 0; j < steps; j++) {
+      const s0 = j / steps, s1 = (j + 0.7) / steps, sm = (j + 0.35) / steps, x = xt + dx * sm;
+      if (x < -4 || x > W + 4) continue;
+      const m = M(x / W, sm);
+      let P = 0;
+      for (let k = 0; k < 3; k++) { const d = wrapd(sm - p[k]); P += Math.exp(-(d * d) / (L[k] * L[k])); }
+      const I = P * (0.22 * amb + 0.9 * m) + m * 0.55 * breath;
+      if (I < 0.03) continue;
+      const a1 = Math.min(1, I);
+      g.lineWidth = lw * (0.8 + 2.4 * a1); g.globalAlpha = a1; g.strokeStyle = o.tint;
+      g.beginPath(); g.moveTo(xt + dx * s0, s0 * H); g.lineTo(xt + dx * s1, s1 * H); g.stroke();
+      if (I > 0.5) { g.globalAlpha = Math.min(1, (I - 0.5) * 1.5); g.strokeStyle = CORE; g.stroke(); }
+    }
+  }
+};
+
+// Character grid. Glyph weight follows bands moving through whatever is lit.
+const RAMP = '.:-=+*x%#@', EDGE = '/\\|<>[]!', SPARSE = '.,:;\'`+';
+DRAW.ascii = (g, W, H, t, o, M) => {
+  const unit = Math.min(W, H) / lerp(16, 64, o.density), ch = unit, cw = unit * 0.62, amb = o.amb;
+  const cols = Math.ceil(W / cw), rows = Math.ceil(H / ch), ox = (W - cols * cw) / 2, oy = (H - rows * ch) / 2;
+  g.font = '500 ' + Math.max(4, Math.round(ch * 0.94)) + 'px "DM Mono",ui-monospace,Menlo,monospace';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  const tick = Math.floor(t * Math.round(o.loop * 8)), slow = Math.floor(t * Math.round(o.loop * 2));
+  const c3 = cyc(3, o), c1 = cyc(1, o), sx = (o.vb < 0.5 ? -2 : 2), sy = 0.8 + 1.4 * o.va;
+  for (let r = 0; r < rows; r++) {
+    const y = oy + (r + 0.5) * ch, v = y / H, d = wrapd(v - t * c1), band = amb * Math.exp(-(d * d) / 0.003);
+    for (let c = 0; c < cols; c++) {
+      const x = ox + (c + 0.5) * cw, u = x / W, m = M(u, v);
+      let gl, I;
+      if (m > 0.5) {
+        const f = 0.5 + 0.5 * Math.sin(TAU * (u * sx + v * sy - t * c3));
+        gl = RAMP[Math.min(RAMP.length - 1, Math.floor((0.22 + 0.78 * f) * (0.72 + 0.28 * hash(c, r, tick)) * RAMP.length))];
+        I = 0.42 + 0.42 * f + 0.6 * band;
+      } else if (m > 0.12) {
+        gl = EDGE[Math.floor(hash(c, r, slow) * EDGE.length)]; I = 0.5 + 0.5 * band;
+      } else {
+        if (!amb || hash(c, r, slow + 91) > 0.03 + 0.55 * band) continue;
+        gl = SPARSE[Math.floor(hash(r, c, tick) * SPARSE.length)]; I = 0.18 + 0.6 * band;
+      }
+      g.globalAlpha = Math.min(1, I); g.fillStyle = I > 0.9 ? CORE : o.tint;
+      g.fillText(gl, x, y);
+    }
+  }
+};
+
+// Stepped horizontal lines pushed up by whatever is lit, each line hiding the ones behind it.
+DRAW.ridge = (g, W, H, t, o, M, B) => {
+  const unit = Math.min(W, H) / lerp(16, 60, o.density), amb = o.amb;
+  const n = Math.max(5, Math.round(H / unit)), gap = H / n, amp = gap * 3.4, q = Math.max(1, gap * 0.2);
+  const sx = Math.max(2, unit * 0.4), nx = Math.ceil(W / sx), lw = Math.max(1, Math.min(W, H) / 520);
+  const ys = new Float32Array(nx + 1), ms = new Float32Array(nx + 1), c2 = cyc(2, o), c1 = cyc(1, o), fq = 0.8 + 1.6 * o.va;
+  g.lineJoin = 'miter'; g.lineCap = 'butt';
+  for (let r = 0; r < n; r++) {
+    const y0 = (r + 0.9) * gap, v = (r + 0.5) / n;
+    let any = amb > 0;
+    for (let i = 0; i < nx; i++) {
+      const u = (i + 0.5) * sx / W, m = B(u, v);
+      const wob = 0.7 + 0.3 * Math.sin(TAU * (u * fq - t * c2 + r * 0.06));
+      const idle = amb * (0.5 + 0.5 * Math.sin(TAU * (u * 2.5 + t * c1 + r * 0.19)));
+      ys[i] = y0 - Math.round((amp * m * wob + gap * 0.14 * idle) / q) * q; ms[i] = m;
+      if (m > 0.1) any = true;
+    }
+    if (!any) continue;
+    g.globalAlpha = 1; g.fillStyle = '#000';
+    g.beginPath(); g.moveTo(0, y0 + gap);
+    for (let i = 0; i < nx; i++) { g.lineTo(i * sx, ys[i]); g.lineTo(i * sx + sx, ys[i]); }
+    g.lineTo(W, y0 + gap); g.closePath(); g.fill();
+    g.strokeStyle = o.tint;
+    if (amb) {
+      g.lineWidth = lw; g.globalAlpha = 0.3;
+      g.beginPath(); g.moveTo(0, ys[0]);
+      for (let i = 0; i < nx; i++) { g.lineTo(i * sx, ys[i]); g.lineTo(i * sx + sx, ys[i]); }
+      g.stroke();
+    }
+    let open = false;
+    g.beginPath();
+    for (let i = 0; i < nx; i++) {
+      if (ms[i] > 0.1) { if (!open) { g.moveTo(i * sx, ys[i]); open = true; } else g.lineTo(i * sx, ys[i]); g.lineTo(i * sx + sx, ys[i]); }
+      else open = false;
+    }
+    g.globalAlpha = 1; g.lineWidth = lw * 1.8; g.stroke();
+    g.strokeStyle = CORE; g.globalAlpha = 0.55; g.lineWidth = lw; g.stroke();
+  }
+};
+
+// Pixels switched on and off by a dither pattern: ordered, halftone, scanline, noise or error diffusion.
+function bayer(n) {
+  if (n === 2) return [0, 2, 3, 1];
+  const h = n / 2, b = bayer(h), out = new Array(n * n);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) out[y * n + x] = 4 * b[(y % h) * h + (x % h)] + [0, 2, 3, 1][(y >= h ? 2 : 0) + (x >= h ? 1 : 0)];
+  return out;
+}
+const BAYER = { bayer2: bayer(2), bayer4: bayer(4), bayer8: bayer(8) };
+DRAW.dither = (g, W, H, t, o, M) => {
+  const unit = Math.min(W, H) / lerp(20, 90, o.density);
+  const cols = Math.ceil(W / unit), rows = Math.ceil(H / unit), ox = (W - cols * unit) / 2, oy = (H - rows * unit) / 2;
+  const s = Math.max(1, unit * o.pfill), c2 = cyc(2, o), c1 = cyc(1, o), fq = 0.8 + 1.4 * o.va, dir = o.vb < 0.5 ? -1 : 1, amb = o.amb;
+  const mode = o.dither, bm = BAYER[mode], bn = bm ? Math.sqrt(bm.length) : 0, diff = mode === 'diffusion';
+  let e0 = diff ? new Float32Array(cols + 2) : null, e1 = diff ? new Float32Array(cols + 2) : null;
+  for (let r = 0; r < rows; r++) {
+    const v = (oy + (r + 0.5) * unit) / H, rev = diff && (r & 1) === 1;
+    for (let k = 0; k < cols; k++) {
+      const c = rev ? cols - 1 - k : k;
+      const u = (ox + (c + 0.5) * unit) / W, m = M(u, v);
+      const f1 = 0.5 + 0.5 * Math.sin(TAU * (v * fq - dir * t * c2 + 0.18 * Math.sin(TAU * (u * 1.5 + t * c1))));
+      const f2 = 0.5 + 0.5 * Math.sin(TAU * (u + v * 0.6 + t * c1));
+      const val = m * (0.4 + 0.6 * f1) + amb * (1 - m) * 0.17 * f2 * f2, I = m > 0.5 ? 0.5 + 0.5 * f1 : 0.3 + 0.5 * m;
+      const px = ox + c * unit + unit / 2, py = oy + r * unit + unit / 2;
+      if (mode === 'halftone') { if (val > 0.03) { const z = s * 1.25 * Math.sqrt(Math.min(1, val)); lit(g, px - z / 2, py - z / 2, z, z, 0.45 + 0.55 * Math.min(1, val), o.tint); } continue; }
+      let on;
+      if (bm) on = val > (bm[(r % bn) * bn + (c % bn)] + 0.5) / bm.length;
+      else if (mode === 'lines') on = val > ((r % 4) * 0.25 + 0.06 + 0.12 * ((c & 1)));
+      else if (mode === 'noise') on = val > 0.04 + 0.96 * hash(c, r, 7);
+      else {
+        const x = val + e0[c + 1], q = x - ((on = x > 0.5) ? 1 : 0), a = rev ? -1 : 1;
+        e0[c + 1 + a] += q * 0.4375; e1[c + 1 - a] += q * 0.1875; e1[c + 1] += q * 0.3125; e1[c + 1 + a] += q * 0.0625;
+      }
+      if (on) lit(g, px - s / 2, py - s / 2, s, s, I, o.tint);
+    }
+    if (diff) { const z = e0; e0 = e1; e1 = z; e1.fill(0); }
+  }
+};
+
+class Renderer {
+  constructor(cv) {
+    this.cv = cv; this.g = cv.getContext('2d', { alpha: false });
+    const mk = () => document.createElement('canvas');
+    this.lay = [mk(), mk(), mk()]; this.lg = this.lay.map(c => c.getContext('2d', { alpha: false }));
+    this.fb = mk(); this.fq = this.fb.getContext('2d', { alpha: false }); this.fbOk = false;
+    this.b1 = mk(); this.b2 = mk(); this.g1 = this.b1.getContext('2d'); this.g2 = this.b2.getContext('2d');
+    this.canBlur = typeof this.g1.filter === 'string';
+  }
+  // LO: options for base, glitch and logo layer, in that order
+  draw(t, LO, st) {
+    const { cv, g } = this, W = cv.width, H = cv.height;
+    g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+    if (st.black || st.gain < 0.01) { this.fbOk = false; return; }
+    CORE = LO[0].hot ? '#fff' : LO[0].tint; SHAPE = LO[0].pshape;
+    for (let L = 0; L < 3; L++) {
+      if ((L === 0 && !st.bn) || (L === 2 && !st.lv)) continue;
+      const o = LO[L];
+      o.va = st.va; o.vb = st.vb; o.amb = L === 1 ? 1 : 0;
+      if (L === 2 && st.dens !== 1) o.density = Math.min(1.2, (lerp(22, 96, o.density) * st.dens - 22) / 74);
+      const lc = this.lay[L], q = this.lg[L];
+      if (lc.width !== W || lc.height !== H) { lc.width = W; lc.height = H; }
+      q.globalCompositeOperation = 'source-over'; q.globalAlpha = 1; q.fillStyle = '#000'; q.fillRect(0, 0, W, H);
+      const f = L === 0 ? baseField(W, H, st) : L === 1 ? fxField(W, H, t, o, st) : logoField(W, H, t, o, st);
+      DRAW[st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style](q, W, H, t, o, f.M, f.B);
+      g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1; g.drawImage(lc, 0, 0);
+    }
+    g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+    if (st.gain < 0.995) { g.globalAlpha = 1 - st.gain; g.fillStyle = '#000'; g.fillRect(0, 0, W, H); g.globalAlpha = 1; }
+    const o = LO[0];
+    if (o.trail > 0.01) {            // the last frame lingers, slipped a little along the smear direction
+      const fb = this.fb, k = H / 1080;
+      if (fb.width !== W || fb.height !== H) { fb.width = W; fb.height = H; this.fbOk = false; }
+      if (this.fbOk) { g.save(); g.globalCompositeOperation = 'lighten'; g.globalAlpha = Math.pow(0.42 + 0.52 * o.trail, 30 / o.fps); g.drawImage(fb, st.fbx * k, st.fby * k); g.restore(); }
+      this.fq.globalCompositeOperation = 'copy'; this.fq.drawImage(cv, 0, 0); this.fbOk = true;
+    } else this.fbOk = false;
+    if (st.flash > 0.02) { g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = Math.min(0.8, st.flash * 0.7); g.drawImage(cv, 0, 0); g.restore(); }
+    const glow = o.glow * (1 + 0.8 * st.flash);
+    if (glow > 0.01) this.bloom(glow);
+  }
+  bloom(a) {
+    const { cv, g, b1, b2, g1, g2 } = this, W = cv.width, H = cv.height;
+    const w1 = Math.max(2, W >> 2), h1 = Math.max(2, H >> 2), w2 = Math.max(2, W >> 3), h2 = Math.max(2, H >> 3);
+    if (b1.width !== w1 || b1.height !== h1) { b1.width = w1; b1.height = h1; }
+    if (b2.width !== w2 || b2.height !== h2) { b2.width = w2; b2.height = h2; }
+    const r = Math.min(W, H) / 1080;
+    g1.globalCompositeOperation = 'copy'; g2.globalCompositeOperation = 'copy';
+    if (this.canBlur) { g1.filter = 'blur(' + (2.2 * r).toFixed(2) + 'px)'; g2.filter = 'blur(' + (4 * r).toFixed(2) + 'px)'; }
+    g1.drawImage(cv, 0, 0, w1, h1); g2.drawImage(cv, 0, 0, w2, h2);
+    g.save(); g.globalCompositeOperation = 'lighter'; g.imageSmoothingEnabled = true;
+    g.globalAlpha = Math.min(1, 0.6 * a); g.drawImage(b1, 0, 0, W, H);
+    g.globalAlpha = Math.min(1, 0.75 * a); g.drawImage(b2, 0, 0, W, H);
+    g.restore();
+  }
+}
+
+/* ---------- state ---------- */
+let track = null;      // {name, ab, an} once sound is loaded
+let score = null, autoEv = [], userEv = [];
+const ST = newState(), audio = new Audio();
+audio.loop = true; audio.preload = 'auto';
+
+function dims() {
+  if (S.format === 'wide') return { W: 1920, H: 1080 };
+  if (S.format === 'panel') return { W: 360, H: 360 * S.shape };
+  const pw = Math.max(16, Math.floor(Math.min(128, 4096 / S.panels) / 2) * 2);
+  return { W: pw * S.panels, H: pw * S.shape, pw };
+}
+function layerOpts(fps, P) {
+  const ring = S.format === 'ring', loop = track ? 8 : S.loop;
+  const mk = (style, density) => ({ style, density, tint: P.tint, hot: P.hot, glow: P.glow, size: P.size, loop, k: loop / 8, loopD: track ? 0 : S.loop,
+    repeats: ring ? S.repeats : 1, travel: ring && S.orbit ? 1 : 0, fan: S.format === 'wide', trail: P.trail, fps,
+    pshape: P.pshape, pfill: P.pfill, dither: P.dither, loader: P.loader, va: 0.3, vb: 0.7, amb: 0,
+    wobA: P.wob * 2, wobB: Math.max(0, P.wob - 0.5) * 0.05, wobF: Math.pow(4, 0.5 - P.wobSize), eqAmt: P.eqAmt, ease: P.ease, tw: 0 });
+  return [mk(P.baseStyle, P.baseDen), mk(P.fxStyle, P.fxDen), mk(P.logoStyle, P.logoDen)];
+}
+const motion = (P, tw) => ({ glitch: P.glitch, eq: track ? P.eq : 0, chaos: P.chaos, lines: P.lines, chase: P.chase, bgLo: P.bgLo, bgMid: P.bgMid, bgHi: P.bgHi, mix: P.mix, ease: P.ease, tw });
+// eased seconds: real time blended toward the organic clock by the part's Easing amount
+const warp = (tau, P) => tau + (phiAt(score, tau) - tau) * P.ease;
+const phase = tw => score.cyclic ? tw / score.D : tw / 8;
+function mergeEv() { score.all = autoEv.concat(userEv.filter(e => e.t < score.D)).sort((a, b) => a.t - b.t); tlCache = null; touch(); }
+function rebuildScore() {
+  savePart();
+  const chAt = t => parts[partIdx(t)].P.chaos;
+  score = track ? buildTrackScore(track.an, S.seed, chAt) : buildLoopScore(S.loop, S.seed, chAt);
+  autoEv = [];
+  parts.forEach((p, i) => { for (const e of makeEvents(score, { base: p.P.baseAmt, mode: p.P.logoMode, presence: p.P.presence }, p.t, partEnd(i), i)) autoEv.push(e); });
+  mergeEv();
+  if (tau >= score.D) tau = 0;
+}
+
+const stage = $('stage'), main = new Renderer(stage);
+let tau = 0, last = performance.now(), busy = false, slowFrames = 0, pscale = 1, tlCache = null, fpsNow = 60;
+function sizeStage() {
+  const { W, H } = dims();
+  const w = Math.max(2, Math.round(W * pscale)), h = Math.max(2, Math.round(H * pscale));
+  if (stage.width !== w || stage.height !== h) { stage.width = w; stage.height = h; }
+}
+function paint() {
+  const P = parts[partIdx(tau)].P, tw = warp(tau, P), LO = layerOpts(fpsNow, P);
+  LO[1].tw = tw;
+  stateAt(score, tau, motion(P, tw), ST);
+  main.draw(phase(tw), LO, ST);
+  if (S.format === 'ring') {
+    const g = main.g, pw = stage.width / S.panels, gw = Math.max(1, Math.round(stage.height / 200));
+    g.globalAlpha = 1; g.fillStyle = '#3a3947';
+    for (let i = 1; i < S.panels; i++) g.fillRect(Math.round(i * pw - gw / 2), 0, gw, stage.height);
+  }
+  $('hudTime').textContent = tau.toFixed(2) + ' / ' + (Math.round(score.D * 10) / 10) + ' s';
+  $('hudState').textContent = (parts.length > 1 ? 'Part ' + (partIdx(tau) + 1) + ' · ' : '') + (ST.lv === 1 ? 'Logo loading ' + Math.round(ST.lp * 100) + ' %' : ST.lv === 2 ? 'Logo up' : 'Logo out');
+  drawTimeline();
+}
+// Logo state at a time, for the timeline strip: 0 gone, 1 loading, 2 up.
+function logoAt(t) {
+  let best = null, age = 1e9;
+  for (const e of score.all) { if (e.k < 10) continue; let a = t - e.t; if (a < 0) { if (!score.cyclic) continue; a += score.D; } if (a < age && !(e.k === 11 && a >= e.d)) { age = a; best = e; } }
+  if (!best) return 0;
+  return best.k === 10 ? (age < best.d ? 1 : 2) : best.k === 11 && age < best.d ? 2 : 0;
+}
+// Timeline: level as height, glitch stretches in the tint, logo strip along the top, base events as full-height marks, your triggers as squares.
+function drawTimeline() {
+  const c = $('tl'), dpr = Math.min(2, window.devicePixelRatio || 1), W = Math.max(50, Math.round(c.clientWidth * dpr)), H = Math.round(48 * dpr);
+  if (c.width !== W || c.height !== H) { c.width = W; c.height = H; tlCache = null; }
+  const g = c.getContext('2d');
+  if (!tlCache) {
+    tlCache = document.createElement('canvas'); tlCache.width = W; tlCache.height = H;
+    const q = tlCache.getContext('2d'), top = Math.round(7 * dpr), D = score.D;
+    q.fillStyle = '#000'; q.fillRect(0, 0, W, H);
+    for (let x = 0; x < W; x++) {
+      const a = Math.floor(x / W * score.nh), b = Math.max(a + 1, Math.floor((x + 1) / W * score.nh));
+      let lv = 0, gl = 0;
+      for (let h = a; h < b && h < score.nh; h++) { lv = Math.max(lv, score.gain[h] + 0.3 * score.pulse[h]); gl = Math.max(gl, score.G[h]); }
+      const hh = Math.max(1, Math.round(Math.min(1, lv) * (H - top - 6 * dpr))), Pp = parts[partIdx((x + 0.5) / W * D)].P;
+      q.fillStyle = gl * Pp.glitch * 1.6 > 0.4 ? Pp.tint : '#34333f'; q.fillRect(x, H - hh, 1, hh);
+      const ls = logoAt((x + 0.5) / W * D);
+      if (ls) { q.fillStyle = ls === 2 ? '#eceaf4' : (x & 2 ? '#eceaf4' : '#000'); q.fillRect(x, 0, 1, Math.round(4 * dpr)); }
+    }
+    for (const e of score.all) {
+      if (e.k >= 10) continue;
+      const x = Math.round(e.t / D * W), user = userEv.includes(e);
+      if (e.k < 4) { q.fillStyle = '#fff'; q.fillRect(x, top, Math.max(1, Math.round(1.5 * dpr)), H - top); q.fillRect(x, top, Math.round(6 * dpr), Math.round(3 * dpr)); }
+      if (user) { q.fillStyle = S.tint; q.fillRect(x - Math.round(2 * dpr), H - Math.round(8 * dpr), Math.round(5 * dpr), Math.round(5 * dpr)); q.strokeStyle = '#000'; q.strokeRect(x - Math.round(2 * dpr) + 0.5, H - Math.round(8 * dpr) + 0.5, Math.round(5 * dpr), Math.round(5 * dpr)); }
+    }
+    q.fillStyle = '#8d8b9e';
+    for (let i = 1; i < parts.length; i++) { const x = Math.round(parts[i].t / D * W); for (let y = 0; y < H; y += Math.round(6 * dpr)) q.fillRect(x, y, Math.max(1, Math.round(dpr)), Math.round(3 * dpr)); }
+    for (const e of userEv) if (e.k >= 10 && e.t < D) { const x = Math.round(e.t / D * W); q.fillStyle = S.tint; q.fillRect(x - Math.round(2 * dpr), H - Math.round(8 * dpr), Math.round(5 * dpr), Math.round(5 * dpr)); }
+  }
+  g.drawImage(tlCache, 0, 0);
+  g.fillStyle = '#fff'; g.fillRect(Math.round(tau / score.D * W), 0, Math.max(1, Math.round(1.5 * dpr)), H);
+  c.setAttribute('aria-valuenow', String(Math.round(tau / score.D * 100)));
+}
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (dt > 0.001) fpsNow = Math.min(120, Math.max(20, 0.9 * fpsNow + 0.1 / dt));
+  if (!busy) {
+    if (S.playing) {
+      tau += dt;
+      if (track && !audio.paused && Math.abs(audio.currentTime - tau) > 0.09) tau = audio.currentTime;
+      if (loopPart && (tau >= partEnd(sel) || tau < parts[sel].t)) { tau = parts[sel].t; if (track) { try { audio.currentTime = tau; } catch (e) {} } }
+      if (tau >= score.D) tau = track ? 0 : tau % score.D;
+      followPart();
+    }
+    const t0 = performance.now();
+    paint();
+    if (performance.now() - t0 > 34) { if (++slowFrames > 20 && pscale === 1) { pscale = 0.5; sizeStage(); } } else slowFrames = Math.max(0, slowFrames - 1);
+  }
+  requestAnimationFrame(frame);
+}
+// The part under the playhead is always the one the controls edit.
+function followPart() {
+  const i = partIdx(tau);
+  if (i === sel) return;
+  sel = i; Object.assign(S, parts[i].P); pushAll(); syncUI();
+}
+let partsSig = '';
+function renderParts() {
+  const sig = parts.map(p => p.t.toFixed(2)).join(',') + '|' + sel + '|' + score.D.toFixed(2);
+  if (sig === partsSig) return;
+  partsSig = sig;
+  const box = $('parts'); box.textContent = '';
+  parts.forEach((p, i) => {
+    const b = document.createElement('button'), end = partEnd(i);
+    b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(i === sel)); b.id = 'part-' + (i + 1);
+    b.style.flexGrow = String(Math.max(0.05, end - p.t)); b.title = p.t.toFixed(1) + ' to ' + end.toFixed(1) + ' s';
+    b.textContent = 'Part ' + (i + 1);
+    b.addEventListener('click', () => { tau = Math.min(score.D * 0.9999, p.t + 0.001); if (track) { try { audio.currentTime = tau; } catch (e) {} } followPart(); if (!S.playing && !busy) paint(); });
+    box.append(b);
+  });
+  $('partNote').textContent = parts.length === 1 ? 'One part covers the whole piece. Split at the playhead to give a stretch of the song its own layers, look and colour.'
+    : 'Editing part ' + (sel + 1) + ' of ' + parts.length + ', ' + parts[sel].t.toFixed(1) + ' to ' + partEnd(sel).toFixed(1) + ' s. The layers, variation, pixels and look below belong to it.';
+}
+function syncUI() {
+  const { W, H, pw } = dims();
+  savePart();
+  renderParts();
+  sizeStage();
+  $('stageWrap').className = 'stage ' + S.format;
+  $('ringOpts').hidden = S.format !== 'ring';
+  $('shapeRow').hidden = S.format === 'wide';
+  $('hudRes').textContent = W + ' × ' + H + ' · ' + S.fps + ' fps';
+  $('fmtNote').textContent = S.format === 'wide' ? 'One 16:9 screen, ' + W + ' × ' + H + '.'
+    : S.format === 'panel' ? 'One tall panel, 1 × ' + S.shape + ', ' + W + ' × ' + H + '.'
+    : 'All ' + S.panels + ' panels side by side as one strip, ' + W + ' × ' + H + '. Each panel is 1 × ' + S.shape + ', ' + pw + ' × ' + H + '. Scroll sideways to see all of it. The thin lines mark the panel edges and are not in the export.';
+  $('modeNote').textContent = S.logoMode === 0 ? 'The logo builds like a loading screen with a progress bar, lands on a hit, holds, then drops out.'
+    : S.logoMode === 1 ? 'The logo stays out and cuts in on some of the hits.' : 'The logo is up the whole time and cuts between poses on the hits.';
+  $('loader').disabled = S.logoMode !== 0;
+  $('presence').disabled = S.logoMode === 2;
+  $('play').textContent = S.playing ? 'Pause' : 'Play';
+  $('loop').disabled = !!track;
+  $('soundOff').hidden = !track;
+  $('seed').value = S.seed;
+  document.querySelectorAll('input[name=eq]').forEach(r => { r.disabled = !track; });
+  document.documentElement.style.setProperty('--signal', S.tint);
+  tlCache = null;
+  touch();
+  if (!S.playing && !busy) paint();
+}
+async function setPlaying(p) {
+  S.playing = p;
+  if (track) {
+    if (p) { try { audio.currentTime = Math.min(tau, Math.max(0, score.D - 0.05)); await audio.play(); } catch (e) { S.playing = false; } }
+    else audio.pause();
+  }
+  syncUI();
+}
+function seek(x) {
+  tau = clamp01(x) * score.D * 0.9999;
+  if (track) { try { audio.currentTime = tau; } catch (e) {} }
+  followPart();
+  if (!S.playing && !busy) paint();
+}
+
+/* ---------- trigger pad ---------- */
+const PAD = [
+  ['Base', [['sweep', 'Sweep', '1'], ['strobe', 'Strobe', '2'], ['flood', 'Flood', '3'], ['blackout', 'Blackout', '4']]],
+  ['Glitch', [['glitch', 'Glitch', 'Q'], ['chase', 'Chase', 'W'], ['lines', 'Lines', 'E'], ['sparks', 'Sparks', 'R'], ['bars', 'Bars', 'T'], ['blocks', 'Blocks', 'Y']]],
+  ['Logo', [['load', 'Loader', 'A'], ['show', 'Show', 'S'], ['hide', 'Hide', 'D']]]
+];
+const KEYS = {};
+function trigger(type, btn) {
+  userEv.push(mkEv(tau, type, Math.floor(Math.random() * 1e6)));
+  mergeEv();
+  const n = userEv.length;
+  $('trigNote').textContent = n + (n === 1 ? ' trigger' : ' triggers') + ' pinned to the timeline. They play back at the same moment every time and go into the export.';
+  if (btn) { btn.classList.add('hit'); setTimeout(() => btn.classList.remove('hit'), 140); }
+  if (!S.playing && !busy) paint();
+}
+{
+  const pad = $('pad'), foot = pad.firstElementChild;
+  for (const [name, items] of PAD) {
+    const row = document.createElement('div'); row.className = 'padrow';
+    const lab = document.createElement('span'); lab.textContent = name;
+    const box = document.createElement('div'); box.className = 'padbtns';
+    for (const [type, label, key] of items) {
+      const b = document.createElement('button'); b.type = 'button'; b.id = 'trig-' + type;
+      const k = document.createElement('kbd'); k.textContent = key;
+      b.append(label, k);
+      b.addEventListener('click', () => trigger(type, b));
+      box.append(b); KEYS[key.toLowerCase()] = [type, b];
+    }
+    row.append(lab, box); pad.insertBefore(row, foot);
+  }
+}
+// Looks: one press swaps how all three layers are drawn. These change the settings, not the timeline.
+const LOOKS = {
+  'LED': { baseStyle: 'dither', baseDen: 0.3, fxStyle: 'rods', fxDen: 0.78, logoStyle: 'rods', logoDen: 0.72, dither: 'bayer4', pshape: 0, pfill: 0.78 },
+  'Terminal': { baseStyle: 'ascii', baseDen: 0.4, fxStyle: 'ascii', fxDen: 0.72, logoStyle: 'ascii', logoDen: 0.8, dither: 'bayer4', pshape: 0, pfill: 0.78 },
+  'Halftone': { baseStyle: 'dither', baseDen: 0.2, fxStyle: 'dither', fxDen: 0.7, logoStyle: 'dither', logoDen: 0.6, dither: 'halftone', pshape: 1, pfill: 0.9 },
+  'Chunky': { baseStyle: 'dither', baseDen: 0.05, fxStyle: 'dither', fxDen: 0.34, logoStyle: 'dither', logoDen: 0.3, dither: 'bayer4', pshape: 0, pfill: 0.86 },
+  'Wire': { baseStyle: 'ridge', baseDen: 0.4, fxStyle: 'streaks', fxDen: 0.7, logoStyle: 'ridge', logoDen: 0.7, dither: 'bayer4', pshape: 0, pfill: 0.78 },
+  'Grain': { baseStyle: 'dither', baseDen: 0.5, fxStyle: 'rods', fxDen: 0.9, logoStyle: 'dither', logoDen: 0.85, dither: 'diffusion', pshape: 0, pfill: 1 }
+};
+function pushAll() {
+  pushRanges();
+  for (const id of ['baseStyle', 'fxStyle', 'logoStyle', 'dither', 'loader']) $(id).value = S[id];
+  setRadio('logoMode', S.logoMode); setRadio('pshape', S.pshape); setRadio('eq', S.eq);
+  $('mix').checked = S.mix; $('hot').checked = S.hot;
+  $('tintPick').value = S.tint; $('tintHex').value = S.tint.toUpperCase();
+  document.querySelectorAll('input[name=tint]').forEach(r => { r.checked = r.value === S.tint; });
+}
+{
+  const row = document.createElement('div'); row.className = 'padrow';
+  const lab = document.createElement('span'); lab.textContent = 'Looks';
+  const box = document.createElement('div'); box.className = 'padbtns';
+  for (const name of Object.keys(LOOKS)) {
+    const b = document.createElement('button'); b.type = 'button'; b.id = 'look-' + name.toLowerCase(); b.textContent = name;
+    b.addEventListener('click', () => { Object.assign(S, LOOKS[name]); pushAll(); syncUI(); });
+    box.append(b);
+  }
+  row.append(lab, box); $('pad').insertBefore(row, $('pad').lastElementChild);
+}
+$('clearTrig').addEventListener('click', () => { userEv = []; mergeEv(); $('trigNote').textContent = 'Triggers cleared. Only the automatic cut is left.'; if (!S.playing && !busy) paint(); });
+addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+  const tag = e.target && e.target.tagName;
+  if (tag === 'INPUT' && e.target.type !== 'range' && e.target.type !== 'checkbox' && e.target.type !== 'radio') return;
+  if (tag === 'SELECT' || tag === 'TEXTAREA') return;
+  if (e.code === 'Space' && tag !== 'BUTTON') { e.preventDefault(); setPlaying(!S.playing); return; }
+  const hit = KEYS[e.key.toLowerCase()];
+  if (hit) { e.preventDefault(); trigger(hit[0], hit[1]); }
+});
+
+/* ---------- logo and sound input ---------- */
+function loadImg(url) {
+  return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('load')); im.src = url; });
+}
+async function loadLogo(file) {
+  const note = $('logoNote');
+  try {
+    let url;
+    if (/svg/i.test(file.type) || /\.svg$/i.test(file.name)) {
+      const doc = new DOMParser().parseFromString(await file.text(), 'image/svg+xml'), svg = doc.documentElement;
+      if (!svg || svg.nodeName.toLowerCase() !== 'svg') throw new Error('svg');
+      const vb = (svg.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+      if (vb.length === 4 && vb[2] > 0 && vb[3] > 0) {
+        const a = vb[2] / vb[3];
+        svg.setAttribute('width', a >= 1 ? 1024 : Math.round(1024 * a)); svg.setAttribute('height', a >= 1 ? Math.round(1024 / a) : 1024);
+      } else if (!(parseFloat(svg.getAttribute('width')) > 0 && parseFloat(svg.getAttribute('height')) > 0)) {
+        svg.setAttribute('width', 1024); svg.setAttribute('height', 1024);
+      }
+      url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(doc)], { type: 'image/svg+xml' }));
+    } else {
+      url = URL.createObjectURL(file);
+    }
+    const img = await loadImg(url), w = img.naturalWidth || 1024, h = img.naturalHeight || 1024;
+    logoSrc = { img, w, h };
+    mask = buildMask(img, w, h, S.invert); maskN++;
+    URL.revokeObjectURL(url);
+    if (window.nativeApp) logoFile = { name: file.name, dataUrl: await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(file); }) };
+    note.textContent = 'Using ' + file.name + '. Only its shape is used; tick Invert if the background lights up instead of the logo.';
+    syncUI();
+  } catch (e) {
+    note.textContent = 'That file could not be read as an image. Try an SVG or a PNG.';
+  }
+}
+let soundUrl = null, soundPath = '', logoFile = null;
+async function loadSound(file, quiet, knownPath) {
+  const note = $('soundNote');
+  note.textContent = 'Reading the sound in ' + file.name + '.';
+  try {
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const ab = await new OAC(2, 1, 48000).decodeAudioData(await file.arrayBuffer());
+    if (ab.duration > 300) { note.textContent = 'That is ' + Math.round(ab.duration / 60) + ' minutes long. Trim it to under five minutes and drop it again.'; return; }
+    const n = ab.length, mono = new Float32Array(n);
+    for (let c = 0; c < ab.numberOfChannels; c++) { const d = ab.getChannelData(c); for (let i = 0; i < n; i++) mono[i] += d[i] / ab.numberOfChannels; }
+    const an = analyze(mono, ab.sampleRate);
+    audio.pause();
+    if (soundUrl) URL.revokeObjectURL(soundUrl);
+    soundUrl = URL.createObjectURL(file); audio.src = soundUrl;
+    track = { name: file.name, ab, an };
+    soundPath = knownPath || (window.nativeApp ? window.nativeApp.pathFor(file) : '');
+    tau = 0; userEv = []; resetParts(); rebuildScore();
+    note.textContent = file.name + ', ' + ab.duration.toFixed(1) + ' s. ' + score.moves.length + ' cuts land on its hits, ' + autoEv.filter(e => e.k < 4).length + ' base moments on the biggest ones.';
+    if (quiet) { S.playing = false; syncUI(); return; }
+    await setPlaying(true);
+    if (!S.playing) note.textContent += ' Press Play to hear it.';
+  } catch (e) {
+    note.textContent = 'No sound could be read from that file. Try a WAV, MP3, M4A or an MP4 video.';
+  }
+}
+function dropFile(f) {
+  if (/^(audio|video)\//.test(f.type) || /\.(mp3|wav|m4a|aac|flac|ogg|mp4|mov|webm)$/i.test(f.name)) loadSound(f); else loadLogo(f);
+}
+$('file').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) loadLogo(f); e.target.value = ''; });
+$('sfile').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) loadSound(f); e.target.value = ''; });
+$('soundOff').addEventListener('click', () => {
+  audio.pause(); audio.removeAttribute('src'); if (soundUrl) { URL.revokeObjectURL(soundUrl); soundUrl = null; }
+  track = null; soundPath = ''; tau = 0; userEv = []; resetParts(); rebuildScore();
+  $('soundNote').textContent = 'No sound yet. The piece runs as a seamless loop on a built-in half-second beat.';
+  syncUI();
+});
+let dragDepth = 0;
+addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); });
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); } });
+addEventListener('drop', e => {
+  e.preventDefault(); dragDepth = 0; document.body.classList.remove('dragging');
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) dropFile(f);
+});
+
+/* ---------- controls ---------- */
+const clampInt = (el, lo, hi, d) => { const n = Math.round(Number(el.value)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+const px2den = v => 1 - 1.2 * v, den2px = d => (1 - d) / 1.2;
+// id, state key, value from 0..1 slider position, and back; rebuild = the schedule depends on it
+const RANGES = [['baseAmt', 'baseAmt', 1], ['basePx', 'baseDen', 0, px2den, den2px], ['glitch', 'glitch'], ['lines', 'lines'], ['chase', 'chase'], ['bgLo', 'bgLo'], ['bgMid', 'bgMid'], ['bgHi', 'bgHi'],
+  ['fxPx', 'fxDen', 0, px2den, den2px], ['wob', 'wob'], ['wobSize', 'wobSize'], ['eqAmt', 'eqAmt'], ['ease', 'ease'], ['presence', 'presence', 1], ['logoPx', 'logoDen', 0, px2den, den2px], ['size', 'size'], ['chaos', 'chaos', 1], ['trail', 'trail'], ['pfill', 'pfill'], ['glow', 'glow']];
+for (const [id, key, rebuild, to] of RANGES) $(id).addEventListener('input', e => { const v = e.target.value / 100; S[key] = to ? to(v) : v; if (rebuild) rebuildScore(); syncUI(); });
+function pushRanges() { for (const [id, key, , , back] of RANGES) $(id).value = Math.round((back ? back(S[key]) : S[key]) * 100); }
+for (const id of ['baseStyle', 'fxStyle', 'logoStyle']) {
+  for (const s of STYLES) { const o = document.createElement('option'); o.value = s; o.textContent = STYLE_NAMES[s]; $(id).append(o); }
+  $(id).value = S[id];
+  $(id).addEventListener('change', e => { S[id] = e.target.value; syncUI(); });
+}
+function setTint(hex, fromPreset) {
+  S.tint = hex.toLowerCase();
+  $('tintPick').value = S.tint; $('tintHex').value = S.tint.toUpperCase();
+  if (!fromPreset) document.querySelectorAll('input[name=tint]').forEach(r => { r.checked = r.value === S.tint; });
+  syncUI();
+}
+const radios = (name, fn) => document.querySelectorAll('input[name=' + name + ']').forEach(r => r.addEventListener('change', () => { if (r.checked) fn(r.value); }));
+const setRadio = (name, v) => document.querySelectorAll('input[name=' + name + ']').forEach(r => { r.checked = r.value === String(v); });
+radios('format', v => { S.format = v; pscale = 1; slowFrames = 0; syncUI(); });
+radios('tint', v => setTint(v, true));
+radios('eq', v => { S.eq = Number(v); syncUI(); });
+radios('logoMode', v => { S.logoMode = Number(v); rebuildScore(); syncUI(); });
+radios('pshape', v => { S.pshape = Number(v); syncUI(); });
+$('invert').addEventListener('change', e => { S.invert = e.target.checked; mask = buildMask(logoSrc.img, logoSrc.w, logoSrc.h, S.invert); maskN++; syncUI(); });
+$('loader').addEventListener('change', e => { S.loader = Number(e.target.value); syncUI(); });
+$('dither').addEventListener('change', e => { S.dither = e.target.value; syncUI(); });
+$('mix').addEventListener('change', e => { S.mix = e.target.checked; syncUI(); });
+$('tintPick').addEventListener('input', e => setTint(e.target.value, false));
+$('tintHex').addEventListener('change', e => {
+  let v = e.target.value.trim(); if (v[0] !== '#') v = '#' + v;
+  if (/^#[0-9a-f]{3}$/i.test(v)) v = '#' + v[1] + v[1] + v[2] + v[2] + v[3] + v[3];
+  if (/^#[0-9a-f]{6}$/i.test(v)) setTint(v, false); else e.target.value = S.tint.toUpperCase();
+});
+$('hot').addEventListener('change', e => { S.hot = e.target.checked; syncUI(); });
+$('shape').addEventListener('change', e => { S.shape = Number(e.target.value); pscale = 1; slowFrames = 0; syncUI(); });
+$('panels').addEventListener('change', e => { S.panels = clampInt(e.target, 4, 64, 30); e.target.value = S.panels; syncUI(); });
+$('repeats').addEventListener('change', e => { S.repeats = clampInt(e.target, 1, 12, 3); e.target.value = S.repeats; syncUI(); });
+$('orbit').addEventListener('change', e => { S.orbit = e.target.checked; syncUI(); });
+$('seed').addEventListener('change', e => { S.seed = clampInt(e.target, 1, 9999, 1); rebuildScore(); syncUI(); });
+$('shuffle').addEventListener('click', () => { S.seed = 1 + Math.floor(Math.random() * 9999); rebuildScore(); syncUI(); });
+$('randAll').addEventListener('click', () => {
+  const r = Math.random, pick = a => a[Math.floor(r() * a.length)];
+  S.seed = 1 + Math.floor(r() * 9999);
+  S.baseAmt = 0.2 + 0.7 * r(); S.glitch = 0.35 + 0.65 * r(); S.lines = 0.3 + 0.7 * r(); S.chase = r() * 0.9; S.bgLo = r(); S.bgMid = r(); S.bgHi = r();
+  S.chaos = 0.3 + 0.7 * r(); S.trail = r() * 0.6; S.presence = 0.25 + 0.6 * r(); S.loader = Math.floor(r() * 3); S.logoMode = r() < 0.6 ? 0 : 1;
+  S.baseStyle = pick(STYLES); S.fxStyle = pick(STYLES); S.logoStyle = pick(STYLES); S.dither = pick(['bayer2', 'bayer4', 'bayer8', 'halftone', 'lines', 'noise', 'diffusion']); S.pshape = Math.floor(r() * 3);
+  S.baseDen = 0.1 + 0.5 * r(); S.fxDen = 0.45 + 0.5 * r(); S.logoDen = 0.35 + 0.55 * r();
+  if (track) S.eq = Math.floor(r() * 4);
+  pushAll();
+  rebuildScore(); syncUI();
+});
+$('loop').addEventListener('change', e => { S.loop = Number(e.target.value); if (!track) { userEv = []; resetParts(); rebuildScore(); } syncUI(); });
+$('range').addEventListener('change', e => { S.range = e.target.value; });
+function resetParts() { parts = [{ t: 0, P: snap() }]; sel = 0; loopPart = false; $('loopPart').setAttribute('aria-pressed', 'false'); }
+const partSay = s => { partsSig = ''; renderParts(); $('partNote').textContent = s; };
+$('split').addEventListener('click', () => {
+  const t = tau, i = partIdx(t);
+  if (t - parts[i].t < 0.5 || partEnd(i) - t < 0.5) { partSay('Move the playhead at least half a second away from a part edge, then split.'); return; }
+  savePart(); parts.splice(i + 1, 0, { t, P: Object.assign({}, parts[i].P) }); sel = i + 1; Object.assign(S, parts[sel].P);
+  rebuildScore(); pushAll(); syncUI();
+});
+$('merge').addEventListener('click', () => {
+  if (sel === 0) { partSay('The first part has nothing before it to merge with.'); return; }
+  parts.splice(sel, 1); sel--; Object.assign(S, parts[sel].P);
+  rebuildScore(); pushAll(); syncUI();
+});
+$('loopPart').addEventListener('click', e => { loopPart = !loopPart; e.currentTarget.setAttribute('aria-pressed', String(loopPart)); });
+$('copyAll').addEventListener('click', () => { savePart(); for (const p of parts) p.P = snap(); rebuildScore(); syncUI(); partSay('All ' + parts.length + ' parts now share the settings of part ' + (sel + 1) + '.'); });
+$('fps').addEventListener('change', e => { S.fps = Number(e.target.value); syncUI(); });
+$('play').addEventListener('click', () => setPlaying(!S.playing));
+{
+  const tl = $('tl'); let down = false;
+  const at = e => { const r = tl.getBoundingClientRect(); seek((e.clientX - r.left) / r.width); };
+  tl.addEventListener('pointerdown', e => { down = true; tl.setPointerCapture(e.pointerId); at(e); });
+  tl.addEventListener('pointermove', e => { if (down) at(e); });
+  tl.addEventListener('pointerup', () => { down = false; });
+  tl.addEventListener('pointercancel', () => { down = false; });
+  tl.addEventListener('keydown', e => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); seek(tau / score.D + (e.key === 'ArrowRight' ? 0.02 : -0.02)); } });
+}
+
+/* ---------- export ---------- */
+let rendered = null, dlPromise = null, stop = false;
+// A finished render is kept and offered again until something that changes the picture or the sound changes.
+const renderKey = () => JSON.stringify([Object.assign({}, S, { playing: 0 }), parts, S.range === 'part' ? sel : -1, maskN, track ? track.name + track.ab.length : 0, userEv.map(e => e.type + e.t.toFixed(3) + e.seed)]);
+// Resolves to the save capability, null when this view cannot save, or undefined when the page runs outside Claude.
+function getDownloads() {
+  if (window.nativeApp) return Promise.resolve({ save: async ({ filename, data }) => {      // the Mac app writes straight to disk through a save dialog
+    if (!(await window.nativeApp.saveFile(filename, await data.arrayBuffer()))) throw { code: 'declined' };
+    return { status: 'saved' };
+  } });
+  if (!(window.claude && typeof window.claude.use === 'function')) return Promise.resolve(undefined);
+  if (!dlPromise) dlPromise = window.claude.use('downloads').catch(() => null);
+  return dlPromise;
+}
+const say = s => { $('saveNote').textContent = s; };
+
+async function pickCodec(W, H, fps, bitrate) {
+  const list = [['avc', 'avc1.640034'], ['avc', 'avc1.640033'], ['avc', 'avc1.64002A'], ['avc', 'avc1.4D4034'], ['avc', 'avc1.42E034'], ['vp9', 'vp09.00.50.08'], ['av1', 'av01.0.12M.08']];
+  for (const [mux, codec] of list) {
+    try { const r = await VideoEncoder.isConfigSupported({ codec, width: W, height: H, bitrate, framerate: fps }); if (r && r.supported) return { mux, codec }; } catch (e) {}
+  }
+  return null;
+}
+async function pickAudio(ab) {
+  if (typeof AudioEncoder === 'undefined' || typeof AudioData === 'undefined') return null;
+  const ch = Math.min(2, ab.numberOfChannels);
+  for (const [mux, codec] of [['aac', 'mp4a.40.2'], ['opus', 'opus']]) {
+    try { const r = await AudioEncoder.isConfigSupported({ codec, sampleRate: ab.sampleRate, numberOfChannels: ch, bitrate: 192000 }); if (r && r.supported) return { mux, codec, ch }; } catch (e) {}
+  }
+  return null;
+}
+async function renderFile() {
+  const whole = S.range !== 'part' || parts.length === 1, t0 = whole ? 0 : parts[sel].t, t1 = whole ? score.D : partEnd(sel);
+  const { W, H } = dims(), fps = S.fps, D = score.D, N = Math.max(1, Math.round((t1 - t0) * fps));
+  const bitrate = Math.round(Math.min(45e6, Math.max(4e6, W * H * fps * 0.18)));
+  const pick = await pickCodec(W, H, fps, bitrate);
+  if (!pick) throw new Error('codec');
+  const snd = track ? await pickAudio(track.ab) : null;
+  if (document.fonts && document.fonts.ready) await document.fonts.ready;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const r = new Renderer(cv), st = newState(), sc = score;
+  const mo = { target: new Mp4Muxer.ArrayBufferTarget(), video: { codec: pick.mux, width: W, height: H, frameRate: fps }, fastStart: 'in-memory', firstTimestampBehavior: 'offset' };
+  if (snd) mo.audio = { codec: snd.mux, numberOfChannels: snd.ch, sampleRate: track.ab.sampleRate };
+  const muxer = new Mp4Muxer.Muxer(mo);
+  let failed = null;
+  const enc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: e => { failed = e; } });
+  enc.configure({ codec: pick.codec, width: W, height: H, bitrate, framerate: fps, latencyMode: 'quality' });
+  let aenc = null, aPos = 0, aFrom = 0, aTotal = 0, chans = null, sr = 0;
+  if (snd) {
+    const ab = track.ab; sr = ab.sampleRate; aFrom = aPos = Math.min(ab.length, Math.round(t0 * sr)); aTotal = Math.min(ab.length, Math.round(t1 * sr));
+    chans = []; for (let c = 0; c < snd.ch; c++) chans.push(ab.getChannelData(c));
+    aenc = new AudioEncoder({ output: (chunk, meta) => muxer.addAudioChunk(chunk, meta), error: e => { failed = e; } });
+    aenc.configure({ codec: snd.codec, sampleRate: sr, numberOfChannels: snd.ch, bitrate: 192000 });
+  }
+  const feed = sec => {
+    const until = Math.min(aTotal, aFrom + Math.round(sec * sr));
+    while (aPos < until) {
+      const len = Math.min(4096, aTotal - aPos), data = new Float32Array(len * snd.ch);
+      for (let c = 0; c < snd.ch; c++) data.set(chans[c].subarray(aPos, aPos + len), c * len);
+      const ad = new AudioData({ format: 'f32-planar', sampleRate: sr, numberOfFrames: len, numberOfChannels: snd.ch, timestamp: Math.round((aPos - aFrom) / sr * 1e6), data });
+      aenc.encode(ad); ad.close(); aPos += len;
+    }
+  };
+  const us = 1e6 / fps, one = i => { const tf = t0 + i / fps, P = parts[partIdx(tf)].P, tw = warp(tf, P), LO = layerOpts(fps, P); LO[1].tw = tw; stateAt(sc, tf, motion(P, tw), st); r.draw(phase(tw), LO, st); return tf - t0; };
+  sc._i = 0; sc._k = 0;
+  try {
+    // a loop with trails has to start with the tail of its own ending already on screen
+    if (sc.cyclic && whole && parts[partIdx(D - 0.01)].P.trail > 0.01) for (let i = Math.max(0, N - Math.round(fps * 0.8)); i < N; i++) one(i);
+    for (let i = 0; i < N; i++) {
+      if (failed) throw failed;
+      if (stop) throw new Error('stop');
+      const tf = one(i);
+      const vf = new VideoFrame(cv, { timestamp: Math.round(i * us), duration: Math.round(us) });
+      enc.encode(vf, { keyFrame: i % fps === 0 });
+      vf.close();
+      if (aenc) feed(tf + 0.5);
+      if (enc.encodeQueueSize > 2 || i % 3 === 0) {
+        $('barFill').style.width = (100 * (i + 1) / N).toFixed(1) + '%';
+        say('Rendering frame ' + (i + 1) + ' of ' + N + '.');
+        await new Promise(res => setTimeout(res, 0));
+        while (enc.encodeQueueSize > 4) await new Promise(res => setTimeout(res, 4));
+      }
+    }
+    if (aenc) { feed(t1 - t0 + 1); await aenc.flush(); aenc.close(); }
+    await enc.flush(); enc.close();
+  } catch (e) {
+    try { enc.close(); } catch (x) {} try { if (aenc) aenc.close(); } catch (x) {}
+    throw e;
+  }
+  if (failed) throw failed;
+  muxer.finalize();
+  return { blob: new Blob([muxer.target.buffer], { type: 'video/mp4' }), silent: !!track && !snd, opus: !!snd && snd.mux === 'opus',
+    name: (track ? 'track' : 'loop') + (whole ? '' : '-part' + (sel + 1)) + '-seed' + S.seed + '-' + S.format + '-' + W + 'x' + H + '-' + Math.round(t1 - t0) + 's-' + fps + 'fps.mp4' };
+}
+async function offer(file, downloads) {
+  const tail = file.silent ? ' This browser could not encode the sound, so the file is picture only.'
+    : file.opus ? ' The sound is stored as Opus. If your player stays silent, lay the original track under the picture instead.' : '';
+  if (downloads) {
+    try { await downloads.save({ filename: file.name, data: file.blob }); say('Saved ' + file.name + '.' + tail); }
+    catch (e) {
+      const code = e && e.code;
+      say(code === 'declined' ? 'Not saved. The render is kept, so pressing the button again asks straight away.'
+        : code === 'rate_limited' ? 'A save prompt is already open. Answer it, then press the button again.'
+        : 'The file could not be saved from this view.');
+    }
+  } else {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(file.blob); a.download = file.name;
+    document.body.append(a); a.click(); a.remove();
+    say('Download started: ' + file.name + '.' + tail);
+  }
+}
+$('save').addEventListener('click', async () => {
+  const btn = $('save');
+  if (busy) { stop = true; return; }
+  try {
+    const downloads = await getDownloads();
+    if (downloads === null) { say('Saving files is not available in this view. Open the page on claude.ai in Chrome.'); return; }
+    if (typeof VideoEncoder === 'undefined' || typeof VideoFrame === 'undefined' || !window.Mp4Muxer) { say('Video encoding is not available here. In a browser, open the page in Chrome.'); return; }
+    const key = renderKey();
+    if (!rendered || rendered.key !== key) {
+      rendered = null;
+      const wasPlaying = S.playing;
+      if (track) audio.pause();
+      busy = true; stop = false; btn.textContent = 'Stop rendering'; $('bar').hidden = false; $('barFill').style.width = '0%';
+      try { rendered = await renderFile(); rendered.key = key; }
+      finally { busy = false; btn.textContent = 'Save as MP4'; $('bar').hidden = true; last = performance.now(); if (track && wasPlaying) setPlaying(true); }
+    }
+    await offer(rendered, downloads);
+  } catch (e) {
+    const m = e && e.message;
+    say(m === 'stop' ? 'Render stopped.' : m === 'codec' ? 'This browser has no video encoder for this size. Try Chrome, or a smaller format.' : 'The render stopped before it finished. Try again, or try a shorter piece.');
+  }
+});
+
+/* ---------- project files (Mac app) ---------- */
+const GLOBAL_KEYS = ['format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range'];
+let loadingProject = false, saveTimer = 0;
+function getProject() {
+  savePart();
+  const g = {}; for (const k of GLOBAL_KEYS) g[k] = S[k];
+  return { v: 1, app: 'mall-call', S: g, parts: parts.map(p => ({ t: p.t, P: p.P })), userEv: userEv.map(e => ({ t: e.t, type: e.type, seed: e.seed, d: e.d })), logo: logoFile, soundPath: soundPath || null };
+}
+function pushGlobals() {
+  setRadio('format', S.format);
+  for (const id of ['shape', 'panels', 'repeats', 'loop', 'fps', 'seed', 'range']) $(id).value = S[id];
+  $('orbit').checked = S.orbit; $('invert').checked = S.invert;
+}
+async function applyProject(pj) {
+  if (!pj || pj.v !== 1 || !Array.isArray(pj.parts) || !pj.parts.length) return false;
+  loadingProject = true;
+  try {
+    audio.pause(); S.playing = false;
+    for (const k of GLOBAL_KEYS) if (k in pj.S) S[k] = pj.S[k];
+    pushGlobals();
+    if (!pj.soundPath && track) { audio.removeAttribute('src'); track = null; soundPath = ''; resetParts(); }
+    if (pj.logo && pj.logo.dataUrl) { const blob = await (await fetch(pj.logo.dataUrl)).blob(); await loadLogo(new File([blob], pj.logo.name, { type: blob.type })); }
+    let missing = '';
+    if (pj.soundPath && window.nativeApp) {
+      const f = await window.nativeApp.readFile(pj.soundPath);
+      if (f) await loadSound(new File([f.data], f.name), true, pj.soundPath); else missing = pj.soundPath;
+    }
+    if (!track) { soundPath = ''; rebuildScore(); }
+    if (!missing) {
+      parts = pj.parts.filter(p => p.t < score.D).map(p => ({ t: p.t, P: Object.assign(snap(), p.P) }));
+      if (!parts.length || parts[0].t !== 0) parts.unshift({ t: 0, P: snap() });
+      userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d));
+    } else $('soundNote').textContent = 'The sound for this project was not found at ' + missing + '. Drop it in again and reopen the project.';
+    sel = 0; tau = 0; Object.assign(S, parts[0].P);
+    rebuildScore(); pushAll(); syncUI();
+    return true;
+  } finally { loadingProject = false; }
+}
+// The Mac app keeps the session on disk a moment after every change, and brings it back on launch.
+function touch() {
+  if (!window.nativeApp || loadingProject || !score) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { try { window.nativeApp.autosave(JSON.stringify(getProject())); } catch (e) {} }, 1200);
+}
+if (window.nativeApp) {
+  window.nativeApp.onMenu(async cmd => {
+    if (cmd === 'open-logo' || cmd === 'open-sound') {
+      const f = await window.nativeApp.pickFile(cmd === 'open-logo' ? 'logo' : 'sound');
+      if (f) { const file = new File([f.data], f.name); if (cmd === 'open-logo') loadLogo(file); else loadSound(file, false, f.path); }
+    } else if (cmd === 'save-project' || cmd === 'save-project-as') {
+      const p = await window.nativeApp.projectSave(JSON.stringify(getProject(), null, 1), cmd === 'save-project-as');
+      if (p) say('Project saved to ' + p + '.');
+    } else if (cmd === 'open-project') {
+      const r = await window.nativeApp.projectOpen();
+      if (r && !(await applyProject(JSON.parse(r.json)))) say('That file is not a project from this app.');
+    } else if (cmd === 'new-project') {
+      audio.pause(); audio.removeAttribute('src'); track = null; soundPath = ''; userEv = []; tau = 0; resetParts(); rebuildScore(); syncUI();
+      $('soundNote').textContent = 'No sound yet. The piece runs as a seamless loop on a built-in half-second beat.';
+    } else if (cmd === 'export') $('save').click();
+    else if (cmd === 'play') setPlaying(!S.playing);
+    else if (cmd === 'new-variation') $('shuffle').click();
+  });
+}
+// Used by the app's own start-up check: one frame, the encoders, and a project round trip.
+window.__selfTest = async () => {
+  const r = { native: !!window.nativeApp, muxer: !!window.Mp4Muxer, monoFont: !!(document.fonts && document.fonts.check('500 20px "DM Mono"')) };
+  try { r.h264 = (await VideoEncoder.isConfigSupported({ codec: 'avc1.640034', width: 1920, height: 1080, bitrate: 8e6, framerate: 30 })).supported; } catch (e) { r.h264 = 'error: ' + e.message; }
+  try { r.aac = (await AudioEncoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 192000 })).supported; } catch (e) { r.aac = 'error: ' + e.message; }
+  S.playing = false; tau = score.D * 0.45; paint();
+  const d = main.g.getImageData(0, 0, stage.width, stage.height).data;
+  let lit = 0; for (let i = 0; i < d.length; i += 400) if (d[i] > 40) lit++;
+  r.litSamples = lit; r.moves = score.moves.length;
+  const before = JSON.stringify(getProject());
+  tau = 3; $('split').click(); $('look-chunky').click(); trigger('sweep');
+  const pj = JSON.stringify(getProject());
+  r.roundTrip = (await applyProject(JSON.parse(pj))) && parts.length === 2 && userEv.length === 1 && parts[1].P.fxStyle === 'dither';
+  await applyProject(JSON.parse(before));
+  r.restored = parts.length === 1 && userEv.length === 0;
+  return r;
+};
+
+/* ---------- start ---------- */
+logoSrc = placeholder();
+mask = buildMask(logoSrc.img, logoSrc.w, logoSrc.h, false);
+rebuildScore();
+if (matchMedia('(prefers-reduced-motion: reduce)').matches) { S.playing = false; tau = 3.6; }
+pushRanges();
+syncUI();
+if (document.fonts && document.fonts.load) document.fonts.load('500 20px "DM Mono"').then(() => { if (!S.playing) syncUI(); }, () => {});
+addEventListener('resize', () => { tlCache = null; });
+getDownloads();
+if (window.nativeApp) window.nativeApp.autosaveLoad().then(j => { if (j) { try { applyProject(JSON.parse(j)); } catch (e) {} } }, () => {});
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
