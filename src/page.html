@@ -542,7 +542,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 41;
+const BUILD = 42;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -1821,7 +1821,6 @@ async function loadSound(file, quiet, knownPath) {
   try {
     const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     const ab = await new OAC(2, 1, 48000).decodeAudioData(await file.arrayBuffer());
-    if (ab.duration > 300) { note.textContent = 'That is ' + Math.round(ab.duration / 60) + ' minutes long. Trim it to under five minutes and drop it again.'; return; }
     const n = ab.length, mono = new Float32Array(n);
     for (let c = 0; c < ab.numberOfChannels; c++) { const d = ab.getChannelData(c); for (let i = 0; i < n; i++) mono[i] += d[i] / ab.numberOfChannels; }
     const an = analyze(mono, ab.sampleRate);
@@ -1869,7 +1868,8 @@ const px2den = v => 1 - 1.2 * v, den2px = d => (1 - d) / 1.2;
 // id, state key, value from 0..1 slider position, and back; rebuild = the schedule depends on it
 const RANGES = [['baseAmt', 'baseAmt', 1], ['basePx', 'baseDen', 0, px2den, den2px], ['glitch', 'glitch'], ['lines', 'lines'], ['chase', 'chase'], ['bgLo', 'bgLo'], ['bgMid', 'bgMid'], ['bgHi', 'bgHi'], ['fxAmt', 'fxAmt', 1],
   ['fxPx', 'fxDen', 0, px2den, den2px], ['wob', 'wob'], ['wobSize', 'wobSize'], ['eqAmt', 'eqAmt'], ['ease', 'ease'], ['presence', 'presence', 1], ['pilAmt', 'pilAmt', 1], ['symAmt', 'symAmt', 1], ['busy', 'busy', 1], ['logoPx', 'logoDen', 0, px2den, den2px], ['typePx', 'typeDen', 0, px2den, den2px], ['typeWarp', 'typeWarp'], ['size', 'size'], ['chaos', 'chaos', 1], ['trail', 'trail'], ['pfill', 'pfill'], ['glow', 'glow']];
-for (const [id, key, rebuild, to] of RANGES) $(id).addEventListener('input', e => { const v = e.target.value / 100, x = to ? to(v) : v; if (auto[key] && auto[key].length) setKey(key, tau, x); else S[key] = x; if (rebuild) rebuildScore(key !== 'chaos'); syncUI(); });      // only Chaos changes the score itself
+let chaosT = 0;                          // on a long piece Chaos redoes the whole score, so it waits until the slider rests
+for (const [id, key, rebuild, to] of RANGES) $(id).addEventListener('input', e => { const v = e.target.value / 100, x = to ? to(v) : v; if (auto[key] && auto[key].length) setKey(key, tau, x); else S[key] = x; if (rebuild) { if (key === 'chaos' && score.D > 120) { clearTimeout(chaosT); chaosT = setTimeout(() => { rebuildScore(); syncUI(); }, 200); } else rebuildScore(key !== 'chaos'); } syncUI(); });      // only Chaos changes the score itself
 function pushRanges() { for (const [id, key, , , back] of RANGES) $(id).value = Math.round((back ? back(S[key]) : S[key]) * 100); }
 for (const id of ['baseStyle', 'fxStyle', 'logoStyle', 'typeStyle']) {
   for (const s of STYLES) { const o = document.createElement('option'); o.value = s; o.textContent = STYLE_NAMES[s]; $(id).append(o); }
