@@ -58,6 +58,7 @@ async function check(quick) {
     const sha = (await get(API + '/commits/' + branch, 'application/vnd.github.sha')).trim();
     if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error('no commit for ' + branch);
     const short = sha.slice(0, 7);
+    if (sha === state.bad) { status = 'The newest page on ' + branch + ' (' + short + ') did not start here. Waiting for the next one'; return false; }
     if (sha === state.sha || (!state.sha && sha === builtSha())) { status = 'Up to date with ' + branch + ' (' + short + ')'; return false; }
     const at = RAW + '/' + sha + '/';
     const m = A.sources(await get(at + A.MANIFEST)), files = {};
@@ -79,5 +80,9 @@ async function check(quick) {
     return false;
   }
 }
+// can the page that is open be watched for starting? Pages before build 32 never say so.
+const reports = () => { try { return pagePath() !== path.join(bundled, 'index.html') && fs.readFileSync(pagePath(), 'utf8').includes('nativeApp.pageOk'); } catch (e) { return false; } };
+// a fetched page that never started: go back to the built-in one and do not fetch that commit again
+async function markBad() { if (!state.sha) return false; state.bad = state.sha; state.sha = ''; state.shell = false; status = 'The fetched page did not start, so the built-in one is open'; await save(); return true; }
 async function setChannel(c) { state.channel = c; state.sha = ''; state.shell = false; await save(); }
-module.exports = { load, check, pagePath, setChannel, state: () => state, status: () => status, takeFresh: () => { const f = fresh; fresh = false; return f; } };
+module.exports = { load, check, pagePath, reports, markBad, setChannel, state: () => state, status: () => status, takeFresh: () => { const f = fresh; fresh = false; return f; } };

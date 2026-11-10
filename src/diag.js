@@ -1,8 +1,8 @@
 /* ---------- diagnostics: the app reporting on itself ----------
    So that whoever is helping does not need screenshots. The app keeps a short running record of how it is doing:
-   timings, the settings that cost time, and anything that went wrong. Report copies it as text. In the Mac app the
-   same record is also written every few seconds to a file in the project library folder (_diagnostics/latest.json);
-   if that folder syncs somewhere the helper can read, they can fetch it themselves. Nothing is sent anywhere. */
+   timings, the settings that cost time, and anything that went wrong. In the Mac app the record is written every few seconds to a file in the project library folder
+   (_diagnostics/latest.json) and, when the computer has a Dropbox folder, to Mall Call/_diagnostics there, where the
+   helper can read it. There is no button: the user asked for the app to do this by itself. */
 const DIAG = { errors: [], hist: [], worst: 0, started: new Date().toISOString() };
 addEventListener('error', e => { DIAG.errors.push({ at: new Date().toISOString(), msg: String(e.message).slice(0, 300), where: (e.filename || '').split('/').pop() + ':' + e.lineno }); if (DIAG.errors.length > 30) DIAG.errors.shift(); });
 addEventListener('unhandledrejection', e => { DIAG.errors.push({ at: new Date().toISOString(), msg: 'promise: ' + String(e.reason && e.reason.message || e.reason).slice(0, 300) }); if (DIAG.errors.length > 30) DIAG.errors.shift(); });
@@ -36,12 +36,5 @@ function diagText() {
     + '\n(history lines: second, ms a frame, preview fps, logo state, base clips, pillar clips, words and symbols)';
 }
 {
-  const say = t => { $('saveMsg').textContent = t; setTimeout(() => { if ($('saveMsg').textContent === t) $('saveMsg').textContent = ''; }, 6000); };
-  $('reportBtn').replaceChildren(ic('info'), 'Report');
-  $('reportBtn').addEventListener('click', async () => {
-    const text = diagText();
-    try { await navigator.clipboard.writeText(text); say('Report copied. Paste it in the chat'); }
-    catch (e) { const ta = document.createElement('textarea'); ta.value = text; document.body.append(ta); ta.select(); try { document.execCommand('copy'); say('Report copied. Paste it in the chat'); } catch (x) { say('Could not copy the report'); } ta.remove(); }
-  });
   if (window.nativeApp && window.nativeApp.diagWrite) setInterval(() => { try { window.nativeApp.diagWrite(JSON.stringify(diagNow())); } catch (e) {} }, 15000);
 }

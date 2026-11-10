@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('nativeApp', {
   pathFor: file => { try { return webUtils.getPathForFile(file) || ''; } catch (e) { return ''; } },
   projectSave: (json, saveAs) => ipcRenderer.invoke('project-save', json, saveAs),
   projectOpen: () => ipcRenderer.invoke('project-open'),
+  pageOk: build => ipcRenderer.send('page-ok', build),
   autosave: json => ipcRenderer.invoke('autosave', json),
   autosaveLoad: () => ipcRenderer.invoke('autosave-load'),
   outputDisplays: () => ipcRenderer.invoke('output-displays'),
