@@ -456,7 +456,7 @@ body.rendering .rail fieldset { opacity: .55; }
       <label class="row" for="loop"><span>Loop length</span><select id="loop"><option value="4">4 s</option><option value="8" selected>8 s</option><option value="16">16 s</option></select></label>
       <label class="row" for="fps"><span>Frame rate</span><select id="fps"><option value="25">25 fps</option><option value="30" selected>30 fps</option><option value="50">50 fps</option><option value="60">60 fps</option></select></label>
       <label class="row" for="pq"><span>Preview</span><select id="pq"><option value="auto">Full, drops to half if slow</option><option value="1">Always full size</option><option value="0.5">Half size, lighter</option><option value="0.25">Quarter size, lightest</option></select></label>
-      <label class="check" for="gpu"><input type="checkbox" id="gpu" checked> Draw on the graphics card (the logo layer so far)</label>
+      <label class="check" for="gpu"><input type="checkbox" id="gpu" checked> Draw on the graphics card (logo and glitch layers so far)</label>
       <button type="button" class="plain" id="play">Pause</button>
     </fieldset>
 
@@ -541,7 +541,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 38;
+const BUILD = 39;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -1337,7 +1337,8 @@ class Renderer {
       // and each pillar is a window onto its own stretch of that picture
       const gN = o.gapN, gk = 1 / (1 + (o.gap || 0)), goff = (1 - gk) / 2, win = u => { const x = u * gN, i = Math.floor(x); return (i + goff + (x - i) * gk) / gN; };
       const wrap = a => gN ? { M: (u, v) => a.M(win(u), v), B: (u, v) => a.B(win(u), v) } : a;
-      if (L === 0) f = wrap(baseField(Wf, H, st)); else if (L === 1) f = wrap(fxField(Wf, H, t, o, st));
+      if (L === 0) f = wrap(baseField(Wf, H, st));
+      else if (L === 1) f = this.gpu && S.gpu !== false && gpuFx(q, W, H, Wf, t, o, st, st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style) ? null : wrap(fxField(Wf, H, t, o, st));
       else if (L === 3) f = wrap(typeField(Wf, H, o, st));   // words, on their own
       else {                                               // the logo and any symbols share a layer
         // a logo in every pillar sits in the pillar itself, not in the picture behind them

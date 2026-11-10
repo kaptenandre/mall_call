@@ -4,17 +4,17 @@
    and draws the style, cell for cell the way the canvas version does. The canvas version stays as the reference, and is
    what runs for anything not moved yet and for every export.
 
-   Moved so far: the logo layer, drawn as Dither (ordered, lines, noise) or LED rods with square pixels.
+   Moved so far: the logo layer and the glitch layer, drawn as Dither (ordered, lines, noise) or LED rods with square pixels.
    Everything else falls back by itself: gpuLogo returns false and the caller draws the old way. */
-const GPU = { force: false, name: '', cv: null, gl: null, prog: null, loc: {}, bad: false, maskN: -1, tex: null, used: 0 };
+const GPU = { force: false, name: '', cv: null, gl: null, progs: null, bad: false, maskN: -1, tex: null, used: 0 };
 const GPU_VS = '#version 300 es\nin vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
-const GPU_FS = `#version 300 es
+const GPU_HEAD = `#version 300 es
 precision highp float; precision highp int;
 uniform sampler2D uMask;
 uniform vec2 uRes, uCell, uCtr, uRot, uL, uY, uX, uTh, uBar, uG, uPlane, uCrush, uO, uCR, uMw;
 uniform vec3 uTint, uCore, uSl[8];
 uniform float uR, uTY, uShift, uSk, uEqK, uLp, uBy, uGI, uTA, uTF, uTP, uDA, uDF, uDP, uGapN, uGoff, uGk;
-uniform float uUnit, uS, uT, uC1, uC2, uC3, uFq, uDir, uAmb, uBay[64], uPy, uPx, uDw, uDh, uEase, uEqv[24];
+uniform float uHM, uLw, uUnit, uS, uT, uC1, uC2, uC3, uFq, uDir, uAmb, uBay[64], uPy, uPx, uDw, uDh, uEase, uEqv[24];
 uniform int uEq, uLay, uLt, uLs, uNSl, uStyle, uMode, uBn;
 uniform bool uHide, uLoading, uOutline, uInv;
 out vec4 outC;
@@ -30,11 +30,18 @@ vec2 smp(float u, float v) {
   if (u < 0. || u > 1. || v < 0. || v > 1.) return vec2(0.);
   return texture(uMask, (vec2(u, v) * (uMw - 1.) + .5) / uMw).rg;
 }
-float field(float u, float v) {
+// tear, slip and slices: the picture pulled about before anything is read from it (mkDisp)
+vec2 disp(float u, float v) {
   if (uCrush.y > 0.) { u = (floor(u * uCrush.x) + .5) / uCrush.x; v = (floor(v * uCrush.y) + .5) / uCrush.y; }
   if (uTA > .002) u += uTA * nz(v * uTF + uTP, 11);
   if (uDA > .002) v += uDA * nz(u * uDF + uDP, 12);
   for (int i = 0; i < 8; i++) { if (i >= uNSl) break; if (v >= uSl[i].x && v < uSl[i].y) { u += uSl[i].z; break; } }
+  return vec2(u, v);
+}
+`;
+const GPU_LOGO = `
+float field(float u, float v) {
+  vec2 dq = disp(u, v); u = dq.x; v = dq.y;
   float c = u * uR - uShift; c -= floor(c);
   float r = v * uTY; r -= floor(r);
   float dx = c * uCell.x - uCtr.x, dy = r * uCell.y - uCtr.y, ry = dy * uRot.x - dx * uRot.y, lu = (dx * uRot.x + dy * uRot.y + ry * uSk) / uL.x + .5;
@@ -59,6 +66,49 @@ float field(float u, float v) {
   if (uInv && lu > -.12 && lu < 1.12 && lv > -.12 && lv < 1.12) val = 1. - val;
   return val;
 }
+`;
+// the glitch layer: lines, volleys, slab, rods, chase lanes and debris on its three bands (fxField)
+const GPU_FX = `
+uniform vec4 uP[12], uLaneA[5], uLaneB[5], uBN;
+uniform vec2 uHl[4], uVl[4], uShot[8], uSlab, uThF;
+uniform vec3 uB;
+uniform float uPI[12], uRods, uChI, uFxg;
+uniform int uPn, uShotN, uLaneN, uSeed, uLoK, uMiK, uHiK, uLines;
+uniform bool uPHz;
+float field(float u, float v) {
+  vec2 dq = disp(u, v); u = dq.x; v = dq.y;
+  float val = 0.;
+  if (uLines == 2) {
+    float across = uPHz ? v : u, along = uPHz ? u : v, th = uPHz ? uThF.x : uThF.y;
+    for (int j = 0; j < 12; j++) { if (j >= uPn) break; if (abs(across - uP[j].x) < th * (1. + .9 * uP[j].y)) { float d = abs(along - uP[j].z) / uP[j].w; if (d < 1.) val = max(val, uPI[j] * pow(1. - d * d, 1.4)); } }
+  } else if (uLines == 1) for (int j = 0; j < 4; j++) {
+    if (uHl[j].y > val && abs(v - uHl[j].x) < uThF.x) val = uHl[j].y;
+    if (uVl[j].y > val && abs(u - uVl[j].x) < uThF.y) val = uVl[j].y;
+  }
+  for (int j = 0; j < 8; j++) { if (j >= uShotN) break; bool hz = uShot[j].x > .5; if (abs((hz ? v : u) - uShot[j].y) < (hz ? uThF.x : uThF.y)) val = 1.; }
+  if (u >= uSlab.x && u < uSlab.y) val = 1.;
+  else if (uRods > 0. && hash(int(floor(u * uBN.x)), uSeed, 3) < uRods) val = 1.;
+  for (int j = 0; j < 5; j++) {
+    if (j >= uLaneN) break;
+    bool hz = uLaneA[j].x > .5; float across = hz ? v : u, along = hz ? u : v, n = uLaneA[j].z;
+    if (abs(across - uLaneA[j].y) < (hz ? uThF.x : uThF.y) * uLaneB[j].z) {
+      float d = mod(uLaneA[j].w - floor(along * n) * uLaneB[j].x, n);
+      if (d < uLaneB[j].y) val = max(val, uChI * (1. - .75 * d / uLaneB[j].y));
+    }
+  }
+  if (uB.x > .02) {
+    int g = int(floor(u * uBN.y)); float h1 = hash(g, uLoK, 81);
+    if (h1 < .22) { float len = (.15 + .6 * hash(g, uLoK, 83)) * (.35 + .65 * min(1., uB.x * 1.5)), a = hash(g, uLoK, 82) * (1. - len); if (v >= a && v < a + len) val = max(val, uB.x * (.5 + .45 * h1 / .22)); }
+  }
+  if (uB.y > .02) {
+    int r = int(floor(v * uBN.z)); float h2 = hash(r, uMiK, 84);
+    if (h2 < .14) { float len = (.1 + .5 * hash(r, uMiK, 86)) * (.35 + .65 * min(1., uB.y * 1.6)), a = hash(r, uMiK, 85) * (1. - len); if (u >= a && u < a + len) val = max(val, uB.y * .75); }
+  }
+  if (uB.z > .02 && hash(int(floor(u * uBN.w)), int(floor(v * uHM)), uHiK) < .05 * uB.z) val = max(val, .55 + .4 * uB.z);
+  return val * uFxg;
+}
+`;
+const GPU_TAIL = `
 // each pillar is a window onto its own stretch of a picture as wide as the whole ring, air included
 float M(float u, float v) { if (uGapN > 0.) { float x = u * uGapN, i = floor(x); u = (i + uGoff + (x - i) * uGk) / uGapN; } return field(u, v); }
 bool inside(float x, float y, float cx, float cy, float w, float h) {
@@ -67,6 +117,7 @@ bool inside(float x, float y, float cx, float cy, float w, float h) {
 }
 void main() {
   float x = gl_FragCoord.x - .5, y = uRes.y - gl_FragCoord.y - .5, I = 0.;
+  vec3 col = vec3(0.);
   outC = vec4(0., 0., 0., 1.);
   if (uStyle == 0) {                                     // dither
     float c = floor((x + .5 - uO.x) / uUnit), r = floor((y + .5 - uO.y) / uUnit);
@@ -86,6 +137,7 @@ void main() {
   } else {                                               // LED rods
     float c = floor((x + .5) / uPx), r = floor((y + .5) / uPy);
     float cx = (c + .5) * uPx, v = (r + .5) / uCR.y, u = cx / uRes.x;
+    if (uAmb > 0.) { float x0 = floor(cx - uLw / 2. + .5); if (x >= x0 && x < x0 + max(1., floor(uLw + .5))) { col = uTint * .08; outC = vec4(col, 1.); } }      // the faint rod itself
     if (!inside(x, y, cx, v * uRes.y, uDw, uDh)) return;
     int ci = int(c);
     float sp = (hash(ci, 1, 7) * 2. < 1. ? uC1 : uC2) * (hash(ci, 2, 7) < .5 ? -1. : 1.), ph = hash(ci, 3, 7);
@@ -96,7 +148,7 @@ void main() {
     I = m * (.4 + .6 * wave) + pk * (.2 * uAmb + .6 * m);
   }
   if (I < .03) return;
-  vec3 col = uTint * (max(1., floor(min(1., I) * 32. + .5)) / 32.);       // brightness in 32 steps, as the canvas version gathers it
+  col = mix(col, uTint, max(1., floor(min(1., I) * 32. + .5)) / 32.);       // brightness in 32 steps, as the canvas version gathers it
   if (I > .55) col = mix(col, uCore, floor(min(1., (I - .55) * 1.8) * 32. + .5) / 32.);
   outC = vec4(col, 1.);
 }`;
@@ -109,26 +161,58 @@ function gpuInit() {
     // WebGL drawn by the processor is slower than the canvas version, so it is not worth having
     { const x = gl.getExtension('WEBGL_debug_renderer_info'), name = x ? String(gl.getParameter(x.UNMASKED_RENDERER_WEBGL)) : ''; GPU.name = name; if (!GPU.force && /swiftshader|llvmpipe|software|basic render/i.test(name)) throw new Error('software graphics (' + name + ')'); }
     const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
-    const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, GPU_VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, GPU_FS)); gl.bindAttribLocation(pr, 0, 'p'); gl.linkProgram(pr);
-    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
-    gl.useProgram(pr);
+    const vs = sh(gl.VERTEX_SHADER, GPU_VS), mk = body => { const pr = gl.createProgram(); gl.attachShader(pr, vs); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, GPU_HEAD + body + GPU_TAIL)); gl.bindAttribLocation(pr, 0, 'p'); gl.linkProgram(pr); if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr)); return { pr, loc: {} }; };
+    const progs = { logo: mk(GPU_LOGO), fx: mk(GPU_FX) };
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    cv.addEventListener('webglcontextlost', e => { e.preventDefault(); GPU.gl = null; GPU.prog = null; GPU.loc = {}; GPU.maskN = -1; });      // comes back by itself on the next frame
-    GPU.cv = cv; GPU.gl = gl; GPU.prog = pr; GPU.loc = {}; GPU.maskN = -1;
+    cv.addEventListener('webglcontextlost', e => { e.preventDefault(); GPU.gl = null; GPU.progs = null; GPU.maskN = -1; });      // comes back by itself on the next frame
+    GPU.cv = cv; GPU.gl = gl; GPU.progs = progs; GPU.maskN = -1;
     return true;
   } catch (e) { GPU.bad = true; GPU.why = String(e && e.message).slice(0, 300); console.warn('gpu: ' + GPU.why); return false; }      // not an error: the canvas version takes over
 }
 const gpuHex = h => { const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(h) || [0, 'ff', 'ff', 'ff']; return [parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255, parseInt(m[3], 16) / 255]; };
+// which dither a shader can draw: ordered 0, lines 1, noise 2. Halftone and diffusion stay in script.
+const gpuDither = mode => BAYER[mode] ? 0 : mode === 'lines' ? 1 : mode === 'noise' ? 2 : -1;
+const gpuCan = (sn, o, st) => SHAPE === 0 && (sn === 'rods' || (sn === 'dither' && gpuDither(o.dither) >= 0)) && st.nSl <= 8 && gpuInit();
+// One layer's program made current and its canvas sized; returns the setters.
+function gpuUse(kind, W, H) {
+  const { gl, cv } = GPU, P = GPU.progs[kind], L = P.loc, at = n => L[n] !== undefined ? L[n] : (L[n] = gl.getUniformLocation(P.pr, n));
+  gl.useProgram(P.pr);
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  gl.viewport(0, 0, W, H);
+  return { gl, at, f1: (n, a) => gl.uniform1f(at(n), a), f2: (n, a, b) => gl.uniform2f(at(n), a, b), i1: (n, a) => gl.uniform1i(at(n), a) };
+}
+// tear, slip and slices, as mkDisp: FW is the field's width, amt how much of it this layer takes
+function gpuDisp(u, o, st, FW, H, amt) {
+  const cy = st.crush, n = st.nSl, sl = new Float32Array(24);
+  for (let i = 0; i < n; i++) { sl[i * 3] = st.sl[i].a; sl[i * 3 + 1] = st.sl[i].b; sl[i * 3 + 2] = st.sl[i].d * amt; }
+  u.f2('uCrush', cy ? Math.max(2, Math.round(cy * FW / H)) : 0, cy || 0); u.i1('uNSl', n); u.gl.uniform3fv(u.at('uSl[0]'), sl);
+  u.f1('uTA', (st.tearA * o.wobA + o.wobB) * amt); u.f1('uTF', st.tearF * o.wobF); u.f1('uTP', st.tearP); u.f1('uDA', (st.dropA * o.wobA + o.wobB * 0.7) * amt); u.f1('uDF', st.dropF * o.wobF); u.f1('uDP', st.dropP);
+}
+// the style and the pillar windows, then the draw itself into the 2D context q
+function gpuDraw(u, q, W, H, t, o, sn, gapN) {
+  const { gl, f1, f2, i1, at } = u, gk = 1 / (1 + (o.gap || 0)), mode = o.dither;
+  f2('uRes', W, H); f1('uGapN', gapN); f1('uGk', gk); f1('uGoff', (1 - gk) / 2);
+  const tint = gpuHex(o.tint), core = gpuHex(CORE);
+  gl.uniform3f(at('uTint'), tint[0], tint[1], tint[2]); gl.uniform3f(at('uCore'), core[0], core[1], core[2]);
+  f1('uT', t); f1('uC1', cyc(1, o)); f1('uC2', cyc(2, o)); f1('uC3', cyc(3, o)); f1('uDir', o.vb < 0.5 ? -1 : 1); f1('uAmb', o.amb); f1('uEase', o.ease);
+  if (sn === 'dither') {
+    const unit = Math.min(W, H) / lerp(20, 90, o.density), cols = Math.ceil(W / unit), rows = Math.ceil(H / unit), bm = BAYER[mode];
+    i1('uStyle', 0); i1('uMode', gpuDither(mode)); f1('uUnit', unit); f2('uCR', cols, rows); f2('uO', (W - cols * unit) / 2, (H - rows * unit) / 2); f1('uS', Math.max(1, unit * o.pfill)); f1('uFq', 0.8 + 1.4 * o.va);
+    if (bm) { const b = new Float32Array(64); b.set(bm); gl.uniform1fv(at('uBay[0]'), b); i1('uBn', Math.sqrt(bm.length)); } else i1('uBn', 2);
+  } else {
+    const unit = Math.min(W, H) / lerp(22, 96, o.density), rows = Math.max(6, Math.round(H / unit)), py = H / rows, cols = Math.max(3, Math.round(W / (unit * 2.4)));
+    i1('uStyle', 1); f2('uCR', cols, rows); f1('uPy', py); f1('uPx', W / cols); f1('uDw', py * 0.56 * o.pfill); f1('uDh', py * 0.82 * o.pfill); f1('uFq', 0.6 + 1.8 * o.va); f1('uLw', Math.max(1, Math.min(W, H) / 900));
+  }
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  q.drawImage(GPU.cv, 0, 0);
+  GPU.used++;
+}
 // The logo layer into the 2D context q. W and H are the layer's size, Wf the width of the field behind the pillars.
 // st is the state to draw from (the plain one when a clean Show is up). Returns false when this frame needs the canvas version.
 function gpuLogo(q, W, H, Wf, t, o, st, each, PN, sn) {
-  const mode = o.dither, md = BAYER[mode] ? 0 : mode === 'lines' ? 1 : mode === 'noise' ? 2 : -1;
-  if (SHAPE !== 0 || !(sn === 'rods' || (sn === 'dither' && md >= 0)) || st.nSl > 8 || !gpuInit()) return false;
-  const { gl, cv } = GPU, L = GPU.loc, at = n => L[n] !== undefined ? L[n] : (L[n] = gl.getUniformLocation(GPU.prog, n));
-  const f1 = (n, a) => gl.uniform1f(at(n), a), f2 = (n, a, b) => gl.uniform2f(at(n), a, b), i1 = (n, a) => gl.uniform1i(at(n), a);
-  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
-  gl.viewport(0, 0, W, H);
+  if (!gpuCan(sn, o, st)) return false;
+  const u = gpuUse('logo', W, H), { gl, f1, f2, i1, at } = u;
   if (GPU.maskN !== maskN || GPU.maskRef !== mask) {      // the logo as a texture: the shape in red, its blur in green
     const n = mask.w * mask.h, px = new Uint8Array(n * 2);
     for (let i = 0; i < n; i++) { px[i * 2] = Math.round(Math.min(1, Math.max(0, mask.data[i])) * 255); px[i * 2 + 1] = Math.round(Math.min(1, Math.max(0, mask.blur[i])) * 255); }
@@ -138,7 +222,7 @@ function gpuLogo(q, W, H, Wf, t, o, st, each, PN, sn) {
     for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
     GPU.maskN = maskN; GPU.maskRef = mask;
   }
-  i1('uMask', 0); f2('uMw', mask.w, mask.h); f2('uRes', W, H);
+  i1('uMask', 0); f2('uMw', mask.w, mask.h);
   // the field, with the same sums as logoField
   const FW = each ? W : Wf, rep = each ? PN : o.repeats, travel = each ? 0 : o.travel;
   const R = rep * st.tx, TY = st.ty, cellW = FW / R, cellH = H / TY, la = mask.w / mask.h, box = o.size * st.s * Math.min(cellW, cellH);
@@ -150,27 +234,41 @@ function gpuLogo(q, W, H, Wf, t, o, st, each, PN, sn) {
   f2('uPlane', Math.min(1, (st.x0 + 1 - st.x1) * 6), eq === 2 ? 0 : Math.min(1, (st.y0 + 1 - st.y1) * 6));
   i1('uHide', st.hide ? 1 : 0); i1('uLoading', st.lv === 1 ? 1 : 0); f1('uLp', st.lp); i1('uLt', o.loader | 0); i1('uLs', st.lseed | 0); f1('uBy', Math.max(4, Math.round(14 / la)));
   f2('uBar', 1.1, 1.1 + Math.max(thLv * 2.2, 0.035)); f1('uGI', st.gI); f2('uG', st.gx, st.gy); i1('uOutline', o.outline ? 1 : 0); i1('uInv', st.inv ? 1 : 0);
-  // tear, slip and slices, as mkDisp
-  const cy = st.crush, n = st.nSl, sl = new Float32Array(24);
-  for (let i = 0; i < n; i++) { sl[i * 3] = st.sl[i].a; sl[i * 3 + 1] = st.sl[i].b; sl[i * 3 + 2] = st.sl[i].d; }
-  f2('uCrush', cy ? Math.max(2, Math.round(cy * FW / H)) : 0, cy || 0); i1('uNSl', n); gl.uniform3fv(at('uSl[0]'), sl);
-  f1('uTA', st.tearA * o.wobA + o.wobB); f1('uTF', st.tearF * o.wobF); f1('uTP', st.tearP); f1('uDA', st.dropA * o.wobA + o.wobB * 0.7); f1('uDF', st.dropF * o.wobF); f1('uDP', st.dropP);
-  const gapN = each ? 0 : o.gapN || 0, gk = 1 / (1 + (o.gap || 0));
-  f1('uGapN', gapN); f1('uGk', gk); f1('uGoff', (1 - gk) / 2);
-  // the style
-  const tint = gpuHex(o.tint), core = gpuHex(CORE);
-  gl.uniform3f(at('uTint'), tint[0], tint[1], tint[2]); gl.uniform3f(at('uCore'), core[0], core[1], core[2]);
-  f1('uT', t); f1('uC1', cyc(1, o)); f1('uC2', cyc(2, o)); f1('uC3', cyc(3, o)); f1('uDir', o.vb < 0.5 ? -1 : 1); f1('uAmb', o.amb); f1('uEase', o.ease);
-  if (sn === 'dither') {
-    const unit = Math.min(W, H) / lerp(20, 90, o.density), cols = Math.ceil(W / unit), rows = Math.ceil(H / unit), bm = BAYER[mode];
-    i1('uStyle', 0); i1('uMode', md); f1('uUnit', unit); f2('uCR', cols, rows); f2('uO', (W - cols * unit) / 2, (H - rows * unit) / 2); f1('uS', Math.max(1, unit * o.pfill)); f1('uFq', 0.8 + 1.4 * o.va);
-    if (bm) { const b = new Float32Array(64); b.set(bm); gl.uniform1fv(at('uBay[0]'), b); i1('uBn', Math.sqrt(bm.length)); } else i1('uBn', 2);
-  } else {
-    const unit = Math.min(W, H) / lerp(22, 96, o.density), rows = Math.max(6, Math.round(H / unit)), py = H / rows, cols = Math.max(3, Math.round(W / (unit * 2.4)));
-    i1('uStyle', 1); f2('uCR', cols, rows); f1('uPy', py); f1('uPx', W / cols); f1('uDw', py * 0.56 * o.pfill); f1('uDh', py * 0.82 * o.pfill); f1('uFq', 0.6 + 1.8 * o.va);
-  }
-  gl.drawArrays(gl.TRIANGLES, 0, 3);
-  q.drawImage(cv, 0, 0);
-  GPU.used++;
+  gpuDisp(u, o, st, FW, H, 1);
+  gpuDraw(u, q, W, H, t, o, sn, each ? 0 : o.gapN || 0);
+  return true;
+}
+// The glitch layer, with the same sums as fxField.
+function gpuFx(q, W, H, Wf, t, o, st, sn) {
+  if (!gpuCan(sn, o, st)) return false;
+  const u = gpuUse('fx', W, H), { gl, f1, f2, i1, at } = u;
+  const unit = Math.min(Wf, H) / lerp(22, 96, o.density);
+  f2('uThF', unit * 0.6 / H, unit * 1.3 / Wf);
+  gl.uniform4f(at('uBN'), Math.max(6, Math.round(Wf / (unit * 2.4))), Math.max(4, Math.round(Wf / (unit * 6))), Math.max(6, Math.round(H / (unit * 1.6))), Math.max(8, Math.round(Wf / unit))); f1('uHM', Math.max(6, Math.round(H / unit)));
+  f2('uSlab', st.slabW > 0 ? st.slabX - st.slabW / 2 : 9, st.slabX + st.slabW / 2); f1('uRods', st.rods); i1('uSeed', st.seed | 0);
+  gl.uniform3f(at('uB'), st.bLo, st.bMid, st.bHi); i1('uLoK', st.loK | 0); i1('uMiK', st.miK | 0); i1('uHiK', st.hiK | 0); f1('uFxg', st.fxGain); f1('uChI', st.chI);
+  // lines: pulse stretches, or the four hairlines each way
+  i1('uLines', st.pulseLines ? 2 : st.lines ? 1 : 0); i1('uPHz', st.pHz ? 1 : 0); i1('uPn', st.pn);
+  { const p = new Float32Array(48); for (let j = 0; j < st.pn; j++) { p[j * 4] = st.pp[j]; p[j * 4 + 1] = st.pE[j]; p[j * 4 + 2] = st.pc[j]; p[j * 4 + 3] = st.pL[j]; } gl.uniform4fv(at('uP[0]'), p); gl.uniform1fv(at('uPI[0]'), st.pI); }
+  { const h = new Float32Array(8), v = new Float32Array(8); for (let j = 0; j < 4; j++) { h[j * 2] = st.hl[j]; h[j * 2 + 1] = st.hI[j]; v[j * 2] = st.vl[j]; v[j * 2 + 1] = st.vI[j]; } gl.uniform2fv(at('uHl[0]'), h); gl.uniform2fv(at('uVl[0]'), v); }
+  // one-shot line volleys from Lines clips
+  { const s = new Float32Array(16); let n = 0;
+    for (let i = 0; i < st.lsN && n < 8; i++) { const sd = st.lsS[i], hz = sd % 2 === 0, rev = (sd >> 1) % 2 === 0; for (let j = 0; j < 4; j++, n++) { const e = ioExpo(clamp01((st.lsX[i] - 0.1 * j) / 0.7)); s[n * 2] = hz ? 1 : 0; s[n * 2 + 1] = rev ? 1.05 - 1.1 * e : -0.05 + 1.1 * e; } }
+    i1('uShotN', n); gl.uniform2fv(at('uShot[0]'), s); }
+  // chase lanes
+  { const a = new Float32Array(20), b = new Float32Array(20); let nl = 0;
+    if (st.chase) {
+      const cs = st.chSeed, D = o.loopD; nl = 2 + Math.floor(hash(cs, 1, 190) * 4);
+      for (let j = 0; j < nl; j++) {
+        const n = 8 + Math.floor(hash(cs, j, 192) * 28);
+        let lapHz = (6 + Math.floor(hash(cs, j, 193) * 20)) / n; if (D) lapHz = Math.max(1, Math.round(lapHz * D)) / D;
+        const lap = o.tw * lapHz + hash(cs, j, 198), fl = Math.floor(lap), k = lap - fl, run = fl + (o.ease > 0.02 ? k + (ioQuint(k) - k) * Math.min(1, o.ease * 1.2) : k), head = Math.floor(run * n + 1e-4);
+        a[j * 4] = hash(cs, j, 191) < 0.6 ? 1 : 0; a[j * 4 + 1] = 0.06 + 0.88 * hash(cs, j, 194); a[j * 4 + 2] = n; a[j * 4 + 3] = ((head % n) + n) % n;
+        b[j * 4] = hash(cs, j, 195) < 0.5 ? 1 : -1; b[j * 4 + 1] = 2 + Math.floor(hash(cs, j, 196) * 6); b[j * 4 + 2] = 1 + Math.floor(hash(cs, j, 197) * 2.5);
+      }
+    }
+    i1('uLaneN', nl); gl.uniform4fv(at('uLaneA[0]'), a); gl.uniform4fv(at('uLaneB[0]'), b); }
+  gpuDisp(u, o, st, Wf, H, 0.6);
+  gpuDraw(u, q, W, H, t, o, sn, o.gapN || 0);
   return true;
 }
