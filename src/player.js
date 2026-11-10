@@ -9,7 +9,7 @@ function statsShow() {
     if (window.nativeApp && window.nativeApp.metrics) { try { statsSys = await window.nativeApp.metrics(); } catch (e) {} }
     const f = n => n.toFixed(1).padStart(5), budget = 1000 / PREVIEW_FPS(), d = dims();
     const lines = ['FRAME     ' + f(PERF.all) + ' ms of ' + budget.toFixed(1) + (PERF.all > budget ? '  OVER' : ''),
-      ' layers   ' + f(PERF.draw) + '   base ' + PERF.layer[0].toFixed(1) + '  glitch ' + PERF.layer[1].toFixed(1) + '  logo ' + PERF.layer[2].toFixed(1),
+      ' layers   ' + f(PERF.draw) + '   base ' + PERF.layer[0].toFixed(1) + '  glitch ' + PERF.layer[1].toFixed(1) + '  logo ' + PERF.layer[2].toFixed(1) + '  type ' + PERF.layer[3].toFixed(1),
       ' grade    ' + f(PERF.grade), ' monitors ' + f(PERF.views), ' timeline ' + f(PERF.rest),
       'PREVIEW   ' + Math.round(paintFps) + ' fps at ' + stage.width + ' x ' + stage.height + (pscale < 1 ? ' (reduced)' : '') + ', piece is ' + d.W + ' x ' + d.H];
     if (statsSys) lines.push('PROCESSOR ' + Math.round(statsSys.cpu) + ' % of one core   page ' + Math.round(statsSys.page) + '  graphics ' + Math.round(statsSys.gpu), 'MEMORY    ' + Math.round(statsSys.mem) + ' MB');

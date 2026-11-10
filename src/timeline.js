@@ -7,7 +7,7 @@ const AKEYS = [['glitch', 'Glitch'], ['lines', 'Lines'], ['chase', 'Chases'], ['
 const ANAME = Object.fromEntries(AKEYS), CURVES = ['Ease', 'Snap', 'Cut'];
 const LAYERS = ['Base', 'Glitch', 'Logo', 'Type', 'Pillars', 'Symbols'], LAYER_NEW = ['sweep', 'glitch', 'show', 'type', 'pillar', 'sym'];
 const PIL_NAMES = { echo: 'Echo, a delay round the ring', drain: 'Drain away', chase: 'Chase', spin: 'Spin', ping: 'Ping pong', wave: 'Wave', random: 'Random', alt: 'Every other, swaps on the hit', pop: 'Pop on the hit', vu: 'A band of the sound each', build: 'Build up', split: 'Split open' };
-const TYPE_MODES = [['slam', 'Slam, word by word'], ['typeon', 'Type on'], ['letters', 'Letters, scattered'], ['roll', 'Roll and lock'], ['ticker', 'Ticker, one pass'], ['band', 'Ticker band, keeps running'], ['stack', 'Stack, rows sliding'], ['stretch', 'Stretch, snaps on the hit'], ['wave', 'Wave, stepped']];
+const TYPE_MODES = [['slam', 'Slam, word by word'], ['typeon', 'Type on'], ['letters', 'Letters, scattered'], ['roll', 'Roll and lock'], ['ticker', 'Ticker, one pass'], ['band', 'Ticker band, keeps running'], ['stack', 'Stack, rows sliding'], ['stretch', 'Stretch, snaps on the hit'], ['wave', 'Wave, stepped'], ['bump', 'Bump in, knocks on the hit'], ['spin', 'Spin in and lock'], ['flip', 'Flip round like a sign'], ['drop', 'Drop in and bounce']];
 const layerOf = k => isBase(k) ? 0 : k < 10 ? 1 : k === 13 ? 3 : k === 17 ? 4 : k === 18 ? 5 : 2, CUTS = ['base', 'fx', 'logo', null, 'pil', 'sym'];
 const TLH = { ruler: 20, over: 84, parts: 20, ev: 24, auto: 46 };
 const tlv = { z: 1, x0: 0 };
