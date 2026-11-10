@@ -19,7 +19,7 @@ async function main() {
     }
     execFileSync('iconutil', ['-c', 'icns', set, '-o', icns]);
   }
-  const keep = ['/main.js', '/preload.js', '/package.json', '/app'];
+  const keep = ['/main.js', '/preload.js', '/update.js', '/assemble.js', '/package.json', '/app'];
   const out = await packager({
     dir: root, name: NAME, out: path.join(root, 'dist'), overwrite: true, prune: true,
     platform: process.platform, arch: process.arch,

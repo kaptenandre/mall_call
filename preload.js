@@ -10,5 +10,12 @@ contextBridge.exposeInMainWorld('nativeApp', {
   projectOpen: () => ipcRenderer.invoke('project-open'),
   autosave: json => ipcRenderer.invoke('autosave', json),
   autosaveLoad: () => ipcRenderer.invoke('autosave-load'),
+  outputDisplays: () => ipcRenderer.invoke('output-displays'),
+  outputPlace: where => ipcRenderer.invoke('output-place', where),
+  reloadUpdate: () => ipcRenderer.invoke('reload-update'),
+  ffCheck: () => ipcRenderer.invoke('ff-check'),
+  ffStart: o => ipcRenderer.invoke('ff-start', o),
+  ffFrame: data => ipcRenderer.invoke('ff-frame', data),
+  ffEnd: abort => ipcRenderer.invoke('ff-end', abort),
   onMenu: fn => { ipcRenderer.on('menu', (event, cmd) => fn(cmd)); }
 });

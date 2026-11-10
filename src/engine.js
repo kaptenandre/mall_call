@@ -302,27 +302,108 @@ function buildLoopScore(L, seed, ch) {
 }
 
 /* ---------- three layers: base (rare and big), glitch (lines, chases, debris), logo (loader or appearing) ---------- */
-const EV = { sweep: 0, strobe: 1, flood: 2, blackout: 3, glitch: 4, chase: 5, lines: 6, sparks: 7, bars: 8, blocks: 9, load: 10, show: 11, hide: 12 };
-const EVD = { sweep: 0.9, strobe: 0.6, flood: 0.9, blackout: 0.4, glitch: 0.6, chase: 4, lines: 0.7, sparks: 0.6, bars: 0.6, blocks: 0.6, load: 3, show: 2, hide: 0 };
-const mkEv = (t, type, seed, d) => ({ t, type, k: EV[type], seed: seed | 0, d: d === undefined ? EVD[type] : d });
+const EV = { sweep: 0, strobe: 1, flood: 2, blackout: 3, glitch: 4, chase: 5, lines: 6, sparks: 7, bars: 8, blocks: 9, load: 10, show: 11, hide: 12, type: 13, orbit: 14, spokes: 15, meet: 16 };
+const EVD = { sweep: 0.9, strobe: 0.6, flood: 0.9, blackout: 0.4, glitch: 0.6, chase: 4, lines: 0.7, sparks: 0.6, bars: 0.6, blocks: 0.6, load: 3, show: 2, hide: 0, type: 2.5, orbit: 1.4, spokes: 2.4, meet: 1.2 };
+// base clips are the first four and the three that run round the ring; which face of the ring a clip plays on is e.face: 0 both, 1 outside, 2 inside
+const isBase = k => k < 4 || k >= 14;
+// A Type clip carries its words and how they arrive: txt, mode (slam, typeon, roll, ticker), size and y as parts of the frame height, font.
+const TYPE_NEW = { txt: 'MALL CALL', mode: 'slam', size: 0.5, y: 0.5, font: 'sans' };
+const evMore = e => e.k === 13 ? { txt: e.txt, mode: e.mode, size: e.size, y: e.y, font: e.font, face: e.face | 0 } : e.face ? { face: e.face } : null;
+const mkEv = (t, type, seed, d, more) => { const e = { t, type, k: EV[type], seed: seed | 0, d: d === undefined || d === null ? EVD[type] : d }; if (more && more.face) e.face = more.face | 0; return e.k === 13 ? Object.assign(e, TYPE_NEW, more) : e; };
+
+// The shape of the piece, read off the score once: where it drops, the builds that lead into drops, the quiet stretches,
+// and the moments each band of the spectrum jumps. The automatic cut hangs its clips on these.
+function makeStructure(sc) {
+  const { nh, hop, D } = sc, e = new Float32Array(nh);
+  for (let i = 0; i < nh; i++) e[i] = 0.65 * sc.gain[i] + 0.35 * sc.lo[i];
+  const fast = follow(e, hop, 0.12, 0.2, 0), pre = new Float64Array(nh + 1);
+  for (let i = 0; i < nh; i++) pre[i + 1] = pre[i] + fast[i];
+  const mean = (t0, t1) => { const i0 = Math.max(0, Math.min(nh - 1, Math.round(t0 / hop))), i1 = Math.max(i0 + 1, Math.min(nh, Math.round(t1 / hop))); return (pre[i1] - pre[i0]) / (i1 - i0); };
+  const spaced = (list, gap) => { const keep = []; for (const c of list.slice().sort((x, y) => y.v - x.v)) if (keep.every(k => Math.abs(k.t - c.t) > gap)) keep.push(c); return keep.sort((x, y) => x.t - y.t); };
+  // drops: a hit where the level after it stands well above the stretch before it
+  let drops = [];
+  for (const h of sc.hitList) {
+    if (h.t < 2 || h.t > D - 1) continue;
+    const before = mean(h.t - 2.5, h.t - 0.25), after = mean(h.t + 0.05, h.t + 1.5), gap = mean(h.t - 0.5, h.t - 0.05);
+    const v = (after - before) + 0.6 * (after - gap);
+    if (after - before > 0.14 && v > 0.22) drops.push({ t: h.t, v, gap: gap < 0.45 * after ? Math.min(0.5, 0.25 + 0.5 * (after - gap)) : 0 });
+  }
+  drops = spaced(drops, 6);
+  // builds: before a drop, how far back the mids and highs have been climbing
+  const mh = new Float32Array(nh);
+  for (let i = 0; i < nh; i++) mh[i] = 0.5 * (sc.mid[i] + sc.hi[i]);
+  const rise = follow(mh, hop, 0.8, 0.8, 0), builds = [];
+  for (const d of drops) {
+    let i = Math.round((d.t - 0.3) / hop), n = 0;
+    const lim = Math.max(0, i - Math.round(10 / hop)), st = Math.round(0.5 / hop);
+    while (i - st > lim && rise[i] > rise[i - st] + 0.004) { i -= st; n++; }
+    const a = i * hop;
+    if (d.t - a >= 1.5 && rise[Math.round((d.t - 0.3) / hop)] - rise[i] > 0.06) builds.push({ a, b: d.t });
+  }
+  // breaks: stretches that sit far under the piece's usual level
+  const usual = pct(fast, 0.7) || 1, breaks = [];
+  for (let i = 0, from = -1; i <= nh; i++) {
+    const low = i < nh && fast[i] < 0.4 * usual;
+    if (low && from < 0) from = i;
+    else if (!low && from >= 0) { if ((i - from) * hop >= 1.2) breaks.push({ a: from * hop, b: i * hop }); from = -1; }
+  }
+  // the moments each band jumps: bass, mids, highs
+  const peaks = [sc.lo, sc.mid, sc.hi].map(lv => {
+    const on = new Float32Array(nh);
+    for (let i = 3; i < nh; i++) on[i] = Math.max(0, lv[i] - lv[i - 3]);
+    const thr = Math.max(0.08, 0.5 * (pct(on, 0.985) || 0)), out = [];
+    for (let i = 4; i < nh - 2; i++) if (on[i] > thr && on[i] >= on[i - 1] && on[i] > on[i + 1]) out.push({ t: (i - 2) * hop, v: on[i] });
+    return spaced(out, 0.2);
+  });
+  return { drops, builds, breaks, peaks };
+}
 
 // What the engine schedules by itself for one part of the piece, from a to b seconds.
-// P: base (how often), mode (0 loader, 1 appear, 2 always), presence. pi is the part's number.
+// P: base (how often), fx (how many glitch clips), mode (0 loader, 1 appear, 2 always), presence. pi is the part's number.
 function makeEvents(sc, P, a, b, pi) {
   const ev = [], D = sc.D, sd = sc.seed + pi * 977, cyc = sc.cyclic, whole = a <= 0 && b >= D;
   const hits = sc.hitList.filter(h => h.t >= a && h.t < b);
   const far = (x, y) => { const d = Math.abs(x - y); return cyc && whole ? Math.min(d, D - d) : d; };
-  if (P.base > 0.02) {                                       // base: only the strongest hits, well apart
+  const st = sc.struct || (sc.struct = makeStructure(sc)), here = x => x.t >= a && x.t < b;
+  const drops = st.drops.filter(here);
+  if (P.base > 0.02) {                                       // base: the drops first, then only the strongest hits, well apart
     const gapMin = lerp(24, 4.5, P.base), chosen = [];
-    for (const h of hits.slice().sort((x, y) => y.v - x.v)) {
+    const cand = drops.map(d => ({ t: d.t, v: 10 + d.v, drop: d })).concat(hits.slice().sort((x, y) => y.v - x.v));
+    for (const h of cand) {
       if (!cyc && pi === 0 && h.t < 1.5) continue;
-      if (chosen.every(c => far(c.t, h.t) > gapMin) && (cyc && whole ? D >= gapMin * 0.6 || chosen.length === 0 : true)) chosen.push(h);
+      if (chosen.every(c => far(c.t, h.t) > (h.drop && c.drop ? 5 : gapMin)) && (cyc && whole ? D >= gapMin * 0.6 || chosen.length === 0 : true)) chosen.push(h);
     }
     chosen.forEach((h, i) => {
-      const type = ['sweep', 'strobe', 'sweep', 'flood', 'sweep', 'blackout', 'strobe'][(i + Math.floor(hash(sd, 2, 140) * 7)) % 7];
-      const d = type === 'sweep' ? 0.7 + 0.6 * hash(i, sd, 142) : type === 'strobe' ? 0.45 + 0.5 * hash(i, sd, 142) : type === 'flood' ? 0.9 : 0.3 + 0.3 * hash(i, sd, 142);
+      let type = h.drop ? ['flood', 'sweep', 'sweep', 'strobe'][Math.floor(hash(i, sd, 143) * 3.99)] : ['sweep', 'strobe', 'sweep', 'flood', 'sweep', 'blackout', 'strobe'][(i + Math.floor(hash(sd, 2, 140) * 7)) % 7];
+      if (P.ring && type === 'sweep') type = ['orbit', 'meet', 'spokes', 'orbit'][Math.floor(hash(i, sd, 144) * 3.99)];      // on a ring, what sweeps goes round it
+      const d = type === 'orbit' ? 1.1 + 0.8 * hash(i, sd, 142) : type === 'meet' ? 0.9 + 0.6 * hash(i, sd, 142) : type === 'spokes' ? 1.8 + 1.4 * hash(i, sd, 142) : type === 'sweep' ? 0.7 + 0.6 * hash(i, sd, 142) : type === 'strobe' ? 0.45 + 0.5 * hash(i, sd, 142) : type === 'flood' ? 0.9 : 0.3 + 0.3 * hash(i, sd, 142);
       ev.push(mkEv(h.t, type, hash(i, sd, 141) * 1e6, d));
+      if (h.drop && h.drop.gap && P.base > 0.3 && h.t - h.drop.gap > a) ev.push(mkEv(h.t - h.drop.gap, 'blackout', 0, h.drop.gap));   // the breath before a drop goes dark
     });
+  }
+  if (P.fx > 0.02) {                                         // glitch clips: builds, drops, and each band's own jumps
+    const fx = P.fx, pick = (list, gap, salt, keepP) => {
+      const out = [];
+      list.filter(here).sort((x, y) => y.v - x.v).forEach((c, i) => { if (hash(Math.round(c.t * 100), sd, salt) < keepP && out.every(o => far(o.t, c.t) > gap)) out.push(c); });
+      return out;
+    };
+    st.builds.filter(u => u.b > a && u.a < b).forEach((u, i) => {
+      const s0 = Math.max(a, u.a), L = Math.min(b, u.b) - s0;
+      if (L < 1) return;
+      ev.push(mkEv(s0, 'chase', hash(i, sd, 181) * 1e6, L));        // a build always gets its chase
+      const n = 2 + Math.floor(fx * 4.99);                   // line volleys that come faster as the drop nears
+      for (let j = 0; j < n; j++) { const x = j / n; ev.push(mkEv(s0 + L * (1 - (1 - x) * (1 - x)), 'lines', hash(i * 9 + j, sd, 182) * 1e6, Math.max(0.25, 0.7 * (1 - 0.6 * x)))); }
+    });
+    drops.forEach((d, i) => { if (hash(i, sd, 183) < 0.3 + 0.7 * fx) ev.push(mkEv(d.t, 'glitch', hash(i, sd, 184) * 1e6, 0.4 + 0.5 * hash(i, sd, 185))); });
+    const kinds = [['blocks', lerp(7, 1.1, fx), 186], ['bars', lerp(6, 0.9, fx), 187], ['sparks', lerp(5, 0.7, fx), 188]];
+    kinds.forEach(([type, gap, salt], band) => {
+      for (const c of pick(st.peaks[band], gap, salt, 0.25 + 0.6 * fx)) {
+        const lines = band === 1 && hash(Math.round(c.t * 100), sd, 189) < 0.4;      // the mids sometimes throw lines instead of bars
+        ev.push(mkEv(c.t, lines ? 'lines' : type, hash(Math.round(c.t * 100), sd, 190) * 1e6, lines ? 0.45 + 0.4 * hash(Math.round(c.t * 100), sd, 191) : 0.35 + 0.4 * hash(Math.round(c.t * 100), sd, 191)));
+      }
+    });
+    // the end of a quiet stretch tears before the sound comes back
+    st.breaks.filter(u => u.b > a + 0.4 && u.b < b).forEach((u, i) => { if (hash(i, sd, 192) < fx) ev.push(mkEv(u.b - 0.3, 'glitch', hash(i, sd, 193) * 1e6, 0.3)); });
   }
   const nextHit = (t, lo, hi) => { for (const h of hits) if (h.t >= t + lo && h.t <= t + hi) return h.t; return -1; };
   if (P.mode === 2) ev.push(mkEv(a, 'show', 1, whole ? D + 1 : b - a + 0.01));
@@ -374,10 +455,11 @@ function newState() {
     inv: false, black: false, crush: 0, rods: 0, hide: false, seed: 0, nSl: 0, sl, eq: 0, eqv: new Float32Array(NB), eqLay: 0,
     tx: 1, ty: 1, dens: 1, va: 0.3, vb: 0.7, tearA: 0, tearF: 3, tearP: 0, dropA: 0, dropF: 4, dropP: 0, gI: 0, gx: 0, gy: 0,
     bLo: 0, bMid: 0, bHi: 0, loK: 0, miK: 0, hiK: 0, fbx: 0, fby: 0,
-    hl: new Float32Array(4), vl: new Float32Array(4), hI: new Float32Array(4), vI: new Float32Array(4), lines: false,
+    hl: new Float32Array(4), vl: new Float32Array(4), hI: new Float32Array(4), vI: new Float32Array(4), lines: false, pulseLines: false,
+    pn: 0, pHz: false, pp: new Float32Array(12), pc: new Float32Array(12), pL: new Float32Array(12), pI: new Float32Array(12), pE: new Float32Array(12),
     bn: 0, bt: new Int8Array(3), bx: new Float32Array(3), ba: new Float32Array(3), bs: new Int32Array(3),
     lsN: 0, lsX: new Float32Array(2), lsS: new Int32Array(2), chase: 0, chSeed: 0, chI: 1, fxGain: 1, tau: 0,
-    lv: 0, lp: 1, lseed: 0, lsince: 9, sty: new Int8Array(3) };
+    lv: 0, lp: 1, lseed: 0, lsince: 9, sty: new Int8Array(3), tyN: 0, tyE: [null, null], tyX: new Float32Array(2), tyA: new Float32Array(2) };
 }
 // relative weights of the hard glitch states; every section of the piece leans on a different few
 const GW = [0.2, 0.2, 0.22, 0.07, 0.12, 0.1, 0.14, 0.12, 0.12];
@@ -395,13 +477,16 @@ function stateAt(sc, tau, cfg, st) {
   const cv = a => a[h0] + (a[h1] - a[h0]) * hf;
   const pk = cv(sc.pulse);
   // everything scheduled or triggered that is live right now
-  st.bn = 0; st.lsN = 0; st.black = false;
-  let gX = 0, cz = 0, czSeed = 0, xLo = 0, xMid = 0, xHi = 0, lg = null, lgAge = 1e9;
+  st.bn = 0; st.lsN = 0; st.tyN = 0; st.black = false;
+  let gX = 0, cz = 0, czSeed = 0, xLo = 0, xMid = 0, xHi = 0, lg = null, lgAge = 1e9, strike = 0;
   const all = sc.all;
   for (let q = 0; q < all.length; q++) {
     const e = all[q];
+    if (e.face && cfg.face !== undefined && e.face !== cfg.face + 1) continue;      // a clip for the other face of the ring
     let age = tau - e.t;
     if (age < 0) { if (!sc.cyclic) continue; age += D; }
+    if (e.k >= 14) { if (age < e.d && st.bn < 3) { st.bt[st.bn] = e.k; st.bx[st.bn] = age / e.d; st.ba[st.bn] = age; st.bs[st.bn] = e.seed; st.bn++; } continue; }
+    if (e.k === 13) { if (age < e.d && st.tyN < 2) { st.tyE[st.tyN] = e; st.tyX[st.tyN] = age / e.d; st.tyA[st.tyN] = age; st.tyN++; } continue; }
     if (e.k >= 10) { if (age < lgAge && !(e.k === 11 && age >= e.d)) { lgAge = age; lg = e; } continue; }   // a Show that has run out hands back to whatever came before it
     if (age >= e.d) continue;
     const x = age / e.d;
@@ -409,7 +494,7 @@ function stateAt(sc, tau, cfg, st) {
     else if (e.k === 3) st.black = true;
     else if (e.k === 4) gX = Math.max(gX, 1 - x * x);
     else if (e.k === 5) { cz = 1; czSeed = e.seed; }
-    else if (e.k === 6) { if (st.lsN < 2) { st.lsX[st.lsN] = x; st.lsS[st.lsN] = e.seed; st.lsN++; } }
+    else if (e.k === 6) { if (cfg.lineMode) strike = Math.max(strike, Math.exp(-age / (0.3 * e.d))); else if (st.lsN < 2) { st.lsX[st.lsN] = x; st.lsS[st.lsN] = e.seed; st.lsN++; } }   // a Lines clip strikes every line, or in Slide mode sends a volley across
     else if (e.k === 7) xHi = Math.max(xHi, 1 - x);
     else if (e.k === 8) xMid = Math.max(xMid, 1 - x);
     else xLo = Math.max(xLo, 1 - x);
@@ -449,8 +534,26 @@ function stateAt(sc, tau, cfg, st) {
   const ja = (0.05 * Gv + 0.035 * burst + 0.012 * pk * ch) * settle;
   st.ox += (hash(k, sd, 16) - 0.5) * 2 * ja; st.oy += (hash(k, sd, 17) - 0.5) * 1.4 * ja;
   // the fast eased motion belongs to the lines; each one leaves a touch later than the last
-  st.lines = cfg.lines > 0.02;
-  if (st.lines) {
+  st.lines = cfg.lines > 0.02; st.pulseLines = st.lines && !!cfg.lineMode;
+  if (st.pulseLines) {
+    // Pulse: a rack of parallel bars, each showing a short lit stretch. The whole rack strikes out in length and light the
+    // instant the sound hits, then sinks back, every bar a little in its own way. Nothing glides: the stretches sit where
+    // they are, creeping slightly, and stand somewhere else after the next hit.
+    const bands = [sc.pulse, sc.mid, sc.hi], N = st.pn = 12;
+    const at = (a, t) => { let hp = t / sc.hop; if (hp < 0) hp = sc.cyclic ? hp + sc.nh : 0; return a[Math.min(sc.nh - 1, hp | 0)]; };
+    st.pHz = hash(m.sec, sd, 200) < 0.5;
+    const c0 = 0.3 + 0.4 * hash(m.i, sd, 205), slope = (hash(m.i, sd, 207) - 0.5) * 0.9, bow = (hash(m.i, sd, 208) - 0.5) * 0.5;
+    for (let j = 0; j < N; j++) {
+      const dly = 0.03 * hash(j, sd, 201), x = j / (N - 1) - 0.5;
+      const env = Math.max(strike, clamp01(Math.max(at(sc.pulse, tau - dly), 0.75 * at(bands[j % 3], tau - dly)) * (0.7 + 0.5 * hash(j, sd, 202))));
+      const creep = sc.cyclic ? Math.sin(TAU * (tau / D + hash(j, sd, 206))) : nz(tau * 0.11 + j * 7.3, sd);
+      st.pp[j] = (j + 0.5 + 0.5 * (hash(m.sec * 16 + j, sd, 209) - 0.5)) / N;
+      st.pc[j] = c0 + slope * x + bow * (x * x - 0.08) + 0.06 * (hash(m.i * 16 + j, sd, 210) - 0.5) + 0.03 * creep;
+      st.pL[j] = lerp(0.014, 0.14 + 0.3 * hash(m.i * 16 + j, sd, 204), Math.pow(env, 0.75));
+      st.pI[j] = cfg.lines * (0.55 + 0.45 * env) * (1 - 0.12 * hash(k, j, 203));          // a lamp is never quite steady
+      st.pE[j] = env;
+    }
+  } else if (st.lines) {
     for (let j = 0; j < 4; j++) {
       const eh = m.le(clamp01((dtm / m.ld - m.ldl[j]) / 0.6)), evv = m.le(clamp01((dtm / m.ld - m.ldl[j + 4]) / 0.6));
       st.hl[j] = m.L0.h[j] + (m.L.h[j] - m.L0.h[j]) * eh; st.hI[j] = cfg.lines * (0.5 + 2 * eh * (1 - eh));
@@ -466,7 +569,7 @@ function stateAt(sc, tau, cfg, st) {
     }
   }
   const sx = clamp01(dtm / m.ld), se = m.le(sx);
-  if (m.slab && st.lines && sx > 0 && sx < 1) { st.slabX = m.slab > 0 ? -0.2 + 1.4 * se : 1.2 - 1.4 * se; st.slabW = m.slabW * 0.5; } else st.slabW = 0;
+  if (m.slab && st.lines && !st.pulseLines && sx > 0 && sx < 1) { st.slabX = m.slab > 0 ? -0.2 + 1.4 * se : 1.2 - 1.4 * se; st.slabW = m.slabW * 0.5; } else st.slabW = 0;
   st.pulse = pk;
   st.gain = Math.min(1, cv(sc.gain) + 0.3 * pk);
   st.flash = 0.45 * pk;
@@ -531,4 +634,20 @@ function stateAt(sc, tau, cfg, st) {
   const fa = TAU * hash(m.i, sd, 76);
   st.fbx = Math.cos(fa) * (2 + 10 * pk + 14 * b2); st.fby = Math.sin(fa) * (2 + 10 * pk + 14 * b2);
   return st;
+}
+
+/* ---------- automation: keyframes on a setting. Never linear: each key leaves with an ease, a snap or a cut ---------- */
+// keys: [{t, v, c}] sorted by t. c: 0 ease, 1 snap, 2 cut (holds until the next key). On a loop the last key runs round into the first.
+const ACURVE = [ioQuint, ioExpo, () => 0];
+function autoVal(keys, t, D, cyclic) {
+  const n = keys.length;
+  if (n === 1) return keys[0].v;
+  let i = -1;
+  for (let j = 0; j < n && keys[j].t <= t; j++) i = j;
+  let a, b, span, x;
+  if (i >= 0 && i < n - 1) { a = keys[i]; b = keys[i + 1]; span = b.t - a.t; x = t - a.t; }
+  else if (!cyclic) return i < 0 ? keys[0].v : keys[n - 1].v;
+  else { a = keys[n - 1]; b = keys[0]; span = b.t + D - a.t; x = i < 0 ? t + D - a.t : t - a.t; }
+  if (span <= 1e-6) return b.v;
+  return a.v + (b.v - a.v) * ACURVE[a.c | 0](clamp01(x / span));
 }

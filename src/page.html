@@ -31,11 +31,29 @@ h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase
 .stagecol{position:sticky;top:12px;min-width:0}
 .stage{background:#000;border:1px solid var(--rule);display:flex;justify-content:center;align-items:center;min-height:180px;overflow-x:auto}
 .stage canvas{display:block}
-.stage.wide canvas{width:100%;height:auto}
-.stage.panel canvas{height:min(64vh,640px);width:auto;max-width:100%}
+.stage.wide canvas{width:auto;height:auto;max-width:100%;max-height:44vh}
+.stage.panel canvas{height:min(44vh,640px);width:auto;max-width:100%}
 .stage.ring{justify-content:flex-start}
-.stage.ring canvas{height:240px;width:auto;max-width:none}
-.tl{display:block;width:100%;height:48px;border:1px solid var(--rule);border-top:0;background:#000;cursor:pointer;touch-action:none}
+.stage.ring canvas{height:150px;width:auto;max-width:none}
+.ring3d{display:block;width:100%;height:40vh;background:#000;border:1px solid var(--rule);border-bottom:0;cursor:grab;touch-action:none}
+.tlbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid var(--rule);border-top:0;background:var(--panel);padding:6px}
+.tlbar button{min-width:30px;min-height:28px;display:inline-flex;align-items:center;justify-content:center}
+.tlbar button,.tlinsp button,.tlhead button{appearance:none;border:1px solid var(--rule);background:#000;color:var(--ink);padding:6px 8px;font:500 10px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-radius:0}
+.tlbar button:hover,.tlinsp button:hover,.tlhead button:hover{border-color:var(--ink)}
+.tlbar button[aria-pressed="true"],.tlhead button[aria-pressed="true"]{background:var(--ink);color:#000;border-color:var(--ink)}
+.tlbar select,.tlinsp select,.tlinsp input{width:auto;padding:4px 6px;font-size:11px}
+.tlbar .tc{margin-left:auto;font:500 13px/1 var(--display);letter-spacing:.06em;font-variant-numeric:tabular-nums;padding:0 4px}
+.tlwrap{display:grid;grid-template-columns:164px minmax(0,1fr);border:1px solid var(--rule);border-top:0;background:#000}
+.tlhead{border-right:1px solid var(--rule);background:var(--panel)}
+.tlhead div{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:0 4px 0 8px;font:500 10px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border-top:1px solid var(--rule);overflow:hidden;white-space:nowrap}
+.tlhead div:first-child{border-top:0}
+.tlhead button{padding:3px 4px;font-size:9px}
+.tl{display:block;width:100%;background:#000;cursor:default;touch-action:none}
+.tlinsp{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--rule);border-top:0;background:var(--panel);padding:6px 8px;min-height:38px;font-size:12.5px;color:var(--dim)}
+.tlinsp label{display:flex;gap:6px;align-items:center}
+.tlinsp input[type=number]{width:74px}
+.tlinsp input[type=text]{width:104px}
+.row.anim>span:first-child::after{content:" ◆";color:var(--signal);font-size:9px}
 .hud{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;font:400 11px/1.3 var(--display);letter-spacing:.07em;text-transform:uppercase;color:var(--dim);padding:8px 2px 10px;font-variant-numeric:tabular-nums}
 .hud b{font-weight:500;color:var(--ink)}
 .parts{display:flex;gap:2px;margin-top:2px}
@@ -110,15 +128,27 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 </head>
 <body>
 <header class="top">
-  <h1>Mall Call</h1>
+  <h1>Mall Call <span id="build" style="color:var(--dim);font-weight:400"></span></h1>
   <p>Three layers cut to your sound. A base layer for the rare big sweep or strobe, a glitch layer of lines, chases and debris, and the logo on top as a loader or popping through. Trigger any of it by hand.</p>
 </header>
 
 <main class="app">
   <section class="stagecol">
+    <canvas id="ring3d" class="ring3d" aria-label="The ring in 3D. Drag to turn, scroll to move in and out." hidden></canvas>
     <div class="stage wide" id="stageWrap"><canvas id="stage" width="1920" height="1080" aria-label="Preview"></canvas></div>
-    <canvas class="tl" id="tl" tabindex="0" role="slider" aria-label="Position in the piece" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></canvas>
-    <div class="parts" id="parts" role="tablist" aria-label="Parts of the piece"></div>
+    <div class="tlbar">
+      <button type="button" id="tlPlay">Pause</button>
+      <button type="button" id="tlOut" title="Zoom out">−</button>
+      <button type="button" id="tlIn" title="Zoom in">+</button>
+      <button type="button" id="tlFit">Fit</button>
+      <button type="button" id="tlSnap" aria-pressed="true" title="Clips and keys snap to hits, part edges and the playhead. Hold Cmd or Ctrl to move freely.">Snap</button>
+      <select id="tlAdd" aria-label="Animate a setting"></select>
+      <button type="button" id="tlUndo" title="Undo">Undo</button>
+      <button type="button" id="tlRedo" title="Redo">Redo</button>
+      <span class="tc" id="tlTc">00:00:00:00</span>
+    </div>
+    <div class="tlwrap"><div class="tlhead" id="tlHead"></div><canvas class="tl" id="tl" tabindex="0" role="slider" aria-label="Timeline" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></canvas></div>
+    <div class="tlinsp" id="tlInsp"></div>
     <div class="hud"><span><b id="hudState">Logo out</b></span><span id="hudRes">1920 × 1080 · 30 fps</span><span id="hudTime">0.00 / 8 s</span></div>
     <div class="partbar">
       <button type="button" class="plain" id="split">Split at playhead</button>
@@ -128,7 +158,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
       <p class="note" id="partNote" aria-live="polite"></p>
     </div>
     <div class="pad" id="pad">
-      <div class="padfoot"><button type="button" class="plain" id="clearTrig">Clear my triggers</button><p class="note" id="trigNote" aria-live="polite">Hit a button or its key while it plays. Each trigger is pinned to that moment, shows on the timeline and goes into the export.</p></div>
+      <div class="padfoot"><button type="button" class="plain" id="clearTrig">Clear my clips</button><p class="note" id="trigNote" aria-live="polite">Hit a button or its key to drop a clip at the playhead. It shows on the timeline, where it can be moved, and goes into the export.</p></div>
     </div>
   </section>
 
@@ -143,6 +173,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 
     <fieldset>
       <legend>Sound</legend>
+      <input type="file" id="ffile" class="sr" accept=".ttf,.otf,.woff,.woff2" tabindex="-1">
       <input type="file" id="sfile" class="sr" accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.flac,.ogg,.mp4,.mov">
       <label class="drop" for="sfile"><strong>Drop audio or a video here</strong><span>or click to choose. It is read on this computer only.</span></label>
       <p class="note" id="soundNote" aria-live="polite">No sound yet. The piece runs as a seamless loop on a built-in half-second beat.</p>
@@ -161,13 +192,15 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
       <legend>2 Glitch layer</legend>
       <label class="row" for="glitch"><span>Glitch</span><input type="range" id="glitch" min="0" max="100" value="70"></label>
       <label class="row" for="lines"><span>Lines</span><input type="range" id="lines" min="0" max="100" value="80"></label>
+      <label class="row" for="lineMode"><span>Lines move</span><select id="lineMode"><option value="1">Pulse</option><option value="0">Slide</option></select></label>
       <label class="row" for="chase"><span>Chases</span><input type="range" id="chase" min="0" max="100" value="40"></label>
       <label class="row" for="bgLo"><span>Bass blocks</span><input type="range" id="bgLo" min="0" max="100" value="60"></label>
       <label class="row" for="bgMid"><span>Mid bars</span><input type="range" id="bgMid" min="0" max="100" value="50"></label>
       <label class="row" for="bgHi"><span>High sparks</span><input type="range" id="bgHi" min="0" max="100" value="60"></label>
+      <label class="row" for="fxAmt"><span>Auto clips</span><input type="range" id="fxAmt" min="0" max="100" value="40"></label>
       <label class="row" for="wob"><span>Wobble</span><input type="range" id="wob" min="0" max="100" value="50"></label>
       <label class="row" for="wobSize"><span>Wobble size</span><input type="range" id="wobSize" min="0" max="100" value="50"></label>
-      <p class="note">Lines carry the fast ease in and out. Blocks, bars and sparks each listen to their own part of the spectrum. Wobble is how far the picture tears and slips, from none to always moving; size runs from tight ripples to long waves.</p>
+      <p class="note">Pulse lines are short lit stretches that strike out on a hit and sink back, like a lamp. Slide lines run the full frame and ease from place to place. Blocks, bars and sparks each listen to their own part of the spectrum. Auto clips is how many clips the automatic cut puts on the glitch lane: chases through a build, lines racing into a drop, bursts where a band jumps. Wobble is how far the picture tears and slips, from none to always moving; size runs from tight ripples to long waves.</p>
       <label class="row" for="fxStyle"><span>Drawn as</span><select id="fxStyle"></select></label>
       <label class="row" for="fxPx"><span>Pixel size</span><input type="range" id="fxPx" min="0" max="100" value="18"></label>
     </fieldset>
@@ -229,7 +262,17 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
       <label class="row" for="shape" id="shapeRow" hidden><span>Panel shape</span><select id="shape"><option value="2">1 × 2</option><option value="3" selected>1 × 3</option><option value="4">1 × 4</option></select></label>
       <p class="note" id="fmtNote"></p>
       <div id="ringOpts" class="stack" hidden>
-        <label class="row" for="panels"><span>Panels in ring</span><input type="number" id="panels" min="4" max="64" value="30"></label>
+        <label class="row" for="panels"><span>Panels in ring</span><input type="number" id="panels" min="4" max="240" value="30"></label>
+        <label class="row" for="faces"><span>Faces</span><select id="faces"><option value="1">Outside only</option><option value="2">Outside and inside</option></select></label>
+        <label class="row" for="panelsIn" id="panelsInRow"><span>Panels inside</span><input type="number" id="panelsIn" min="4" max="240" value="30"></label>
+        <label class="row" for="inner" id="innerRow"><span>Inside shows</span><select id="inner"><option value="same">The same</option><option value="mirror">The same, mirrored</option><option value="own">Its own look</option><option value="off">Nothing</option></select></label>
+        <div class="seg" id="faceSeg" role="radiogroup" aria-label="Which face the controls edit" style="grid-template-columns:1fr 1fr">
+          <label><input type="radio" name="face" id="faceOut" value="0" checked><span>Edit outside</span></label>
+          <label><input type="radio" name="face" id="faceIn" value="1"><span>Edit inside</span></label>
+        </div>
+        <label class="row" for="gap"><span>Air between</span><input type="number" id="gap" min="0" max="20" step="0.1" value="0"></label>
+        <label class="row" for="panelPx"><span>Panel pixels</span><input type="number" id="panelPx" min="0" max="512" value="0"></label>
+        <label class="check" for="view3d"><input type="checkbox" id="view3d" checked> Show the ring in 3D</label>
         <label class="row" for="repeats"><span>Logos in ring</span><input type="number" id="repeats" min="1" max="12" value="3"></label>
         <label class="check" for="orbit"><input type="checkbox" id="orbit" checked> Logos travel around the ring</label>
       </div>
@@ -260,11 +303,29 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
     </fieldset>
 
     <fieldset>
+      <legend>Timecode</legend>
+      <label class="row" for="tcRate"><span>Rate</span><select id="tcRate"><option value="24">24</option><option value="25">25</option><option value="29.97">29.97 drop</option><option value="30">30</option></select></label>
+      <label class="row" for="tcStart"><span>Starts at</span><input type="text" id="tcStart" value="00:00:00:00" spellcheck="false" autocomplete="off"></label>
+      <label class="check" for="tcShow"><input type="checkbox" id="tcShow"> Ruler shows timecode</label>
+      <p class="note">The timecode the first frame of the piece sits on. Set it to the cue time on the lighting desk and the ruler reads the same numbers as the desk.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Output</legend>
+      <button type="button" class="plain" id="outOpen">Open output window</button>
+      <label class="row" for="outFit"><span>Picture</span><select id="outFit"><option value="contain">Fit</option><option value="fill">Stretch</option><option value="none">Pixel for pixel</option></select></label>
+      <label class="row" for="outDisp" id="outDispRow" hidden><span>Put it on</span><select id="outDisp"></select></label>
+      <p class="note" id="outNote">A clean window with only the picture, for a second screen. Double-click it for full screen.</p>
+    </fieldset>
+
+    <fieldset>
       <legend>Export</legend>
       <label class="row" for="range"><span>What</span><select id="range"><option value="all">Whole piece</option><option value="part">This part only</option></select></label>
-      <button type="button" class="primary" id="save">Save as MP4</button>
+      <label class="row" for="exFmt"><span>File</span><select id="exFmt"><option value="mp4">MP4, H.264</option></select></label>
+      <label class="row" for="exView" id="exViewRow" hidden><span>Picture</span><select id="exView"><option value="flat">The flat frame, for mapping</option><option value="3d">The ring in 3D, as it stands above</option></select></label>
+      <button type="button" class="primary" id="save">Save</button>
       <div class="bar" id="bar" hidden><i id="barFill"></i></div>
-      <p class="note" id="saveNote" aria-live="polite">Every frame is rendered once at full size. Without sound the file loops seamlessly; with sound it runs the length of the track and carries the audio.</p>
+      <p class="note" id="saveNote" aria-live="polite">Every frame is rendered once at full size. Without sound the file loops seamlessly; with sound it runs the length of the track and carries the audio. ProRes and HAP also carry the start timecode.</p>
     </fieldset>
   </aside>
 </main>
@@ -274,27 +335,47 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 (() => {
 'use strict';
 /*__SCORE__*/
+/*__TIMECODE__*/
 
 const $ = id => document.getElementById(id);
+// Raised by hand with every push, so anyone can see at a glance which version of the page is running.
+const BUILD = 13;
+$('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
 
 const STYLES = ['rods', 'streaks', 'ascii', 'ridge', 'dither'];
 const STYLE_NAMES = { rods: 'LED rods', streaks: 'Light streaks', ascii: 'ASCII', ridge: 'Ridge lines', dither: 'Dither' };
-const S = { format: 'wide', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.55, size: 0.78, invert: false,
+const S = { format: 'wide', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.4, size: 0.78, invert: false,
   loop: 8, fps: 30, playing: true, seed: 1,
   baseAmt: 0.45, baseStyle: 'dither', baseDen: 0.304,
-  glitch: 0.7, lines: 0.8, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxStyle: 'rods', fxDen: 0.784,
+  glitch: 0.7, lines: 0.8, lineMode: 1, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxAmt: 0.4, fxStyle: 'rods', fxDen: 0.784,
   logoMode: 0, loader: 0, presence: 0.5, eq: 1, logoStyle: 'dither', logoDen: 0.64,
-  chaos: 0.6, trail: 0.2, mix: false, pshape: 0, pfill: 0.78, dither: 'bayer4', wob: 0.5, wobSize: 0.5, eqAmt: 0.6, ease: 0.85, range: 'all' };
+  chaos: 0.6, trail: 0, mix: false, pshape: 0, pfill: 0.78, dither: 'bayer4', wob: 0.5, wobSize: 0.5, eqAmt: 0.6, ease: 0.85, range: 'all',
+  tcRate: '25', tcStart: 0, tcShow: false, outFit: 'contain',
+  faces: 1, panelsIn: 30, panelPx: 0, view3d: true, inner: 'same', exFmt: 'mp4', exView: 'flat', gap: 0 };
 // The piece can be split into parts. Everything from the three layers down to the look is kept per part; S holds the part being edited.
-const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'glitch', 'lines', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxStyle', 'fxDen',
-  'logoMode', 'loader', 'presence', 'eq', 'logoStyle', 'logoDen', 'chaos', 'trail', 'mix', 'pshape', 'pfill', 'dither', 'wob', 'wobSize', 'eqAmt', 'ease'];
+const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'glitch', 'lines', 'lineMode', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxAmt', 'fxStyle', 'fxDen',
+  'logoMode', 'loader', 'presence', 'eq', 'logoStyle', 'logoDen', 'chaos', 'trail', 'mix', 'pshape', 'pfill', 'dither', 'wob', 'wobSize', 'eqAmt', 'ease', 'inner'];
 const snap = () => { const o = {}; for (const k of PART_KEYS) o[k] = S[k]; return o; };
 let parts = [{ t: 0, P: snap() }], sel = 0, loopPart = false;
 const partIdx = t => { let i = 0; while (i + 1 < parts.length && parts[i + 1].t <= t) i++; return i; };
 const partEnd = i => i + 1 < parts.length ? parts[i + 1].t : score.D;
-const savePart = () => { parts[sel].P = snap(); };
+// A ring can have two faces. Each part says what the inside shows (P.inner): the same picture, the same mirrored, nothing,
+// or a look of its own. Its own look is a second set of settings, Q, beside P. face is the one the controls are editing.
+let face = 0;
+const savePart = () => { if (face) { S.inner = 'own'; parts[sel].Q = snap(); parts[sel].P.inner = 'own'; } else parts[sel].P = snap(); };
+const loadPart = () => { face = 0; Object.assign(S, parts[sel].P); };
+function setFace(n) {
+  savePart();
+  if (n && S.inner !== 'own') n = 0;
+  if (n && !parts[sel].Q) parts[sel].Q = Object.assign({}, parts[sel].P);
+  face = n; Object.assign(S, face ? parts[sel].Q : parts[sel].P); S.inner = parts[sel].P.inner;
+  pushAll(); syncUI();
+}
+// Animated settings: keys per setting, { glitch: [{ t, v, c }] }. autoCut: whether the engine schedules its own clips on a layer.
+let auto = {};
+const autoCut = { base: true, fx: true, logo: true };
 
 /* ---------- logo mask ---------- */
 let mask = null, logoSrc = null, maskN = 0;
@@ -406,7 +487,24 @@ function baseField(W, H, st) {
           b = pat === 0 ? 1 : pat === 1 ? ((u < 0.5) === ((fr >> 1 & 1) === 0) ? 1 : 0) : (hash(Math.floor(u * 6), Math.floor(v * 3) + fr * 7, sd) < 0.5 ? 1 : 0);
           b *= 1 - 0.5 * x;
         }
-      } else b = Math.pow(1 - x, 2.2);
+      } else if (st.bt[i] === 2) b = Math.pow(1 - x, 2.2);
+      else {                                              // the three that only make sense on a ring: they travel round it, and the frame's left and right edges are the same place
+        const dir = sd & 1 ? 1 : -1, u0 = hash(sd, 3, 183);
+        let a = u * dir + u0; a -= Math.floor(a);
+        if (st.bt[i] === 14) {                              // orbit: one wall of light runs a lap and a bit, surging off and settling in
+          const w = 0.1 + 0.14 * hash(sd, 1, 184), head = ioExpo(x) * (1 + w + 0.2), d = head - a, d2 = d - 1;
+          b = d >= 0 && d < w ? 1 - 0.8 * d / w : d2 >= 0 && d2 < w ? 1 - 0.8 * d2 / w : 0;
+        } else if (st.bt[i] === 15) {                       // spokes: a few bars turning together, winding up and running down
+          const n = 2 + (sd % 5), turn = (0.6 + 1.2 * hash(sd, 1, 185)) * ioQuint(x), w = 0.1 + 0.2 * hash(sd, 2, 186);
+          let q = a * n - turn * n; q -= Math.floor(q);
+          b = q < w ? (1 - 0.5 * q / w) * (x < 0.08 ? x / 0.08 : 1 - x * x * x) : 0;
+        } else {                                            // meet: two fronts leave one point, go opposite ways and close on the far side
+          const d = Math.abs(a - 0.5) * 2, w = 0.16, head = ioExpo(x) * (1 + w);
+          const g = head - (1 - d);
+          b = g >= 0 && g < w ? 1 - 0.8 * g / w : 0;
+          if (x > 0.82 && d < 0.06) b = Math.max(b, 1 - (x - 0.82) / 0.18);       // and flash where they meet
+        }
+      }
       if (b > val) val = b;
     }
     return val;
@@ -420,7 +518,7 @@ function fxField(W, H, t, o, st) {
   const rodN = Math.max(6, Math.round(W / (unit * 2.4)));
   const slabA = st.slabW > 0 ? st.slabX - st.slabW / 2 : 9, slabB = st.slabX + st.slabW / 2;
   const bN = Math.max(4, Math.round(W / (unit * 6))), mN = Math.max(6, Math.round(H / (unit * 1.6))), hN = Math.max(8, Math.round(W / unit)), hM = Math.max(6, Math.round(H / unit));
-  const lines = st.lines, bLo = st.bLo, bMid = st.bMid, bHi = st.bHi, fxg = st.fxGain;
+  const lines = st.lines, pulse = st.pulseLines, bLo = st.bLo, bMid = st.bMid, bHi = st.bHi, fxg = st.fxGain;
   // chase lanes: a lit run stepping along a row or a column, a few of them at different speeds
   const lanes = [];
   if (st.chase) {
@@ -443,7 +541,11 @@ function fxField(W, H, t, o, st) {
     disp(u0, v0);
     const u = DU, v = DV;
     let val = 0;
-    if (lines) for (let j = 0; j < 4; j++) {
+    if (pulse) {                                        // lit stretches with a hot middle and tips that fall away
+      const across = st.pHz ? v : u, along = st.pHz ? u : v, th = st.pHz ? thV : thU;
+      for (let j = 0; j < st.pn; j++) if (Math.abs(across - st.pp[j]) < th * (1 + 0.9 * st.pE[j])) { const d = Math.abs(along - st.pc[j]) / st.pL[j]; if (d < 1) { const b = st.pI[j] * Math.pow(1 - d * d, 1.4); if (b > val) val = b; } }
+    }
+    else if (lines) for (let j = 0; j < 4; j++) {
       if (st.hI[j] > val && Math.abs(v - st.hl[j]) < thV) val = st.hI[j];
       if (st.vI[j] > val && Math.abs(u - st.vl[j]) < thU) val = st.vI[j];
     }
@@ -510,6 +612,95 @@ function logoField(W, H, t, o, st) {
     return val;
   };
   return { M: f(mask.data), B: f(mask.blur) };
+}
+
+// Type: words as clips on the timeline, drawn in the logo layer with its style and its glitch. Four ways to arrive:
+// slam (one word at a time, cut in hard through two wrong frames), typeon (letter by letter in fits and starts, with a cursor),
+// roll (the picture loses vertical hold, rolls and locks), ticker (runs across, surging with the sound).
+const TYPE_FONTS = { sans: '600 120px "Instrument Sans", system-ui, sans-serif', mono: '500 120px "DM Mono", ui-monospace, monospace' };
+const typeMasks = new Map();
+function typeMask(text, font) {
+  const key = font + '|' + text;
+  let m = typeMasks.get(key);
+  if (m) return m;
+  const c = document.createElement('canvas'), g = c.getContext('2d', { willReadFrequently: true }), f = TYPE_FONTS[font] || TYPE_FONTS.sans;
+  g.font = f;
+  const tw = Math.max(1, g.measureText(text).width), k = Math.min(1, 4000 / tw), w = Math.max(2, Math.ceil(tw * k) + 8), h = Math.ceil(150 * k);
+  c.width = w; c.height = h;
+  g.font = f; g.fillStyle = '#fff'; g.textBaseline = 'alphabetic'; g.setTransform(k, 0, 0, k, 4, 0); g.fillText(text, 0, 112);
+  const px = g.getImageData(0, 0, w, h).data, data = new Float32Array(w * h), adv = [];
+  for (let i = 0; i < data.length; i++) data[i] = px[i * 4 + 3] / 255;
+  for (let i = 0; i <= text.length; i++) adv.push((4 + g.measureText(text.slice(0, i)).width * k) / w);
+  m = { w, h, data, adv };
+  if (typeMasks.size > 200) typeMasks.clear();
+  typeMasks.set(key, m);
+  return m;
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => typeMasks.clear());
+// A font of your own for Type clips: drop a TTF, OTF or WOFF file, or pick Own font on a clip. It is kept inside the project.
+let fontFile = null, fontFace = null;
+async function loadFont(file) {
+  try {
+    const face = new FontFace('MallCallOwn', await file.arrayBuffer());
+    await face.load();
+    if (fontFace) document.fonts.delete(fontFace);
+    document.fonts.add(face); fontFace = face;
+    TYPE_FONTS.own = '120px "MallCallOwn", "Instrument Sans", sans-serif';
+    fontFile = { name: file.name, dataUrl: await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(file); }) };
+    typeMasks.clear(); tlInspSig = ''; tlInsp(); syncUI();
+    return true;
+  } catch (e) { $('trigNote').textContent = 'That file could not be read as a font. Try a TTF, OTF or WOFF.'; return false; }
+}
+function typeField(W, H, o, st) {
+  const disp = mkDisp(st, W, H, 1, o), items = [];
+  for (let i = 0; i < st.tyN; i++) {
+    const e = st.tyE[i], x = st.tyX[i], age = st.tyA[i], mode = e.mode;
+    let text = String(e.txt || '').trim(), grow = 1, jx = 0, jy = 0;
+    if (!text) continue;
+    if (mode === 'slam') {                               // which word is up, and how long it has been
+      const words = text.split(/\s+/), wt = words.map(w => 1 + 0.25 * w.length), tot = wt.reduce((a, b) => a + b, 0);
+      let acc = 0, wi = 0;
+      for (; wi < words.length - 1 && x * tot >= acc + wt[wi]; wi++) acc += wt[wi];
+      const fr = Math.floor((x * tot - acc) / tot * e.d * 30 + 1e-4);
+      text = words[wi];
+      if (fr === 0) { grow = 1.3 + 0.3 * hash(wi, e.seed, 220); jx = (hash(wi, e.seed, 221) - 0.5) * 0.12; jy = (hash(wi, e.seed, 222) - 0.5) * 0.1; }
+      else if (fr === 1) { grow = 0.9; jx = (hash(wi, e.seed, 223) - 0.5) * 0.04; }
+    }
+    const m = typeMask(text, e.font);
+    let hT = Math.max(0.03, e.size) * grow, wT = hT * (m.w / m.h) * H / W;
+    if (mode !== 'ticker' && wT > 0.94) { hT *= 0.94 / wT; wT = 0.94; }
+    const it = { m, mode, hT, wT, left: 0.5 - wT / 2 + jx, top: e.y - hT / 2 + jy, cut: 2, cur: -1, roll: 0, tear: 0, ph: age * 31 };
+    if (mode === 'typeon') {
+      const n = text.length, shown = Math.min(n, Math.floor(prog(Math.min(1, x / 0.7), e.seed) / 0.97 * n + 1e-4));
+      it.cut = m.adv[x >= 0.7 ? n : shown]; it.cur = (st.seed + (x >= 0.7 ? 0 : 1)) % 2 || x < 0.7 ? it.cut : -1;
+    } else if (mode === 'roll') {
+      const lock = oExpo(Math.min(1, x / 0.4));
+      it.roll = (1 - lock) * 3.2; it.tear = (1 - lock) * 0.05;
+    } else if (mode === 'ticker') {
+      let p = x;
+      const a = phiAt(score, e.t), b = phiAt(score, Math.min(score.D, e.t + e.d));
+      if (b > a + 1e-4 && st.tau >= e.t) p = lerp(x, clamp01((phiAt(score, st.tau) - a) / (b - a)), o.ease);
+      it.left = 1 - p * (1 + wT);
+    }
+    items.push(it);
+  }
+  const f = (u0, v0) => {
+    disp(u0, v0);
+    let val = 0;
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      let u = DU, v = DV;
+      if (it.roll) { v += it.roll; v -= Math.floor(v); u += it.tear * nz(v * 9 + it.ph, 21); }
+      const lu = (u - it.left) / it.wT, lv = (v - it.top) / it.hT;
+      if (lu < 0 || lv < 0 || lv > 1) continue;
+      if (it.cur >= 0 && lu >= it.cur && lu < it.cur + 0.5 * it.hT * (it.m.h / it.m.w) / it.hT * 1.1 && lv > 0.12 && lv < 0.88) { val = 1; continue; }
+      if (lu > 1 || lu > it.cut) continue;
+      const b = sample(it.m.data, it.m, lu, lv);
+      if (b > val) val = b;
+    }
+    return val;
+  };
+  return { M: f, B: f };
 }
 
 /* ---------- styles: five ways to draw a layer ---------- */
@@ -711,14 +902,24 @@ class Renderer {
     if (st.black || st.gain < 0.01) { this.fbOk = false; return; }
     CORE = LO[0].hot ? '#fff' : LO[0].tint; SHAPE = LO[0].pshape;
     for (let L = 0; L < 3; L++) {
-      if ((L === 0 && !st.bn) || (L === 2 && !st.lv)) continue;
+      if ((L === 0 && !st.bn) || (L === 2 && !st.lv && !st.tyN)) continue;
       const o = LO[L];
       o.va = st.va; o.vb = st.vb; o.amb = L === 1 ? 1 : 0;
       if (L === 2 && st.dens !== 1) o.density = Math.min(1.2, (lerp(22, 96, o.density) * st.dens - 22) / 74);
       const lc = this.lay[L], q = this.lg[L];
       if (lc.width !== W || lc.height !== H) { lc.width = W; lc.height = H; }
       q.globalCompositeOperation = 'source-over'; q.globalAlpha = 1; q.fillStyle = '#000'; q.fillRect(0, 0, W, H);
-      const f = L === 0 ? baseField(W, H, st) : L === 1 ? fxField(W, H, t, o, st) : logoField(W, H, t, o, st);
+      let f;
+      const Wf = o.gapN ? W * (1 + o.gap) : W;             // with air between the pillars the picture is as wide as the whole ring, air included
+      if (L === 0) f = baseField(Wf, H, st); else if (L === 1) f = fxField(Wf, H, t, o, st);
+      else {                                               // the logo and any words share the top layer
+        const a = st.lv ? logoField(Wf, H, t, o, st) : null, b = st.tyN ? typeField(Wf, H, o, st) : null;
+        f = a && b ? { M: (u, v) => Math.max(a.M(u, v), b.M(u, v)), B: (u, v) => Math.max(a.B(u, v), b.B(u, v)) } : a || b;
+      }
+      if (o.gapN) {                                        // each pillar is a window onto its own stretch of that picture
+        const N = o.gapN, k = 1 / (1 + o.gap), off = (1 - k) / 2, a = f, win = u => { const x = u * N, i = Math.floor(x); return (i + off + (x - i) * k) / N; };
+        f = { M: (u, v) => a.M(win(u), v), B: (u, v) => a.B(win(u), v) };
+      }
       DRAW[st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style](q, W, H, t, o, f.M, f.B);
       g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1; g.drawImage(lc, 0, 0);
     }
@@ -732,7 +933,7 @@ class Renderer {
       this.fq.globalCompositeOperation = 'copy'; this.fq.drawImage(cv, 0, 0); this.fbOk = true;
     } else this.fbOk = false;
     if (st.flash > 0.02) { g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = Math.min(0.8, st.flash * 0.7); g.drawImage(cv, 0, 0); g.restore(); }
-    const glow = o.glow * (1 + 0.8 * st.flash);
+    const glow = o.glow * (0.3 + 1.6 * st.pulse);            // glow is light thrown by a hit, not a haze that is always there
     if (glow > 0.01) this.bloom(glow);
   }
   bloom(a) {
@@ -760,8 +961,10 @@ audio.loop = true; audio.preload = 'auto';
 function dims() {
   if (S.format === 'wide') return { W: 1920, H: 1080 };
   if (S.format === 'panel') return { W: 360, H: 360 * S.shape };
-  const pw = Math.max(16, Math.floor(Math.min(128, 4096 / S.panels) / 2) * 2);
-  return { W: pw * S.panels, H: pw * S.shape, pw };
+  const two = S.faces === 2, n = Math.max(S.panels, two ? S.panelsIn : 0);
+  const pw = S.panelPx >= 8 ? S.panelPx : Math.max(16, Math.floor(Math.min(128, 4096 / n) / 2) * 2), Hs = pw * S.shape;
+  // two faces go out as one frame: the outside strip on top, the inside strip under it, both starting at the left
+  return { W: pw * n, H: two ? Hs * 2 : Hs, pw, two, Hs, Wo: pw * S.panels, Wi: pw * (two ? S.panelsIn : S.panels) };
 }
 function layerOpts(fps, P) {
   const ring = S.format === 'ring', loop = track ? 8 : S.loop;
@@ -771,7 +974,7 @@ function layerOpts(fps, P) {
     wobA: P.wob * 2, wobB: Math.max(0, P.wob - 0.5) * 0.05, wobF: Math.pow(4, 0.5 - P.wobSize), eqAmt: P.eqAmt, ease: P.ease, tw: 0 });
   return [mk(P.baseStyle, P.baseDen), mk(P.fxStyle, P.fxDen), mk(P.logoStyle, P.logoDen)];
 }
-const motion = (P, tw) => ({ glitch: P.glitch, eq: track ? P.eq : 0, chaos: P.chaos, lines: P.lines, chase: P.chase, bgLo: P.bgLo, bgMid: P.bgMid, bgHi: P.bgHi, mix: P.mix, ease: P.ease, tw });
+const motion = (P, tw) => ({ glitch: P.glitch, eq: track ? P.eq : 0, chaos: P.chaos, lines: P.lines, lineMode: P.lineMode, chase: P.chase, bgLo: P.bgLo, bgMid: P.bgMid, bgHi: P.bgHi, mix: P.mix, ease: P.ease, tw });
 // eased seconds: real time blended toward the organic clock by the part's Easing amount
 const warp = (tau, P) => tau + (phiAt(score, tau) - tau) * P.ease;
 const phase = tw => score.cyclic ? tw / score.D : tw / 8;
@@ -781,7 +984,7 @@ function rebuildScore() {
   const chAt = t => parts[partIdx(t)].P.chaos;
   score = track ? buildTrackScore(track.an, S.seed, chAt) : buildLoopScore(S.loop, S.seed, chAt);
   autoEv = [];
-  parts.forEach((p, i) => { for (const e of makeEvents(score, { base: p.P.baseAmt, mode: p.P.logoMode, presence: p.P.presence }, p.t, partEnd(i), i)) autoEv.push(e); });
+  parts.forEach((p, i) => { for (const e of makeEvents(score, { base: p.P.baseAmt, fx: p.P.fxAmt, mode: p.P.logoMode, presence: p.P.presence, ring: S.format === 'ring' }, p.t, partEnd(i), i)) if (isBase(e.k) ? autoCut.base : e.k < 10 ? autoCut.fx : autoCut.logo) autoEv.push(e); });
   mergeEv();
   if (tau >= score.D) tau = 0;
 }
@@ -793,59 +996,47 @@ function sizeStage() {
   const w = Math.max(2, Math.round(W * pscale)), h = Math.max(2, Math.round(H * pscale));
   if (stage.width !== w || stage.height !== h) { stage.width = w; stage.height = h; }
 }
+// One face of the piece into a renderer. face is undefined when the format has a single face.
+function renderOne(R, st, P, tf, fps, fc) {
+  const tw = warp(tf, P), LO = layerOpts(fps, P), mo = motion(P, tw);
+  LO[1].tw = tw; mo.face = fc;
+  if (S.format === 'ring' && S.gap > 0) for (const o of LO) { o.gap = S.gap; o.gapN = fc ? S.panelsIn : S.panels; }
+  stateAt(score, tf, mo, st);
+  R.draw(phase(tw), LO, st);
+}
+const mkRig = (cv, st) => ({ cv, g: cv.getContext('2d', { alpha: false }), a: new Renderer(document.createElement('canvas')), b: new Renderer(document.createElement('canvas')), stA: st || newState(), stB: newState() });
+// Both faces of a ring into one frame.
+function drawFaces(rig, tf, fps) {
+  const d = dims(), k = rig.cv.width / d.W, hs = Math.round(d.Hs * k), wo = Math.round(d.Wo * k), wi = Math.round(d.Wi * k), g = rig.g;
+  const size = (c, w, h) => { if (c.width !== w || c.height !== h) { c.width = w; c.height = h; } };
+  const P = PAt(tf, 0), mode = P.inner;
+  size(rig.a.cv, wo, hs); renderOne(rig.a, rig.stA, P, tf, fps, 0);
+  g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.fillStyle = '#000'; g.fillRect(0, 0, rig.cv.width, rig.cv.height);
+  g.drawImage(rig.a.cv, 0, 0);
+  if (mode === 'off') return;
+  let src = rig.a.cv;
+  if (mode === 'own' || userEv.some(e => e.face)) { size(rig.b.cv, wi, hs); renderOne(rig.b, rig.stB, mode === 'own' ? PAt(tf, 1) : P, tf, fps, 1); src = rig.b.cv; }   // only drawn twice when the faces really differ
+  if (mode === 'mirror') { g.save(); g.translate(wi, hs); g.scale(-1, 1); g.drawImage(src, 0, 0, wi, hs); g.restore(); }
+  else g.drawImage(src, 0, hs, wi, hs);
+}
+let mainRig = null;
 function paint() {
-  const P = parts[partIdx(tau)].P, tw = warp(tau, P), LO = layerOpts(fpsNow, P);
-  LO[1].tw = tw;
-  stateAt(score, tau, motion(P, tw), ST);
-  main.draw(phase(tw), LO, ST);
+  const two = S.format === 'ring' && S.faces === 2, P = PAt(tau, face);
+  if (two) { if (!mainRig) mainRig = mkRig(stage, ST); drawFaces(mainRig, tau, fpsNow); }
+  else renderOne(main, ST, PAt(tau, 0), tau, fpsNow);
+  outFrame(); ringFrame();
+  for (const k in auto) if (auto[k].length) { const R = aRange(k), v = String(Math.round(R.back(P[k]) * 100)); if (R.el.value !== v && document.activeElement !== R.el) R.el.value = v; }   // animated sliders follow their keys
   if (S.format === 'ring') {
-    const g = main.g, pw = stage.width / S.panels, gw = Math.max(1, Math.round(stage.height / 200));
-    g.globalAlpha = 1; g.fillStyle = '#3a3947';
-    for (let i = 1; i < S.panels; i++) g.fillRect(Math.round(i * pw - gw / 2), 0, gw, stage.height);
+    const d = dims(), g = main.g, k = stage.width / d.W, pw = d.pw * k, hs = d.Hs * k, gw = Math.max(1, Math.round(hs / 200));
+    g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.fillStyle = '#3a3947';
+    for (let i = 1; i < S.panels; i++) g.fillRect(Math.round(i * pw - gw / 2), 0, gw, hs);
+    if (two) { for (let i = 1; i < S.panelsIn; i++) g.fillRect(Math.round(i * pw - gw / 2), hs, gw, hs); g.fillRect(0, Math.round(hs - gw / 2), stage.width, gw); }
   }
   $('hudTime').textContent = tau.toFixed(2) + ' / ' + (Math.round(score.D * 10) / 10) + ' s';
   $('hudState').textContent = (parts.length > 1 ? 'Part ' + (partIdx(tau) + 1) + ' · ' : '') + (ST.lv === 1 ? 'Logo loading ' + Math.round(ST.lp * 100) + ' %' : ST.lv === 2 ? 'Logo up' : 'Logo out');
   drawTimeline();
 }
-// Logo state at a time, for the timeline strip: 0 gone, 1 loading, 2 up.
-function logoAt(t) {
-  let best = null, age = 1e9;
-  for (const e of score.all) { if (e.k < 10) continue; let a = t - e.t; if (a < 0) { if (!score.cyclic) continue; a += score.D; } if (a < age && !(e.k === 11 && a >= e.d)) { age = a; best = e; } }
-  if (!best) return 0;
-  return best.k === 10 ? (age < best.d ? 1 : 2) : best.k === 11 && age < best.d ? 2 : 0;
-}
-// Timeline: level as height, glitch stretches in the tint, logo strip along the top, base events as full-height marks, your triggers as squares.
-function drawTimeline() {
-  const c = $('tl'), dpr = Math.min(2, window.devicePixelRatio || 1), W = Math.max(50, Math.round(c.clientWidth * dpr)), H = Math.round(48 * dpr);
-  if (c.width !== W || c.height !== H) { c.width = W; c.height = H; tlCache = null; }
-  const g = c.getContext('2d');
-  if (!tlCache) {
-    tlCache = document.createElement('canvas'); tlCache.width = W; tlCache.height = H;
-    const q = tlCache.getContext('2d'), top = Math.round(7 * dpr), D = score.D;
-    q.fillStyle = '#000'; q.fillRect(0, 0, W, H);
-    for (let x = 0; x < W; x++) {
-      const a = Math.floor(x / W * score.nh), b = Math.max(a + 1, Math.floor((x + 1) / W * score.nh));
-      let lv = 0, gl = 0;
-      for (let h = a; h < b && h < score.nh; h++) { lv = Math.max(lv, score.gain[h] + 0.3 * score.pulse[h]); gl = Math.max(gl, score.G[h]); }
-      const hh = Math.max(1, Math.round(Math.min(1, lv) * (H - top - 6 * dpr))), Pp = parts[partIdx((x + 0.5) / W * D)].P;
-      q.fillStyle = gl * Pp.glitch * 1.6 > 0.4 ? Pp.tint : '#34333f'; q.fillRect(x, H - hh, 1, hh);
-      const ls = logoAt((x + 0.5) / W * D);
-      if (ls) { q.fillStyle = ls === 2 ? '#eceaf4' : (x & 2 ? '#eceaf4' : '#000'); q.fillRect(x, 0, 1, Math.round(4 * dpr)); }
-    }
-    for (const e of score.all) {
-      if (e.k >= 10) continue;
-      const x = Math.round(e.t / D * W), user = userEv.includes(e);
-      if (e.k < 4) { q.fillStyle = '#fff'; q.fillRect(x, top, Math.max(1, Math.round(1.5 * dpr)), H - top); q.fillRect(x, top, Math.round(6 * dpr), Math.round(3 * dpr)); }
-      if (user) { q.fillStyle = S.tint; q.fillRect(x - Math.round(2 * dpr), H - Math.round(8 * dpr), Math.round(5 * dpr), Math.round(5 * dpr)); q.strokeStyle = '#000'; q.strokeRect(x - Math.round(2 * dpr) + 0.5, H - Math.round(8 * dpr) + 0.5, Math.round(5 * dpr), Math.round(5 * dpr)); }
-    }
-    q.fillStyle = '#8d8b9e';
-    for (let i = 1; i < parts.length; i++) { const x = Math.round(parts[i].t / D * W); for (let y = 0; y < H; y += Math.round(6 * dpr)) q.fillRect(x, y, Math.max(1, Math.round(dpr)), Math.round(3 * dpr)); }
-    for (const e of userEv) if (e.k >= 10 && e.t < D) { const x = Math.round(e.t / D * W); q.fillStyle = S.tint; q.fillRect(x - Math.round(2 * dpr), H - Math.round(8 * dpr), Math.round(5 * dpr), Math.round(5 * dpr)); }
-  }
-  g.drawImage(tlCache, 0, 0);
-  g.fillStyle = '#fff'; g.fillRect(Math.round(tau / score.D * W), 0, Math.max(1, Math.round(1.5 * dpr)), H);
-  c.setAttribute('aria-valuenow', String(Math.round(tau / score.D * 100)));
-}
+/*__TIMELINE__*/
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   if (dt > 0.001) fpsNow = Math.min(120, Math.max(20, 0.9 * fpsNow + 0.1 / dt));
@@ -859,7 +1050,7 @@ function frame(now) {
     }
     const t0 = performance.now();
     paint();
-    if (performance.now() - t0 > 34) { if (++slowFrames > 20 && pscale === 1) { pscale = 0.5; sizeStage(); } } else slowFrames = Math.max(0, slowFrames - 1);
+    if (performance.now() - t0 > 34) { if (++slowFrames > 20 && pscale === 1 && !outLive()) { pscale = 0.5; sizeStage(); } } else slowFrames = Math.max(0, slowFrames - 1);
   }
   requestAnimationFrame(frame);
 }
@@ -867,24 +1058,15 @@ function frame(now) {
 function followPart() {
   const i = partIdx(tau);
   if (i === sel) return;
-  sel = i; Object.assign(S, parts[i].P); pushAll(); syncUI();
+  sel = i; loadPart(); pushAll(); syncUI();
 }
 let partsSig = '';
 function renderParts() {
   const sig = parts.map(p => p.t.toFixed(2)).join(',') + '|' + sel + '|' + score.D.toFixed(2);
   if (sig === partsSig) return;
   partsSig = sig;
-  const box = $('parts'); box.textContent = '';
-  parts.forEach((p, i) => {
-    const b = document.createElement('button'), end = partEnd(i);
-    b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(i === sel)); b.id = 'part-' + (i + 1);
-    b.style.flexGrow = String(Math.max(0.05, end - p.t)); b.title = p.t.toFixed(1) + ' to ' + end.toFixed(1) + ' s';
-    b.textContent = 'Part ' + (i + 1);
-    b.addEventListener('click', () => { tau = Math.min(score.D * 0.9999, p.t + 0.001); if (track) { try { audio.currentTime = tau; } catch (e) {} } followPart(); if (!S.playing && !busy) paint(); });
-    box.append(b);
-  });
   $('partNote').textContent = parts.length === 1 ? 'One part covers the whole piece. Split at the playhead to give a stretch of the song its own layers, look and colour.'
-    : 'Editing part ' + (sel + 1) + ' of ' + parts.length + ', ' + parts[sel].t.toFixed(1) + ' to ' + partEnd(sel).toFixed(1) + ' s. The layers, variation, pixels and look below belong to it.';
+    : 'Editing part ' + (sel + 1) + ' of ' + parts.length + ', ' + parts[sel].t.toFixed(1) + ' to ' + partEnd(sel).toFixed(1) + ' s. The layers, variation, pixels and look below belong to it. Drag a part edge on the timeline to move it.';
 }
 function syncUI() {
   const { W, H, pw } = dims();
@@ -897,12 +1079,13 @@ function syncUI() {
   $('hudRes').textContent = W + ' × ' + H + ' · ' + S.fps + ' fps';
   $('fmtNote').textContent = S.format === 'wide' ? 'One 16:9 screen, ' + W + ' × ' + H + '.'
     : S.format === 'panel' ? 'One tall panel, 1 × ' + S.shape + ', ' + W + ' × ' + H + '.'
-    : 'All ' + S.panels + ' panels side by side as one strip, ' + W + ' × ' + H + '. Each panel is 1 × ' + S.shape + ', ' + pw + ' × ' + H + '. Scroll sideways to see all of it. The thin lines mark the panel edges and are not in the export.';
+    : (S.faces === 2 ? 'Two strips in one frame, ' + W + ' × ' + H + ': the ' + S.panels + ' outside panels on top, the ' + S.panelsIn + ' inside panels under them.' : 'All ' + S.panels + ' panels side by side as one strip, ' + W + ' × ' + H + '.') + ' Each panel is 1 × ' + S.shape + ', ' + pw + ' × ' + (pw * S.shape) + ' pixels. Air between is the gap from one pillar to the next, counted in pillar widths: with it set, the picture runs behind the pillars and each one shows its own stretch. Panel pixels 0 picks a size by itself. The thin lines mark the panel edges and are not in the export. What the inside shows is set per part.';
+  { const two = S.format === 'ring' && S.faces === 2; $('panelsInRow').hidden = $('innerRow').hidden = !two; $('faceSeg').hidden = !two || S.inner !== 'own'; if (face && (!two || S.inner !== 'own')) face = 0; setRadio('face', face); $('inner').value = S.inner; $('ring3d').hidden = !(S.format === 'ring' && S.view3d); $('exViewRow').hidden = S.format !== 'ring'; }
   $('modeNote').textContent = S.logoMode === 0 ? 'The logo builds like a loading screen with a progress bar, lands on a hit, holds, then drops out.'
     : S.logoMode === 1 ? 'The logo stays out and cuts in on some of the hits.' : 'The logo is up the whole time and cuts between poses on the hits.';
   $('loader').disabled = S.logoMode !== 0;
   $('presence').disabled = S.logoMode === 2;
-  $('play').textContent = S.playing ? 'Pause' : 'Play';
+  $('play').textContent = S.playing ? 'Pause' : 'Play'; setIcon($('tlPlay'), S.playing ? 'pause' : 'play', S.playing ? 'Pause' : 'Play');
   $('loop').disabled = !!track;
   $('soundOff').hidden = !track;
   $('seed').value = S.seed;
@@ -929,16 +1112,17 @@ function seek(x) {
 
 /* ---------- trigger pad ---------- */
 const PAD = [
-  ['Base', [['sweep', 'Sweep', '1'], ['strobe', 'Strobe', '2'], ['flood', 'Flood', '3'], ['blackout', 'Blackout', '4']]],
+  ['Base', [['sweep', 'Sweep', '1'], ['strobe', 'Strobe', '2'], ['flood', 'Flood', '3'], ['blackout', 'Blackout', '4'], ['orbit', 'Orbit', '5'], ['spokes', 'Spokes', '6'], ['meet', 'Meet', '7']]],
   ['Glitch', [['glitch', 'Glitch', 'Q'], ['chase', 'Chase', 'W'], ['lines', 'Lines', 'E'], ['sparks', 'Sparks', 'R'], ['bars', 'Bars', 'T'], ['blocks', 'Blocks', 'Y']]],
-  ['Logo', [['load', 'Loader', 'A'], ['show', 'Show', 'S'], ['hide', 'Hide', 'D']]]
+  ['Logo', [['load', 'Loader', 'A'], ['show', 'Show', 'S'], ['hide', 'Hide', 'D']]],
+  ['Type', [['type', 'Words', 'F']]]
 ];
 const KEYS = {};
 function trigger(type, btn) {
   userEv.push(mkEv(tau, type, Math.floor(Math.random() * 1e6)));
   mergeEv();
   const n = userEv.length;
-  $('trigNote').textContent = n + (n === 1 ? ' trigger' : ' triggers') + ' pinned to the timeline. They play back at the same moment every time and go into the export.';
+  $('trigNote').textContent = n + (n === 1 ? ' clip' : ' clips') + ' of your own on the timeline. They play back at the same moment every time and go into the export.';
   if (btn) { btn.classList.add('hit'); setTimeout(() => btn.classList.remove('hit'), 140); }
   if (!S.playing && !busy) paint();
 }
@@ -969,7 +1153,7 @@ const LOOKS = {
 };
 function pushAll() {
   pushRanges();
-  for (const id of ['baseStyle', 'fxStyle', 'logoStyle', 'dither', 'loader']) $(id).value = S[id];
+  for (const id of ['baseStyle', 'fxStyle', 'logoStyle', 'dither', 'loader', 'lineMode']) $(id).value = S[id];
   setRadio('logoMode', S.logoMode); setRadio('pshape', S.pshape); setRadio('eq', S.eq);
   $('mix').checked = S.mix; $('hot').checked = S.hot;
   $('tintPick').value = S.tint; $('tintHex').value = S.tint.toUpperCase();
@@ -986,13 +1170,15 @@ function pushAll() {
   }
   row.append(lab, box); $('pad').insertBefore(row, $('pad').lastElementChild);
 }
-$('clearTrig').addEventListener('click', () => { userEv = []; mergeEv(); $('trigNote').textContent = 'Triggers cleared. Only the automatic cut is left.'; if (!S.playing && !busy) paint(); });
+$('clearTrig').addEventListener('click', () => { userEv = []; tlSel = null; mergeEv(); tlInsp(); $('trigNote').textContent = 'Your clips are cleared. Only the automatic cut is left.'; if (!S.playing && !busy) paint(); });
 addEventListener('keydown', e => {
-  if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
   const tag = e.target && e.target.tagName;
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'z' && !window.nativeApp && !(tag === 'INPUT' && (e.target.type === 'text' || e.target.type === 'number'))) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+  if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
   if (tag === 'INPUT' && e.target.type !== 'range' && e.target.type !== 'checkbox' && e.target.type !== 'radio') return;
   if (tag === 'SELECT' || tag === 'TEXTAREA') return;
   if (e.code === 'Space' && tag !== 'BUTTON') { e.preventDefault(); setPlaying(!S.playing); return; }
+  if ((e.key === 'Backspace' || e.key === 'Delete') && tlSel) { e.preventDefault(); tlDelete(); return; }
   const hit = KEYS[e.key.toLowerCase()];
   if (hit) { e.preventDefault(); trigger(hit[0], hit[1]); }
 });
@@ -1046,8 +1232,8 @@ async function loadSound(file, quiet, knownPath) {
     soundUrl = URL.createObjectURL(file); audio.src = soundUrl;
     track = { name: file.name, ab, an };
     soundPath = knownPath || (window.nativeApp ? window.nativeApp.pathFor(file) : '');
-    tau = 0; userEv = []; resetParts(); rebuildScore();
-    note.textContent = file.name + ', ' + ab.duration.toFixed(1) + ' s. ' + score.moves.length + ' cuts land on its hits, ' + autoEv.filter(e => e.k < 4).length + ' base moments on the biggest ones.';
+    tau = 0; userEv = []; auto = {}; tlSel = null; tlv.z = 1; tlv.x0 = 0; resetParts(); rebuildScore(); undoReset(); tlInsp();
+    note.textContent = file.name + ', ' + ab.duration.toFixed(1) + ' s. ' + score.moves.length + ' cuts land on its hits, ' + autoEv.filter(e => isBase(e.k)).length + ' base moments on the biggest ones.';
     if (quiet) { S.playing = false; syncUI(); return; }
     await setPlaying(true);
     if (!S.playing) note.textContent += ' Press Play to hear it.';
@@ -1056,13 +1242,15 @@ async function loadSound(file, quiet, knownPath) {
   }
 }
 function dropFile(f) {
+  if (/\.(ttf|otf|woff2?)$/i.test(f.name)) { loadFont(f); return; }
   if (/^(audio|video)\//.test(f.type) || /\.(mp3|wav|m4a|aac|flac|ogg|mp4|mov|webm)$/i.test(f.name)) loadSound(f); else loadLogo(f);
 }
 $('file').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) loadLogo(f); e.target.value = ''; });
+$('ffile').addEventListener('change', async e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f && (await loadFont(f)) && tlSel && tlSel.kind === 'ev' && tlSel.e.k === 13) { tlSel.e.font = 'own'; tlChanged(); tlInsp(); } });
 $('sfile').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) loadSound(f); e.target.value = ''; });
 $('soundOff').addEventListener('click', () => {
   audio.pause(); audio.removeAttribute('src'); if (soundUrl) { URL.revokeObjectURL(soundUrl); soundUrl = null; }
-  track = null; soundPath = ''; tau = 0; userEv = []; resetParts(); rebuildScore();
+  track = null; soundPath = ''; tau = 0; userEv = []; auto = {}; tlSel = null; tlv.z = 1; tlv.x0 = 0; resetParts(); rebuildScore(); undoReset(); tlInsp();
   $('soundNote').textContent = 'No sound yet. The piece runs as a seamless loop on a built-in half-second beat.';
   syncUI();
 });
@@ -1080,9 +1268,9 @@ addEventListener('drop', e => {
 const clampInt = (el, lo, hi, d) => { const n = Math.round(Number(el.value)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
 const px2den = v => 1 - 1.2 * v, den2px = d => (1 - d) / 1.2;
 // id, state key, value from 0..1 slider position, and back; rebuild = the schedule depends on it
-const RANGES = [['baseAmt', 'baseAmt', 1], ['basePx', 'baseDen', 0, px2den, den2px], ['glitch', 'glitch'], ['lines', 'lines'], ['chase', 'chase'], ['bgLo', 'bgLo'], ['bgMid', 'bgMid'], ['bgHi', 'bgHi'],
+const RANGES = [['baseAmt', 'baseAmt', 1], ['basePx', 'baseDen', 0, px2den, den2px], ['glitch', 'glitch'], ['lines', 'lines'], ['chase', 'chase'], ['bgLo', 'bgLo'], ['bgMid', 'bgMid'], ['bgHi', 'bgHi'], ['fxAmt', 'fxAmt', 1],
   ['fxPx', 'fxDen', 0, px2den, den2px], ['wob', 'wob'], ['wobSize', 'wobSize'], ['eqAmt', 'eqAmt'], ['ease', 'ease'], ['presence', 'presence', 1], ['logoPx', 'logoDen', 0, px2den, den2px], ['size', 'size'], ['chaos', 'chaos', 1], ['trail', 'trail'], ['pfill', 'pfill'], ['glow', 'glow']];
-for (const [id, key, rebuild, to] of RANGES) $(id).addEventListener('input', e => { const v = e.target.value / 100; S[key] = to ? to(v) : v; if (rebuild) rebuildScore(); syncUI(); });
+for (const [id, key, rebuild, to] of RANGES) $(id).addEventListener('input', e => { const v = e.target.value / 100, x = to ? to(v) : v; if (auto[key] && auto[key].length) setKey(key, tau, x); else S[key] = x; if (rebuild) rebuildScore(); syncUI(); });
 function pushRanges() { for (const [id, key, , , back] of RANGES) $(id).value = Math.round((back ? back(S[key]) : S[key]) * 100); }
 for (const id of ['baseStyle', 'fxStyle', 'logoStyle']) {
   for (const s of STYLES) { const o = document.createElement('option'); o.value = s; o.textContent = STYLE_NAMES[s]; $(id).append(o); }
@@ -1097,13 +1285,14 @@ function setTint(hex, fromPreset) {
 }
 const radios = (name, fn) => document.querySelectorAll('input[name=' + name + ']').forEach(r => r.addEventListener('change', () => { if (r.checked) fn(r.value); }));
 const setRadio = (name, v) => document.querySelectorAll('input[name=' + name + ']').forEach(r => { r.checked = r.value === String(v); });
-radios('format', v => { S.format = v; pscale = 1; slowFrames = 0; syncUI(); });
+radios('format', v => { S.format = v; pscale = 1; slowFrames = 0; rebuildScore(); syncUI(); });
 radios('tint', v => setTint(v, true));
 radios('eq', v => { S.eq = Number(v); syncUI(); });
 radios('logoMode', v => { S.logoMode = Number(v); rebuildScore(); syncUI(); });
 radios('pshape', v => { S.pshape = Number(v); syncUI(); });
 $('invert').addEventListener('change', e => { S.invert = e.target.checked; mask = buildMask(logoSrc.img, logoSrc.w, logoSrc.h, S.invert); maskN++; syncUI(); });
 $('loader').addEventListener('change', e => { S.loader = Number(e.target.value); syncUI(); });
+$('lineMode').addEventListener('change', e => { S.lineMode = Number(e.target.value); syncUI(); });
 $('dither').addEventListener('change', e => { S.dither = e.target.value; syncUI(); });
 $('mix').addEventListener('change', e => { S.mix = e.target.checked; syncUI(); });
 $('tintPick').addEventListener('input', e => setTint(e.target.value, false));
@@ -1114,15 +1303,22 @@ $('tintHex').addEventListener('change', e => {
 });
 $('hot').addEventListener('change', e => { S.hot = e.target.checked; syncUI(); });
 $('shape').addEventListener('change', e => { S.shape = Number(e.target.value); pscale = 1; slowFrames = 0; syncUI(); });
-$('panels').addEventListener('change', e => { S.panels = clampInt(e.target, 4, 64, 30); e.target.value = S.panels; syncUI(); });
+$('panels').addEventListener('change', e => { S.panels = clampInt(e.target, 4, 240, 30); e.target.value = S.panels; syncUI(); });
 $('repeats').addEventListener('change', e => { S.repeats = clampInt(e.target, 1, 12, 3); e.target.value = S.repeats; syncUI(); });
 $('orbit').addEventListener('change', e => { S.orbit = e.target.checked; syncUI(); });
+$('faces').addEventListener('change', e => { if (face) setFace(0); S.faces = Number(e.target.value); pscale = 1; slowFrames = 0; syncUI(); });
+$('panelsIn').addEventListener('change', e => { S.panelsIn = clampInt(e.target, 4, 240, 30); e.target.value = S.panelsIn; syncUI(); });
+$('panelPx').addEventListener('change', e => { const n = clampInt(e.target, 0, 512, 0); S.panelPx = n < 8 ? 0 : n; e.target.value = S.panelPx; syncUI(); });
+$('gap').addEventListener('change', e => { const n = Number(e.target.value); S.gap = Number.isFinite(n) ? Math.min(20, Math.max(0, Math.round(n * 100) / 100)) : 0; e.target.value = S.gap; syncUI(); });
+$('view3d').addEventListener('change', e => { S.view3d = e.target.checked; syncUI(); });
+$('inner').addEventListener('change', e => { const v = e.target.value; if (face) setFace(0); S.inner = v; savePart(); if (v === 'own' && !parts[sel].Q) parts[sel].Q = Object.assign({}, parts[sel].P); syncUI(); });
+radios('face', v => setFace(Number(v)));
 $('seed').addEventListener('change', e => { S.seed = clampInt(e.target, 1, 9999, 1); rebuildScore(); syncUI(); });
 $('shuffle').addEventListener('click', () => { S.seed = 1 + Math.floor(Math.random() * 9999); rebuildScore(); syncUI(); });
 $('randAll').addEventListener('click', () => {
   const r = Math.random, pick = a => a[Math.floor(r() * a.length)];
   S.seed = 1 + Math.floor(r() * 9999);
-  S.baseAmt = 0.2 + 0.7 * r(); S.glitch = 0.35 + 0.65 * r(); S.lines = 0.3 + 0.7 * r(); S.chase = r() * 0.9; S.bgLo = r(); S.bgMid = r(); S.bgHi = r();
+  S.baseAmt = 0.2 + 0.7 * r(); S.glitch = 0.35 + 0.65 * r(); S.lines = 0.3 + 0.7 * r(); S.chase = r() * 0.9; S.fxAmt = r() * 0.9; S.bgLo = r(); S.bgMid = r(); S.bgHi = r();
   S.chaos = 0.3 + 0.7 * r(); S.trail = r() * 0.6; S.presence = 0.25 + 0.6 * r(); S.loader = Math.floor(r() * 3); S.logoMode = r() < 0.6 ? 0 : 1;
   S.baseStyle = pick(STYLES); S.fxStyle = pick(STYLES); S.logoStyle = pick(STYLES); S.dither = pick(['bayer2', 'bayer4', 'bayer8', 'halftone', 'lines', 'noise', 'diffusion']); S.pshape = Math.floor(r() * 3);
   S.baseDen = 0.1 + 0.5 * r(); S.fxDen = 0.45 + 0.5 * r(); S.logoDen = 0.35 + 0.55 * r();
@@ -1130,39 +1326,41 @@ $('randAll').addEventListener('click', () => {
   pushAll();
   rebuildScore(); syncUI();
 });
-$('loop').addEventListener('change', e => { S.loop = Number(e.target.value); if (!track) { userEv = []; resetParts(); rebuildScore(); } syncUI(); });
+$('loop').addEventListener('change', e => { S.loop = Number(e.target.value); if (!track) { userEv = []; auto = {}; tlSel = null; resetParts(); rebuildScore(); } syncUI(); tlInsp(); });
 $('range').addEventListener('change', e => { S.range = e.target.value; });
-function resetParts() { parts = [{ t: 0, P: snap() }]; sel = 0; loopPart = false; $('loopPart').setAttribute('aria-pressed', 'false'); }
+$('exFmt').addEventListener('change', e => { S.exFmt = e.target.value; touch(); });
+$('exView').addEventListener('change', e => { S.exView = e.target.value; touch(); });
+if (window.nativeApp && window.nativeApp.ffCheck) window.nativeApp.ffCheck().then(f => {
+  const add = (v, n) => { const o = document.createElement('option'); o.value = v; o.textContent = n; $('exFmt').append(o); };
+  if (f && f.prores) { add('prores', 'ProRes 422 HQ, .mov'); add('prores4444', 'ProRes 4444, .mov'); }
+  if (f && f.hap) add('hap', 'HAP, .mov');
+  $('exFmt').value = [...$('exFmt').options].some(o => o.value === S.exFmt) ? S.exFmt : 'mp4';
+}, () => {});
+// the app found a newer page while running: save the session and reload, unless a render is going
+let updatePending = false;
+async function updateReload() {
+  if (!updatePending || busy || !window.nativeApp || !window.nativeApp.reloadUpdate) return;
+  updatePending = false;
+  try { await window.nativeApp.autosave(JSON.stringify(getProject())); } catch (e) {}
+  window.nativeApp.reloadUpdate();
+}
+function resetParts() { face = 0; S.inner = 'same'; parts = [{ t: 0, P: snap() }]; sel = 0; loopPart = false; $('loopPart').setAttribute('aria-pressed', 'false'); }
 const partSay = s => { partsSig = ''; renderParts(); $('partNote').textContent = s; };
-$('split').addEventListener('click', () => {
-  const t = tau, i = partIdx(t);
-  if (t - parts[i].t < 0.5 || partEnd(i) - t < 0.5) { partSay('Move the playhead at least half a second away from a part edge, then split.'); return; }
-  savePart(); parts.splice(i + 1, 0, { t, P: Object.assign({}, parts[i].P) }); sel = i + 1; Object.assign(S, parts[sel].P);
-  rebuildScore(); pushAll(); syncUI();
-});
+$('split').addEventListener('click', () => splitAt(tau));
 $('merge').addEventListener('click', () => {
   if (sel === 0) { partSay('The first part has nothing before it to merge with.'); return; }
-  parts.splice(sel, 1); sel--; Object.assign(S, parts[sel].P);
+  face = 0; parts.splice(sel, 1); sel--; loadPart();
   rebuildScore(); pushAll(); syncUI();
 });
 $('loopPart').addEventListener('click', e => { loopPart = !loopPart; e.currentTarget.setAttribute('aria-pressed', String(loopPart)); });
-$('copyAll').addEventListener('click', () => { savePart(); for (const p of parts) p.P = snap(); rebuildScore(); syncUI(); partSay('All ' + parts.length + ' parts now share the settings of part ' + (sel + 1) + '.'); });
+$('copyAll').addEventListener('click', () => { if (face) setFace(0); savePart(); for (const p of parts) { p.P = snap(); if (parts[sel].Q) p.Q = Object.assign({}, parts[sel].Q); else delete p.Q; } rebuildScore(); syncUI(); partSay('All ' + parts.length + ' parts now share the settings of part ' + (sel + 1) + '.'); });
 $('fps').addEventListener('change', e => { S.fps = Number(e.target.value); syncUI(); });
 $('play').addEventListener('click', () => setPlaying(!S.playing));
-{
-  const tl = $('tl'); let down = false;
-  const at = e => { const r = tl.getBoundingClientRect(); seek((e.clientX - r.left) / r.width); };
-  tl.addEventListener('pointerdown', e => { down = true; tl.setPointerCapture(e.pointerId); at(e); });
-  tl.addEventListener('pointermove', e => { if (down) at(e); });
-  tl.addEventListener('pointerup', () => { down = false; });
-  tl.addEventListener('pointercancel', () => { down = false; });
-  tl.addEventListener('keydown', e => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); seek(tau / score.D + (e.key === 'ArrowRight' ? 0.02 : -0.02)); } });
-}
 
 /* ---------- export ---------- */
 let rendered = null, dlPromise = null, stop = false;
 // A finished render is kept and offered again until something that changes the picture or the sound changes.
-const renderKey = () => JSON.stringify([Object.assign({}, S, { playing: 0 }), parts, S.range === 'part' ? sel : -1, maskN, track ? track.name + track.ab.length : 0, userEv.map(e => e.type + e.t.toFixed(3) + e.seed)]);
+const renderKey = () => JSON.stringify([Object.assign({}, S, { playing: 0 }), fontFile ? fontFile.name : 0, S.exView === '3d' ? [ringCam.yaw, ringCam.pitch, ringCam.dist] : 0, parts, S.range === 'part' ? sel : -1, maskN, track ? track.name + track.ab.length : 0, userEv.map(e => e.type + e.t.toFixed(3) + e.seed + e.d.toFixed(3) + JSON.stringify(evMore(e))), auto, autoCut]);
 // Resolves to the save capability, null when this view cannot save, or undefined when the page runs outside Claude.
 function getDownloads() {
   if (window.nativeApp) return Promise.resolve({ save: async ({ filename, data }) => {      // the Mac app writes straight to disk through a save dialog
@@ -1192,14 +1390,15 @@ async function pickAudio(ab) {
 }
 async function renderFile() {
   const whole = S.range !== 'part' || parts.length === 1, t0 = whole ? 0 : parts[sel].t, t1 = whole ? score.D : partEnd(sel);
-  const { W, H } = dims(), fps = S.fps, D = score.D, N = Math.max(1, Math.round((t1 - t0) * fps));
+  const { W: FW, H: FH } = dims(), fps = S.fps, D = score.D, N = Math.max(1, Math.round((t1 - t0) * fps));
+  const src = exSource(FW, FH), W = src.W, H = src.H;
   const bitrate = Math.round(Math.min(45e6, Math.max(4e6, W * H * fps * 0.18)));
   const pick = await pickCodec(W, H, fps, bitrate);
   if (!pick) throw new Error('codec');
   const snd = track ? await pickAudio(track.ab) : null;
   if (document.fonts && document.fonts.ready) await document.fonts.ready;
-  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
-  const r = new Renderer(cv), st = newState(), sc = score;
+  const cv = src.cv;
+  const r = S.format === 'ring' && S.faces === 2 ? null : new Renderer(cv), st = newState(), sc = score;
   const mo = { target: new Mp4Muxer.ArrayBufferTarget(), video: { codec: pick.mux, width: W, height: H, frameRate: fps }, fastStart: 'in-memory', firstTimestampBehavior: 'offset' };
   if (snd) mo.audio = { codec: snd.mux, numberOfChannels: snd.ch, sampleRate: track.ab.sampleRate };
   const muxer = new Mp4Muxer.Muxer(mo);
@@ -1222,16 +1421,17 @@ async function renderFile() {
       aenc.encode(ad); ad.close(); aPos += len;
     }
   };
-  const us = 1e6 / fps, one = i => { const tf = t0 + i / fps, P = parts[partIdx(tf)].P, tw = warp(tf, P), LO = layerOpts(fps, P); LO[1].tw = tw; stateAt(sc, tf, motion(P, tw), st); r.draw(phase(tw), LO, st); return tf - t0; };
+  const two = S.format === 'ring' && S.faces === 2, rig = two ? mkRig(cv) : null;
+  const us = 1e6 / fps, one = i => { const tf = t0 + i / fps; if (two) drawFaces(rig, tf, fps); else renderOne(r, st, PAt(tf, 0), tf, fps); return tf - t0; };
   sc._i = 0; sc._k = 0;
   try {
     // a loop with trails has to start with the tail of its own ending already on screen
-    if (sc.cyclic && whole && parts[partIdx(D - 0.01)].P.trail > 0.01) for (let i = Math.max(0, N - Math.round(fps * 0.8)); i < N; i++) one(i);
+    if (sc.cyclic && whole && PAt(D - 0.01).trail > 0.01) for (let i = Math.max(0, N - Math.round(fps * 0.8)); i < N; i++) one(i);
     for (let i = 0; i < N; i++) {
       if (failed) throw failed;
       if (stop) throw new Error('stop');
       const tf = one(i);
-      const vf = new VideoFrame(cv, { timestamp: Math.round(i * us), duration: Math.round(us) });
+      const vf = new VideoFrame(src.shot(), { timestamp: Math.round(i * us), duration: Math.round(us) });
       enc.encode(vf, { keyFrame: i % fps === 0 });
       vf.close();
       if (aenc) feed(tf + 0.5);
@@ -1251,7 +1451,47 @@ async function renderFile() {
   if (failed) throw failed;
   muxer.finalize();
   return { blob: new Blob([muxer.target.buffer], { type: 'video/mp4' }), silent: !!track && !snd, opus: !!snd && snd.mux === 'opus',
-    name: (track ? 'track' : 'loop') + (whole ? '' : '-part' + (sel + 1)) + '-seed' + S.seed + '-' + S.format + '-' + W + 'x' + H + '-' + Math.round(t1 - t0) + 's-' + fps + 'fps.mp4' };
+    name: exName(whole, W, H, t1 - t0, fps, src.v3) + '.mp4' };
+}
+const exName = (whole, W, H, len, fps, v3) => (track ? 'track' : 'loop') + (whole ? '' : '-part' + (sel + 1)) + '-seed' + S.seed + '-' + S.format + (v3 ? '-3d' : '') + '-' + W + 'x' + H + '-' + Math.round(len) + 's-' + fps + 'fps';
+// What an export films: the flat frame, or the ring in 3D as it stands in the preview. cv is always the flat frame.
+function exSource(FW, FH) {
+  const cv = document.createElement('canvas'); cv.width = FW; cv.height = FH;
+  if (!(S.format === 'ring' && S.exView === '3d')) return { cv, W: FW, H: FH, v3: false, shot: () => cv };
+  const c3 = document.createElement('canvas'); c3.width = 1920; c3.height = 1080;
+  const r3 = ringMake(c3);
+  if (!r3) throw new Error('gl');
+  return { cv, W: 1920, H: 1080, v3: true, shot: () => { ringDraw(r3, c3, cv, 1920, 1080); return c3; } };
+}
+// ProRes or HAP through ffmpeg in the Mac app: every frame goes over as raw pixels, the app adds the sound and the start timecode.
+async function renderMov() {
+  const whole = S.range !== 'part' || parts.length === 1, t0 = whole ? 0 : parts[sel].t, t1 = whole ? score.D : partEnd(sel);
+  const { W: FW, H: FH } = dims(), fps = S.fps, D = score.D, N = Math.max(1, Math.round((t1 - t0) * fps));
+  const src = exSource(FW, FH), W = src.W, H = src.H, cv = src.cv, sc = score;
+  if (document.fonts && document.fonts.ready) await document.fonts.ready;
+  const two = S.format === 'ring' && S.faces === 2, rig = two ? mkRig(cv) : null, r = two ? null : new Renderer(cv), st = newState();
+  const one = i => { const tf = t0 + i / fps; if (two) drawFaces(rig, tf, fps); else renderOne(r, st, PAt(tf, 0), tf, fps); };
+  // the timecode of the first frame, counted at the file's own frame rate
+  const R = TC_RATES[S.tcRate], c = framesToTc(S.tcStart + t0 * R.real + 1e-6, R), tc = tc2(c.h) + ':' + tc2(c.m) + ':' + tc2(c.s) + ':' + tc2(Math.min(fps - 1, Math.floor(c.f * fps / R.fps)));
+  const name = exName(whole, W, H, t1 - t0, fps, src.v3) + '-' + S.exFmt + '.mov';
+  const go = await window.nativeApp.ffStart({ w: W, h: H, fps, codec: S.exFmt, timecode: tc, audioPath: track ? soundPath : '', t0, dur: t1 - t0, name });
+  if (!go || !go.ok) throw new Error(go && go.error || 'ffmpeg');
+  const rb = src.v3 ? document.createElement('canvas') : cv, rg = rb.getContext('2d', src.v3 ? { willReadFrequently: true } : undefined);
+  if (src.v3) { rb.width = W; rb.height = H; }
+  sc._i = 0; sc._k = 0;
+  try {
+    if (sc.cyclic && whole && PAt(D - 0.01).trail > 0.01) for (let i = Math.max(0, N - Math.round(fps * 0.8)); i < N; i++) one(i);
+    for (let i = 0; i < N; i++) {
+      if (stop) throw new Error('stop');
+      one(i);
+      if (src.v3) rg.drawImage(src.shot(), 0, 0);
+      if (!(await window.nativeApp.ffFrame(rg.getImageData(0, 0, W, H).data.buffer))) throw new Error('ffmpeg');
+      if (i % 3 === 0) { $('barFill').style.width = (100 * (i + 1) / N).toFixed(1) + '%'; say('Rendering frame ' + (i + 1) + ' of ' + N + '.'); await new Promise(res => setTimeout(res, 0)); }
+    }
+  } catch (e) { await window.nativeApp.ffEnd(true); throw e; }
+  const end = await window.nativeApp.ffEnd(false);
+  if (!end || !end.ok) throw new Error('ffmpeg');
+  return { path: end.path, tc, sound: go.sound };
 }
 async function offer(file, downloads) {
   const tail = file.silent ? ' This browser could not encode the sound, so the file is picture only.'
@@ -1277,6 +1517,14 @@ $('save').addEventListener('click', async () => {
     const downloads = await getDownloads();
     if (downloads === null) { say('Saving files is not available in this view. Open the page on claude.ai in Chrome.'); return; }
     if (typeof VideoEncoder === 'undefined' || typeof VideoFrame === 'undefined' || !window.Mp4Muxer) { say('Video encoding is not available here. In a browser, open the page in Chrome.'); return; }
+    if (S.exFmt !== 'mp4' && window.nativeApp && window.nativeApp.ffStart) {
+      const wasPlaying = S.playing;
+      if (track) audio.pause();
+      busy = true; stop = false; btn.textContent = 'Stop rendering'; $('bar').hidden = false; $('barFill').style.width = '0%';
+      try { const f = await renderMov(); say('Saved ' + f.path + '. It starts at timecode ' + f.tc + (track && !f.sound ? '. The sound file was not found, so the film is silent.' : '.')); }
+      finally { busy = false; btn.textContent = 'Save'; $('bar').hidden = true; last = performance.now(); if (track && wasPlaying) setPlaying(true); updateReload(); }
+      return;
+    }
     const key = renderKey();
     if (!rendered || rendered.key !== key) {
       rendered = null;
@@ -1284,27 +1532,30 @@ $('save').addEventListener('click', async () => {
       if (track) audio.pause();
       busy = true; stop = false; btn.textContent = 'Stop rendering'; $('bar').hidden = false; $('barFill').style.width = '0%';
       try { rendered = await renderFile(); rendered.key = key; }
-      finally { busy = false; btn.textContent = 'Save as MP4'; $('bar').hidden = true; last = performance.now(); if (track && wasPlaying) setPlaying(true); }
+      finally { busy = false; btn.textContent = 'Save'; $('bar').hidden = true; last = performance.now(); if (track && wasPlaying) setPlaying(true); updateReload(); }
     }
     await offer(rendered, downloads);
   } catch (e) {
     const m = e && e.message;
-    say(m === 'stop' ? 'Render stopped.' : m === 'codec' ? 'This browser has no video encoder for this size. Try Chrome, or a smaller format.' : 'The render stopped before it finished. Try again, or try a shorter piece.');
+    say(m === 'stop' ? 'Render stopped.' : m === 'declined' ? 'Not saved.' : m === 'noffmpeg' ? 'ffmpeg was not found on this computer. Install it with Homebrew: brew install ffmpeg.' : m === 'gl' ? 'The 3D view could not be drawn for the film.' : m === 'ffmpeg' ? 'ffmpeg stopped before the film was finished.' : m === 'codec' ? 'This browser has no video encoder for this size. Try Chrome, or a smaller format.' : 'The render stopped before it finished. Try again, or try a shorter piece.');
   }
 });
 
 /* ---------- project files (Mac app) ---------- */
-const GLOBAL_KEYS = ['format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range'];
+const GLOBAL_KEYS = ['format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap'];
 let loadingProject = false, saveTimer = 0;
 function getProject() {
   savePart();
   const g = {}; for (const k of GLOBAL_KEYS) g[k] = S[k];
-  return { v: 1, app: 'mall-call', S: g, parts: parts.map(p => ({ t: p.t, P: p.P })), userEv: userEv.map(e => ({ t: e.t, type: e.type, seed: e.seed, d: e.d })), logo: logoFile, soundPath: soundPath || null };
+  return { v: 1, app: 'mall-call', S: g, parts: parts.map(p => (p.Q ? { t: p.t, P: p.P, Q: p.Q } : { t: p.t, P: p.P })), userEv: userEv.map(e => Object.assign({ t: e.t, type: e.type, seed: e.seed, d: e.d }, evMore(e))), auto, autoCut: Object.assign({}, autoCut), logo: logoFile, font: fontFile, soundPath: soundPath || null };
 }
 function pushGlobals() {
   setRadio('format', S.format);
-  for (const id of ['shape', 'panels', 'repeats', 'loop', 'fps', 'seed', 'range']) $(id).value = S[id];
-  $('orbit').checked = S.orbit; $('invert').checked = S.invert;
+  for (const id of ['shape', 'panels', 'repeats', 'loop', 'fps', 'seed', 'range', 'faces', 'panelsIn', 'panelPx', 'gap']) $(id).value = S[id];
+  $('view3d').checked = S.view3d; $('exView').value = S.exView; if ([...$('exFmt').options].some(o => o.value === S.exFmt)) $('exFmt').value = S.exFmt;
+  $('orbit').checked = S.orbit; $('invert').checked = S.invert; $('outFit').value = S.outFit;
+  if (!TC_RATES[S.tcRate]) S.tcRate = '25';
+  tcPush(); outSync();
 }
 async function applyProject(pj) {
   if (!pj || pj.v !== 1 || !Array.isArray(pj.parts) || !pj.parts.length) return false;
@@ -1312,8 +1563,9 @@ async function applyProject(pj) {
   try {
     audio.pause(); S.playing = false;
     for (const k of GLOBAL_KEYS) if (k in pj.S) S[k] = pj.S[k];
-    pushGlobals();
+    pushGlobals(); undoReset(); tlSel = null; auto = {}; autoCut.base = autoCut.fx = autoCut.logo = true;
     if (!pj.soundPath && track) { audio.removeAttribute('src'); track = null; soundPath = ''; resetParts(); }
+    if (pj.font && pj.font.dataUrl) { const blob = await (await fetch(pj.font.dataUrl)).blob(); await loadFont(new File([blob], pj.font.name)); }
     if (pj.logo && pj.logo.dataUrl) { const blob = await (await fetch(pj.logo.dataUrl)).blob(); await loadLogo(new File([blob], pj.logo.name, { type: blob.type })); }
     let missing = '';
     if (pj.soundPath && window.nativeApp) {
@@ -1322,17 +1574,20 @@ async function applyProject(pj) {
     }
     if (!track) { soundPath = ''; rebuildScore(); }
     if (!missing) {
-      parts = pj.parts.filter(p => p.t < score.D).map(p => ({ t: p.t, P: Object.assign(snap(), p.P) }));
+      parts = pj.parts.filter(p => p.t < score.D).map(p => { const o = { t: p.t, P: Object.assign(snap(), { fxAmt: 0, lineMode: 0, inner: 'same' }, p.P) }; if (p.Q) o.Q = Object.assign({}, o.P, p.Q, { inner: 'own' }); return o; });      // a project from before Auto clips keeps its cut
       if (!parts.length || parts[0].t !== 0) parts.unshift({ t: 0, P: snap() });
-      userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d));
+      userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d, e.type === 'type' ? { txt: String(e.txt || ''), mode: String(e.mode || 'slam'), size: Number(e.size) || 0.5, y: Number(e.y) || 0.5, font: ['mono', 'own'].includes(e.font) ? e.font : 'sans', face: e.face | 0 } : { face: e.face | 0 }));
+      for (const [k] of AKEYS) if (pj.auto && Array.isArray(pj.auto[k])) auto[k] = pj.auto[k].filter(q => q.t <= score.D).map(q => ({ t: Number(q.t) || 0, v: Number(q.v) || 0, c: q.c | 0 })).sort((a, b) => a.t - b.t);
+      if (pj.autoCut) { autoCut.base = pj.autoCut.base !== false; autoCut.fx = pj.autoCut.fx !== false; autoCut.logo = pj.autoCut.logo !== false; }
     } else $('soundNote').textContent = 'The sound for this project was not found at ' + missing + '. Drop it in again and reopen the project.';
-    sel = 0; tau = 0; Object.assign(S, parts[0].P);
-    rebuildScore(); pushAll(); syncUI();
+    sel = 0; tau = 0; loadPart();
+    rebuildScore(); pushAll(); syncUI(); tlInsp();
     return true;
   } finally { loadingProject = false; }
 }
 // The Mac app keeps the session on disk a moment after every change, and brings it back on launch.
 function touch() {
+  if (score && !loadingProject) undoCommit();
   if (!window.nativeApp || loadingProject || !score) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => { try { window.nativeApp.autosave(JSON.stringify(getProject())); } catch (e) {} }, 1200);
@@ -1349,11 +1604,14 @@ if (window.nativeApp) {
       const r = await window.nativeApp.projectOpen();
       if (r && !(await applyProject(JSON.parse(r.json)))) say('That file is not a project from this app.');
     } else if (cmd === 'new-project') {
-      audio.pause(); audio.removeAttribute('src'); track = null; soundPath = ''; userEv = []; tau = 0; resetParts(); rebuildScore(); syncUI();
+      audio.pause(); audio.removeAttribute('src'); track = null; soundPath = ''; userEv = []; tau = 0; auto = {}; autoCut.base = autoCut.fx = autoCut.logo = true; tlSel = null; resetParts(); rebuildScore(); syncUI(); undoReset(); tlInsp();
       $('soundNote').textContent = 'No sound yet. The piece runs as a seamless loop on a built-in half-second beat.';
     } else if (cmd === 'export') $('save').click();
     else if (cmd === 'play') setPlaying(!S.playing);
     else if (cmd === 'new-variation') $('shuffle').click();
+    else if (cmd === 'undo' || cmd === 'redo') { const a = document.activeElement; if (a && a.tagName === 'INPUT' && (a.type === 'text' || a.type === 'number')) document.execCommand(cmd); else if (cmd === 'undo') undo(); else redo(); }
+    else if (cmd === 'output') $('outOpen').click();
+    else if (cmd === 'update-ready') { updatePending = true; updateReload(); }
   });
 }
 // Used by the app's own start-up check: one frame, the encoders, and a project round trip.
@@ -1371,7 +1629,51 @@ window.__selfTest = async () => {
   r.roundTrip = (await applyProject(JSON.parse(pj))) && parts.length === 2 && userEv.length === 1 && parts[1].P.fxStyle === 'dither';
   await applyProject(JSON.parse(before));
   r.restored = parts.length === 1 && userEv.length === 0;
+  // timeline: a key animates a setting, a clip moves, bake takes over the automatic cut, and undo walks all of it back
+  try {
+    const base = editState();
+    undoReset(); undoMark();
+    setKey('glow', 1, 0); setKey('glow', 3, 1, 2); tlChanged();
+    const mid = PAt(2).glow, held = PAt(score.D - 0.5).glow;
+    undoMark(); trigger('sweep'); userEv[0].t = 2; userEv[0].d = 1.5; mergeEv();
+    const autos = autoEv.filter(e => isBase(e.k)).length;
+    undoMark(); tlBake(0);
+    const pj2 = JSON.stringify(getProject());
+    const baked = !autoCut.base && userEv.length === 1 + autos && autoEv.every(e => !isBase(e.k));
+    tau = 2; paint();
+    const kept = (await applyProject(JSON.parse(pj2))) && auto.glow && auto.glow.length === 2 && auto.glow[1].c === 2 && !autoCut.base && userEv.length === 1 + autos;
+    await applyProject(JSON.parse(pj2)); undoReset();
+    undoMark(); tlSel = { kind: 'ev', e: userEv[0] }; tlDelete();
+    const n1 = userEv.length; undo(); const n2 = userEv.length; redo(); const n3 = userEv.length;
+    r.timeline = mid === 0.5 && held === 1 && baked && kept && n1 === autos && n2 === autos + 1 && n3 === autos;
+    if (!r.timeline) r.timelineWhy = [mid, held, baked, kept, n1, n2, n3, autos];
+    tau = 1; trigger('type'); const te = userEv[userEv.length - 1]; te.txt = 'SMOKE TEST'; te.mode = 'typeon'; mergeEv(); tau = 2; paint();
+    const drawn = ST.tyN === 1 && typeMasks.size > 0;
+    await applyProject(JSON.parse(JSON.stringify(getProject())));
+    const t2 = userEv.find(e => e.k === 13);
+    r.type = drawn && !!t2 && t2.txt === 'SMOKE TEST' && t2.mode === 'typeon' && layerOf(t2.k) === 3;
+    await applyProject(JSON.parse(before)); undoReset();
+    r.restored = r.restored && editState() === base;
+    r.tc = tcAt(0) + ' ' + tcString(parseTc('01:00:00:00', TC_RATES['29.97']) + 1800, TC_RATES['29.97']);
+    r.rows = tlRows().length; r.tlHeight = $('tl').height;
+  } catch (e) { r.timeline = 'error: ' + e.message; }
   return r;
+};
+
+/*__OUTPUT__*/
+/*__RING__*/
+
+// Used by the app's export check (MALLCALL_EXPORT_TEST): a short piece through the real export, flat or as the ring in 3D.
+window.__exportTest = async (fmt, ringView) => {
+  const set = (id, v) => { $(id).value = v; $(id).dispatchEvent(new Event('change')); };
+  set('loop', '4'); $('tcStart').value = '01:00:00:00'; $('tcStart').dispatchEvent(new Event('change'));
+  if (ringView) { $('fmtRing').checked = true; $('fmtRing').dispatchEvent(new Event('change')); set('faces', '2'); set('panelsIn', '24'); set('exView', ringView); }
+  if (![...$('exFmt').options].some(o => o.value === fmt)) return { failed: 'format ' + fmt + ' is not offered' };
+  set('exFmt', fmt);
+  $('save').click();
+  await new Promise(res => setTimeout(res, 300));
+  while (busy) await new Promise(res => setTimeout(res, 100));
+  return { note: $('saveNote').textContent, size: dims() };
 };
 
 /* ---------- start ---------- */
@@ -1380,8 +1682,11 @@ mask = buildMask(logoSrc.img, logoSrc.w, logoSrc.h, false);
 rebuildScore();
 if (matchMedia('(prefers-reduced-motion: reduce)').matches) { S.playing = false; tau = 3.6; }
 pushRanges();
+tcPush();
 syncUI();
+tlInsp();
 if (document.fonts && document.fonts.load) document.fonts.load('500 20px "DM Mono"').then(() => { if (!S.playing) syncUI(); }, () => {});
+if (document.fonts && document.fonts.load) document.fonts.load('600 20px "Instrument Sans"').then(() => { typeMasks.clear(); }, () => {});
 addEventListener('resize', () => { tlCache = null; });
 getDownloads();
 if (window.nativeApp) window.nativeApp.autosaveLoad().then(j => { if (j) { try { applyProject(JSON.parse(j)); } catch (e) {} } }, () => {});
