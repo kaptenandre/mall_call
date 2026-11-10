@@ -3,6 +3,11 @@
    Sizes follow the format: one panel is one unit wide, so the radius comes from how many panels go round.
    Plain WebGL, no library, so it travels with the page when the app updates itself. */
 const ringCam = { yaw: 0.6, pitch: 0.16, dist: 0 };
+// Set views for the monitor. dist is in ring radiuses; under 1 the eye is inside the ring looking across it.
+const RING_VIEWS = [['Outside', { yaw: 0.6, pitch: 0.16, dist: 2.6 }], ['Eye level', { yaw: 0.6, pitch: 0.015, dist: 2.1 }], ['Close', { yaw: 0.6, pitch: 0.05, dist: 1.35 }],
+  ['Inside', { yaw: 0.6, pitch: 0.03, dist: 0.5 }], ['Centre', { yaw: 0.6, pitch: 0.0, dist: 0.05 }], ['Above', { yaw: 0.6, pitch: 1.3, dist: 2.9 }]];
+const RING_TURN = 0.22;            // radians a second when Turn is on
+let ringTurn = false, ringLast = 0;
 let ringMain = null, ringBad = false;
 // set up drawing on a canvas; null when this machine has no WebGL
 function ringMake(cv) {
@@ -67,6 +72,19 @@ function ringFrame() {
   const cv = $('ring3d');
   if (cv.hidden || ringBad) return;
   if (!ringMain) { ringMain = ringMake(cv); if (!ringMain) { ringBad = true; return; } }
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const dpr = Math.min(2, window.devicePixelRatio || 1), now = performance.now();
+  if (ringTurn && S.playing && !busy && ringLast) ringCam.yaw += Math.min(0.1, (now - ringLast) / 1000) * RING_TURN;
+  ringLast = now;
   ringDraw(ringMain, cv, stage, Math.max(2, Math.round(cv.clientWidth * dpr)), Math.max(2, Math.round(cv.clientHeight * dpr)));
+}
+{
+  const bar = $('views');
+  for (const [name, v] of RING_VIEWS) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = name;
+    b.addEventListener('click', () => { ringCam.pitch = v.pitch; ringCam.dist = v.dist; if (!ringTurn) ringCam.yaw = v.yaw; if (!S.playing && !busy) paint(); });
+    bar.append(b);
+  }
+  const t = document.createElement('button'); t.type = 'button'; t.textContent = 'Turn'; t.title = 'Walk slowly round the ring while it plays. A 3D film turns too.'; t.setAttribute('aria-pressed', 'false'); t.style.marginLeft = 'auto';
+  t.addEventListener('click', () => { ringTurn = !ringTurn; t.setAttribute('aria-pressed', String(ringTurn)); });
+  bar.append(t);
 }

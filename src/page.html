@@ -27,6 +27,28 @@ body{background:var(--room);color:var(--ink);font-family:var(--body);font-size:1
 .top{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 20px;padding:18px 20px 14px;border-bottom:1px solid var(--rule)}
 h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase;margin:0;text-wrap:balance}
 .top p{margin:0;color:var(--dim);max-width:65ch}
+.tabs{display:flex;gap:4px}
+.tabs button{appearance:none;border:1px solid var(--rule);background:#000;color:var(--dim);padding:7px 12px;font:500 11px/1 var(--display);letter-spacing:.1em;text-transform:uppercase;cursor:pointer;border-radius:0;display:inline-flex;gap:8px;align-items:center}
+.tabs button:hover{color:var(--ink)}
+.tabs button[aria-selected="true"]{background:var(--ink);color:#000;border-color:var(--ink)}
+.work{padding:20px;display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start}
+.work.two{grid-template-columns:minmax(260px,340px) minmax(0,1fr)}
+.pool{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+.pool .card{border:1px solid var(--rule);background:#000;padding:6px;display:flex;flex-direction:column;gap:6px;position:relative;cursor:pointer}
+.pool .card[aria-current="true"]{border-color:var(--ink)}
+.pool .card img,.pool .card canvas{width:100%;aspect-ratio:1;object-fit:contain;background:#000;display:block}
+.pool .card b{font:400 11px/1.2 var(--display);color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pool .card .x{position:absolute;top:2px;right:2px;appearance:none;border:1px solid var(--rule);background:#000;color:var(--dim);width:20px;height:20px;padding:0;cursor:pointer;font:400 12px/1 var(--display)}
+.pool .card .x:hover{color:var(--ink);border-color:var(--ink)}
+.pool .add{border:1px dashed #4a4958;background:#000;color:var(--ink);aspect-ratio:1;cursor:pointer;font:500 22px/1 var(--display)}
+.vers{width:100%;border-collapse:collapse;font-size:12.5px}
+.vers th{text-align:left;font:500 10px/1 var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--dim);padding:6px 8px;border-bottom:1px solid var(--rule)}
+.vers td{padding:7px 8px;border-bottom:1px solid var(--rule);vertical-align:middle}
+.vers td:first-child{font:500 12px/1 var(--display)}
+.vers button{appearance:none;border:1px solid var(--rule);background:#000;color:var(--ink);padding:5px 8px;font:500 10px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-radius:0}
+.vers button:hover{border-color:var(--ink)}
+.kv{display:grid;grid-template-columns:90px minmax(0,1fr);gap:4px 10px;font-size:12.5px}
+.kv span{color:var(--dim)}
 .top{padding-right:250px}
 .smpte{position:fixed;top:8px;right:14px;z-index:20;background:#000;border:1px solid var(--rule);padding:7px 12px;font:500 24px/1 var(--display);letter-spacing:.06em;font-variant-numeric:tabular-nums;color:var(--ink)}
 @media (max-width:620px){.top{padding-right:16px}.smpte{font-size:16px;top:auto;bottom:8px}}
@@ -37,8 +59,13 @@ h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase
 .stage.wide canvas{width:auto;height:auto;max-width:100%;max-height:44vh}
 .stage.panel canvas{height:min(44vh,640px);width:auto;max-width:100%}
 .stage.ring{justify-content:flex-start}
-.stage.ring canvas{height:150px;width:auto;max-width:none}
-.ring3d{display:block;width:100%;height:40vh;background:#000;border:1px solid var(--rule);border-bottom:0;cursor:grab;touch-action:none}
+.stage.ring canvas{height:130px;width:auto;max-width:none}
+.views{display:flex;flex-wrap:wrap;gap:4px;align-items:center;border:1px solid var(--rule);border-bottom:0;background:var(--panel);padding:5px 6px}
+.views button{appearance:none;border:1px solid var(--rule);background:#000;color:var(--ink);padding:6px 9px;font:500 10px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-radius:0;display:inline-flex;gap:7px;align-items:center}
+.views button:hover{border-color:var(--ink)}
+.views button[aria-pressed="true"]{background:var(--ink);color:#000;border-color:var(--ink)}
+.views span{color:var(--dim);font:400 10px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;margin-right:4px}
+.ring3d{display:block;width:100%;height:46vh;background:#000;border:1px solid var(--rule);border-bottom:0;cursor:grab;touch-action:none}
 .tlbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid var(--rule);border-top:0;background:var(--panel);padding:6px}
 .tlbar button{min-width:30px;min-height:28px;display:inline-flex;align-items:center;justify-content:center}
 .tlbar button,.tlinsp button,.tlhead button{appearance:none;border:1px solid var(--rule);background:#000;color:var(--ink);padding:6px 8px;font:500 10px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-radius:0}
@@ -79,6 +106,10 @@ h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase
 .padbtns button{appearance:none;border:1px solid var(--rule);background:#000;color:var(--ink);padding:9px 10px 9px 12px;font:500 11px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-radius:0;display:flex;gap:10px;align-items:center}
 .padbtns button kbd{font:400 10px/1 var(--display);color:var(--dim);border:1px solid var(--rule);padding:3px 4px}
 .padbtns button:hover{border-color:var(--ink)}
+.padbtns button[aria-pressed="true"]{background:var(--ink);color:#000;border-color:var(--ink)}
+.lookflash{position:absolute;left:10px;top:44px;z-index:5;background:#000;border:1px solid var(--ink);color:var(--ink);padding:8px 12px;font:500 13px/1 var(--display);letter-spacing:.12em;text-transform:uppercase;pointer-events:none;opacity:0}
+.lookflash.on{opacity:1}
+.stagecol{position:relative}
 .padbtns button:active,.padbtns button.hit{background:var(--signal);color:#000;border-color:var(--signal)}
 .padbtns button:active kbd,.padbtns button.hit kbd{color:#000;border-color:#000}
 .padfoot{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding-top:4px}
@@ -144,10 +175,13 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 <div class="smpte" id="smpte" role="timer" aria-label="Timecode at the playhead" title="Timecode at the playhead. Set the rate and the start under Timecode.">00:00:00:00</div>
 <header class="top">
   <h1>Mall Call <span id="build" style="color:var(--dim);font-weight:400"></span></h1>
+  <nav class="tabs" id="tabs" aria-label="Workspaces"></nav>
 </header>
 
 <main class="app">
   <section class="stagecol">
+    <div class="lookflash" id="lookFlash" aria-live="polite"></div>
+    <div class="views" id="views" hidden><span>View</span></div>
     <canvas id="ring3d" class="ring3d" aria-label="The ring in 3D. Drag to turn, scroll to move in and out." hidden></canvas>
     <div class="stage wide" id="stageWrap"><canvas id="stage" width="1920" height="1080" aria-label="Preview"></canvas></div>
     <div class="tlbar">
@@ -163,7 +197,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
     </div>
     <div class="tlwrap"><div class="tlhead" id="tlHead"></div><canvas class="tl" id="tl" tabindex="0" role="slider" aria-label="Timeline" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></canvas></div>
     <div class="tlinsp" id="tlInsp"></div>
-    <div class="hud"><span><b id="hudState">Logo out</b></span><span id="hudRes">1920 × 1080 · 30 fps</span><span id="hudTime">0.00 / 8 s</span></div>
+    <div class="hud"><span><b id="hudState">Logo out</b></span><span id="hudLook">Look: LED</span><span id="hudRes">1920 × 1080 · 30 fps</span><span id="hudTime">0.00 / 8 s</span></div>
     <div class="partbar">
       <button type="button" class="plain" id="split">Split at playhead</button>
       <button type="button" class="plain" id="splitSound" title="Cut the piece into parts where the sound changes: at drops, where a build starts, and where a quiet stretch begins and ends">Split by sound</button>
@@ -287,17 +321,12 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
     </fieldset>
 
     <fieldset>
-      <legend>Format</legend>
-      <div class="seg" role="radiogroup" aria-label="Format">
-        <label><input type="radio" name="format" id="fmtWide" value="wide" checked><span>Wide</span></label>
-        <label><input type="radio" name="format" id="fmtPanel" value="panel"><span>Panel</span></label>
-        <label><input type="radio" name="format" id="fmtRing" value="ring"><span>Ring</span></label>
-      </div>
+      <legend>Ring</legend>
       <label class="row" for="shape" id="shapeRow" hidden><span>Panel shape</span><select id="shape"><option value="2">1 × 2</option><option value="3" selected>1 × 3</option><option value="4">1 × 4</option></select></label>
       <p class="note" id="fmtNote"></p>
       <div id="ringOpts" class="stack" hidden>
         <label class="row" for="panels"><span>Panels in ring</span><input type="number" id="panels" min="4" max="240" value="30"></label>
-        <label class="row" for="faces"><span>Faces</span><select id="faces"><option value="1">Outside only</option><option value="2">Outside and inside</option></select></label>
+        <label class="row" for="faces"><span>Faces</span><select id="faces"><option value="2">Outside and inside</option><option value="1">Outside only</option></select></label>
         <label class="row" for="panelsIn" id="panelsInRow"><span>Panels inside</span><input type="number" id="panelsIn" min="4" max="240" value="30"></label>
         <label class="row" for="inner" id="innerRow"><span>Inside shows</span><select id="inner"><option value="same">The same</option><option value="mirror">The same, mirrored</option><option value="own">Its own look</option><option value="off">Nothing</option></select></label>
         <div class="seg" id="faceSeg" role="radiogroup" aria-label="Which face the controls edit" style="grid-template-columns:1fr 1fr">
@@ -357,6 +386,12 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 
     <fieldset>
       <legend>Output</legend>
+      <label class="row" for="gGain"><span>Brightness</span><input type="range" id="gGain" min="30" max="250" value="100"></label>
+      <label class="row" for="gCon"><span>Contrast</span><input type="range" id="gCon" min="50" max="300" value="100"></label>
+      <label class="row" for="gGam"><span>Gamma</span><input type="range" id="gGam" min="40" max="250" value="100"></label>
+      <label class="row" for="gBlack"><span>Black floor</span><input type="range" id="gBlack" min="0" max="60" value="0"></label>
+      <button type="button" class="plain" id="gReset">Reset the grade</button>
+      <p class="note">The last thing done to the picture, in the preview, the output window and every export. For a see-through LED mesh: raise Contrast and Black floor so dim pixels go fully dark instead of glowing grey, and lower Gamma to lift what is left.</p>
       <button type="button" class="plain" id="outOpen">Open output window</button>
       <label class="row" for="outFit"><span>Picture</span><select id="outFit"><option value="contain">Fit</option><option value="fill">Stretch</option><option value="none">Pixel for pixel</option></select></label>
       <label class="row" for="outDisp" id="outDispRow" hidden><span>Put it on</span><select id="outDisp"></select></label>
@@ -374,6 +409,22 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
     </fieldset>
   </aside>
 </main>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="grade" color-interpolation-filters="sRGB" x="0" y="0" width="100%" height="100%">
+  <feComponentTransfer><feFuncR id="gA1" type="gamma" amplitude="1" exponent="1" offset="0"/><feFuncG id="gA2" type="gamma" amplitude="1" exponent="1" offset="0"/><feFuncB id="gA3" type="gamma" amplitude="1" exponent="1" offset="0"/></feComponentTransfer>
+  <feComponentTransfer><feFuncR id="gB1" type="linear" slope="1" intercept="0"/><feFuncG id="gB2" type="linear" slope="1" intercept="0"/><feFuncB id="gB3" type="linear" slope="1" intercept="0"/></feComponentTransfer>
+</filter></svg>
+
+<section class="work" id="viewMedia" hidden>
+  <fieldset><legend>Logos</legend><div class="pool" id="poolLogos"></div><p class="note">Every logo dropped into this project is kept here. Press one to use it.</p></fieldset>
+  <fieldset><legend>Sound</legend><div class="kv" id="poolSound"></div><div class="two"><button type="button" class="plain" id="poolSoundPick">Choose a sound</button><button type="button" class="plain" id="poolSoundOff">Remove it</button></div></fieldset>
+  <fieldset><legend>Symbols of your own</legend><div class="pool" id="poolSyms"></div><p class="note">The shapes you have added to the bank. The built-in ones are always there.</p></fieldset>
+  <fieldset><legend>Font</legend><div class="kv" id="poolFont"></div><canvas id="poolFontCv" width="600" height="110" style="width:100%;height:auto;background:#000;border:1px solid var(--rule)"></canvas><div class="two"><button type="button" class="plain" id="poolFontPick">Load a font</button><button type="button" class="plain" id="poolFontOff">Remove it</button></div></fieldset>
+</section>
+
+<section class="work two" id="viewVersions" hidden>
+  <div class="stack" id="versLeft"></div>
+  <fieldset><legend>History</legend><p class="note" id="versHead" aria-live="polite">Save a version and it shows here.</p><table class="vers"><thead><tr><th>Version</th><th>Saved</th><th>Note</th><th></th></tr></thead><tbody id="versRows"></tbody></table></fieldset>
+</section>
 
 <script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.2/build/mp4-muxer.js"></script>
 <script>
@@ -384,21 +435,22 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 22;
+const BUILD = 24;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
 
 const STYLES = ['rods', 'streaks', 'ascii', 'ridge', 'dither'];
 const STYLE_NAMES = { rods: 'LED rods', streaks: 'Light streaks', ascii: 'ASCII', ridge: 'Ridge lines', dither: 'Dither' };
-const S = { format: 'wide', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.4, size: 0.78, invert: false,
+const S = { format: 'ring', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.4, size: 0.78, invert: false,
   loop: 8, fps: 30, playing: true, seed: 1,
   baseAmt: 0.45, baseStyle: 'dither', baseDen: 0.304,
   logoEach: false, outline: false, symAmt: 0.3, pilAmt: 0.4, busy: 0.4, trans: 'cut', transLen: 1, glitch: 0.7, lines: 0.8, lineMode: 1, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxAmt: 0.4, fxStyle: 'rods', fxDen: 0.784,
   logoMode: 0, loader: 0, presence: 0.5, eq: 1, logoStyle: 'dither', logoDen: 0.64,
   chaos: 0.6, trail: 0, mix: false, pshape: 0, pfill: 0.78, dither: 'bayer4', wob: 0.5, wobSize: 0.5, eqAmt: 0.6, ease: 0.85, range: 'all',
   tcRate: '25', tcStart: 0, tcShow: false, outFit: 'contain',
-  faces: 1, panelsIn: 30, panelPx: 0, view3d: true, inner: 'same', exFmt: 'mp4', exView: 'flat', gap: 0 };
+  faces: 2, panelsIn: 30, panelPx: 0, view3d: true, inner: 'same', exFmt: 'mp4', exView: 'flat', gap: 0,
+  gGain: 1, gCon: 1, gGam: 1, gBlack: 0 };
 // The piece can be split into parts. Everything from the three layers down to the look is kept per part; S holds the part being edited.
 const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'logoEach', 'outline', 'symAmt', 'pilAmt', 'busy', 'trans', 'transLen', 'glitch', 'lines', 'lineMode', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxAmt', 'fxStyle', 'fxDen',
   'logoMode', 'loader', 'presence', 'eq', 'logoStyle', 'logoDen', 'chaos', 'trail', 'mix', 'pshape', 'pfill', 'dither', 'wob', 'wobSize', 'eqAmt', 'ease', 'inner'];
@@ -1266,11 +1318,28 @@ function drawFaces(rig, tf, fps) {
   if (mode === 'mirror') { g.save(); g.translate(wi, hs); g.scale(-1, 1); g.drawImage(src, 0, 0, wi, hs); g.restore(); }
   else g.drawImage(src, 0, hs, wi, hs);
 }
+// The output grade: brightness and gamma first, then contrast about the middle with a floor under which everything is black.
+// It runs as one filter over the finished frame, so the preview, the output window and every export get the same picture.
+const gradeOn = () => S.gGain !== 1 || S.gCon !== 1 || S.gGam !== 1 || S.gBlack !== 0;
+let gradeTmp = null;
+function gradeSet() {
+  const slope = S.gCon / (1 - Math.min(0.9, S.gBlack)), icpt = 0.5 - 0.5 * S.gCon - Math.min(0.9, S.gBlack) * slope;
+  for (const n of [1, 2, 3]) { const a = $('gA' + n), b = $('gB' + n); a.setAttribute('amplitude', S.gGain); a.setAttribute('exponent', S.gGam); b.setAttribute('slope', slope); b.setAttribute('intercept', icpt); }
+}
+function gradeFrame(cv) {
+  if (!gradeOn()) return;
+  if (!gradeTmp) gradeTmp = document.createElement('canvas');
+  if (gradeTmp.width !== cv.width || gradeTmp.height !== cv.height) { gradeTmp.width = cv.width; gradeTmp.height = cv.height; }
+  const g = cv.getContext('2d'), t = gradeTmp.getContext('2d');
+  t.globalCompositeOperation = 'copy'; t.drawImage(cv, 0, 0);
+  g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'copy'; g.globalAlpha = 1; g.filter = 'url(#grade)'; g.drawImage(gradeTmp, 0, 0); g.restore(); g.filter = 'none';
+}
 let mainRig = null;
 function paint() {
   const two = S.format === 'ring' && S.faces === 2, P = PAt(tau, face);
   if (two) { if (!mainRig) mainRig = mkRig(stage, ST); drawFaces(mainRig, tau, fpsNow); }
   else renderOne(main, ST, PAt(tau, 0), tau, fpsNow);
+  gradeFrame(stage);
   outFrame(); ringFrame();
   for (const k in auto) if (auto[k].length) { const R = aRange(k), v = String(Math.round(R.back(P[k]) * 100)); if (R.el.value !== v && document.activeElement !== R.el) R.el.value = v; }   // animated sliders follow their keys
   if (S.format === 'ring') {
@@ -1327,7 +1396,7 @@ function syncUI() {
   $('fmtNote').textContent = S.format === 'wide' ? 'One 16:9 screen, ' + W + ' × ' + H + '.'
     : S.format === 'panel' ? 'One tall panel, 1 × ' + S.shape + ', ' + W + ' × ' + H + '.'
     : (S.faces === 2 ? 'Two strips in one frame, ' + W + ' × ' + H + ': the ' + S.panels + ' outside panels on top, the ' + S.panelsIn + ' inside panels under them.' : 'All ' + S.panels + ' panels side by side as one strip, ' + W + ' × ' + H + '.') + ' Each panel is 1 × ' + S.shape + ', ' + pw + ' × ' + (pw * S.shape) + ' pixels. Air between is the gap from one pillar to the next, counted in pillar widths: with it set, the picture runs behind the pillars and each one shows its own stretch. Panel pixels 0 picks a size by itself. The thin lines mark the panel edges and are not in the export. What the inside shows is set per part.';
-  { const two = S.format === 'ring' && S.faces === 2; $('panelsInRow').hidden = $('innerRow').hidden = !two; $('faceSeg').hidden = !two || S.inner !== 'own'; if (face && (!two || S.inner !== 'own')) face = 0; setRadio('face', face); $('inner').value = S.inner; $('ring3d').hidden = !(S.format === 'ring' && S.view3d); $('exViewRow').hidden = S.format !== 'ring'; }
+  { const two = S.format === 'ring' && S.faces === 2; $('panelsInRow').hidden = $('innerRow').hidden = !two; $('faceSeg').hidden = !two || S.inner !== 'own'; if (face && (!two || S.inner !== 'own')) face = 0; setRadio('face', face); $('inner').value = S.inner; $('ring3d').hidden = $('views').hidden = !(S.format === 'ring' && S.view3d); $('exViewRow').hidden = S.format !== 'ring'; }
   $('modeNote').textContent = S.logoMode === 0 ? 'The logo builds like a loading screen with a progress bar, lands on a hit, holds, then drops out.'
     : S.logoMode === 1 ? 'The logo stays out and cuts in on some of the hits.' : 'The logo is up the whole time and cuts between poses on the hits.';
   $('loader').disabled = S.logoMode !== 0;
@@ -1338,8 +1407,10 @@ function syncUI() {
   $('seed').value = S.seed;
   document.querySelectorAll('input[name=eq]').forEach(r => { r.disabled = !track; });
   document.documentElement.style.setProperty('--signal', S.tint);
+  { const now = lookName(); $('hudLook').textContent = 'Look: ' + (now || 'your own'); document.querySelectorAll('[data-look]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.look === now))); }
   tlCache = null;
   touch();
+  workRefresh();
   if (!S.playing && !busy) paint();
 }
 async function setPlaying(p) {
@@ -1400,6 +1471,10 @@ const LOOKS = {
   'Wire': { baseStyle: 'ridge', baseDen: 0.4, fxStyle: 'streaks', fxDen: 0.7, logoStyle: 'ridge', logoDen: 0.7, dither: 'bayer4', pshape: 0, pfill: 0.78 },
   'Grain': { baseStyle: 'dither', baseDen: 0.5, fxStyle: 'rods', fxDen: 0.9, logoStyle: 'dither', logoDen: 0.85, dither: 'diffusion', pshape: 0, pfill: 1 }
 };
+// which named look the settings match right now, if any
+const lookName = () => Object.keys(LOOKS).find(n => Object.keys(LOOKS[n]).every(k => typeof LOOKS[n][k] === 'number' ? Math.abs(S[k] - LOOKS[n][k]) < 0.005 : S[k] === LOOKS[n][k])) || '';
+let lookTimer = 0;
+function lookFlash(name) { const el = $('lookFlash'); el.textContent = 'Look: ' + name; el.classList.add('on'); clearTimeout(lookTimer); lookTimer = setTimeout(() => el.classList.remove('on'), 1400); }
 function pushAll() {
   pushRanges();
   for (const id of ['baseStyle', 'fxStyle', 'logoStyle', 'dither', 'loader', 'lineMode', 'trans', 'transLen']) $(id).value = S[id];
@@ -1414,7 +1489,8 @@ function pushAll() {
   const box = document.createElement('div'); box.className = 'padbtns';
   for (const name of Object.keys(LOOKS)) {
     const b = document.createElement('button'); b.type = 'button'; b.id = 'look-' + name.toLowerCase(); b.textContent = name;
-    b.addEventListener('click', () => { Object.assign(S, LOOKS[name]); pushAll(); syncUI(); });
+    b.dataset.look = name; b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', () => { Object.assign(S, LOOKS[name]); pushAll(); syncUI(); lookFlash(name); });
     box.append(b);
   }
   row.append(lab, box); $('pad').insertBefore(row, $('pad').lastElementChild);
@@ -1458,14 +1534,15 @@ async function loadLogo(file) {
     logoSrc = { img, w, h };
     mask = buildMask(img, w, h, S.invert); maskN++;
     URL.revokeObjectURL(url);
-    if (window.nativeApp) logoFile = { name: file.name, dataUrl: await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(file); }) };
+    logoFile = { name: file.name, dataUrl: await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(file); }) };
+    if (logoFile.dataUrl && !logoPool.some(q => q.name === logoFile.name && q.dataUrl.length === logoFile.dataUrl.length)) logoPool.push({ name: logoFile.name, dataUrl: logoFile.dataUrl });
     note.textContent = 'Using ' + file.name + '. Only its shape is used; tick Invert if the background lights up instead of the logo.';
     syncUI();
   } catch (e) {
     note.textContent = 'That file could not be read as an image. Try an SVG or a PNG.';
   }
 }
-let soundUrl = null, soundPath = '', logoFile = null;
+let soundUrl = null, soundPath = '', logoFile = null, logoPool = [];      // logoPool: every logo this project has been given, { name, dataUrl }
 async function loadSound(file, quiet, knownPath) {
   const note = $('soundNote');
   note.textContent = 'Reading the sound in ' + file.name + '.';
@@ -1581,6 +1658,9 @@ $('randAll').addEventListener('click', () => {
 });
 $('loop').addEventListener('change', e => { S.loop = Number(e.target.value); if (!track) { userEv = []; auto = {}; tlSel = null; resetParts(); rebuildScore(); } syncUI(); tlInsp(); });
 $('range').addEventListener('change', e => { S.range = e.target.value; });
+for (const [id, key, lo] of [['gGain', 'gGain'], ['gCon', 'gCon'], ['gGam', 'gGam'], ['gBlack', 'gBlack']]) $(id).addEventListener('input', e => { S[key] = e.target.value / 100; gradeSet(); touch(); if (!S.playing && !busy) paint(); });
+$('gReset').addEventListener('click', () => { S.gGain = S.gCon = S.gGam = 1; S.gBlack = 0; gradePush(); touch(); if (!S.playing && !busy) paint(); });
+function gradePush() { for (const k of ['gGain', 'gCon', 'gGam', 'gBlack']) $(k).value = Math.round(S[k] * 100); gradeSet(); }
 $('exFmt').addEventListener('change', e => { S.exFmt = e.target.value; touch(); });
 $('exView').addEventListener('change', e => { S.exView = e.target.value; touch(); });
 if (window.nativeApp && window.nativeApp.ffCheck) window.nativeApp.ffCheck().then(f => {
@@ -1709,7 +1789,7 @@ async function renderFile() {
     }
   };
   const two = S.format === 'ring' && S.faces === 2, rig = two ? mkRig(cv) : null;
-  const us = 1e6 / fps, one = i => { const tf = t0 + i / fps; if (two) drawFaces(rig, tf, fps); else renderOne(r, st, PAt(tf, 0), tf, fps); return tf - t0; };
+  const us = 1e6 / fps, one = i => { const tf = t0 + i / fps; if (two) drawFaces(rig, tf, fps); else renderOne(r, st, PAt(tf, 0), tf, fps); gradeFrame(cv); return tf - t0; };
   sc._i = 0; sc._k = 0;
   try {
     // a loop with trails has to start with the tail of its own ending already on screen
@@ -1748,7 +1828,8 @@ function exSource(FW, FH) {
   const c3 = document.createElement('canvas'); c3.width = 1920; c3.height = 1080;
   const r3 = ringMake(c3);
   if (!r3) throw new Error('gl');
-  return { cv, W: 1920, H: 1080, v3: true, shot: () => { ringDraw(r3, c3, cv, 1920, 1080); return c3; } };
+  const yaw0 = ringCam.yaw; let n = 0;                   // with Turn on, the film turns too, at the same pace, starting where the view stands
+  return { cv, W: 1920, H: 1080, v3: true, shot: () => { if (ringTurn) ringCam.yaw = yaw0 + n++ / S.fps * RING_TURN; ringDraw(r3, c3, cv, 1920, 1080); return c3; } };
 }
 // ProRes or HAP through ffmpeg in the Mac app: every frame goes over as raw pixels, the app adds the sound and the start timecode.
 async function renderMov() {
@@ -1757,7 +1838,7 @@ async function renderMov() {
   const src = exSource(FW, FH), W = src.W, H = src.H, cv = src.cv, sc = score;
   if (document.fonts && document.fonts.ready) await document.fonts.ready;
   const two = S.format === 'ring' && S.faces === 2, rig = two ? mkRig(cv) : null, r = two ? null : new Renderer(cv), st = newState();
-  const one = i => { const tf = t0 + i / fps; if (two) drawFaces(rig, tf, fps); else renderOne(r, st, PAt(tf, 0), tf, fps); };
+  const one = i => { const tf = t0 + i / fps; if (two) drawFaces(rig, tf, fps); else renderOne(r, st, PAt(tf, 0), tf, fps); gradeFrame(cv); };
   // the timecode of the first frame, counted at the file's own frame rate
   const R = TC_RATES[S.tcRate], c = framesToTc(S.tcStart + t0 * R.real + 1e-6, R), tc = tc2(c.h) + ':' + tc2(c.m) + ':' + tc2(c.s) + ':' + tc2(Math.min(fps - 1, Math.floor(c.f * fps / R.fps)));
   const name = exName(whole, W, H, t1 - t0, fps, src.v3) + '-' + S.exFmt + '.mov';
@@ -1829,16 +1910,17 @@ $('save').addEventListener('click', async () => {
 });
 
 /* ---------- project files (Mac app) ---------- */
-const GLOBAL_KEYS = ['format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap'];
+const GLOBAL_KEYS = ['format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap', 'gGain', 'gCon', 'gGam', 'gBlack'];
 let loadingProject = false, saveTimer = 0;
 function getProject() {
   savePart();
   const g = {}; for (const k of GLOBAL_KEYS) g[k] = S[k];
-  return { v: 1, app: 'mall-call', S: g, parts: parts.map(p => (p.Q ? { t: p.t, P: p.P, Q: p.Q } : { t: p.t, P: p.P })), userEv: userEv.map(e => Object.assign({ t: e.t, type: e.type, seed: e.seed, d: e.d }, evMore(e))), auto, autoCut: Object.assign({}, autoCut), logo: logoFile, font: fontFile, syms: userSyms.map(u => ({ name: u.name, dataUrl: u.dataUrl })), soundPath: soundPath || null };
+  return { v: 1, app: 'mall-call', S: g, parts: parts.map(p => (p.Q ? { t: p.t, P: p.P, Q: p.Q } : { t: p.t, P: p.P })), userEv: userEv.map(e => Object.assign({ t: e.t, type: e.type, seed: e.seed, d: e.d }, evMore(e))), auto, autoCut: Object.assign({}, autoCut), logo: logoFile, pool: logoPool, font: fontFile, syms: userSyms.map(u => ({ name: u.name, dataUrl: u.dataUrl })), soundPath: soundPath || null };
 }
 function pushGlobals() {
   setRadio('format', S.format);
   for (const id of ['shape', 'panels', 'repeats', 'loop', 'fps', 'seed', 'range', 'faces', 'panelsIn', 'panelPx', 'gap']) $(id).value = S[id];
+  gradePush();
   $('view3d').checked = S.view3d; $('exView').value = S.exView; if ([...$('exFmt').options].some(o => o.value === S.exFmt)) $('exFmt').value = S.exFmt;
   $('orbit').checked = S.orbit; $('invert').checked = S.invert; $('outFit').value = S.outFit;
   if (!TC_RATES[S.tcRate]) S.tcRate = '25';
@@ -1850,12 +1932,14 @@ async function applyProject(pj) {
   try {
     audio.pause(); S.playing = false;
     for (const k of GLOBAL_KEYS) if (k in pj.S) S[k] = pj.S[k];
+    S.format = 'ring';                                    // the piece is always the ring now; older projects made for a flat screen open on it
     pushGlobals(); undoReset(); tlSel = null; auto = {}; autoCut.base = autoCut.fx = autoCut.logo = autoCut.pil = autoCut.sym = true;
     if (!pj.soundPath && track) { audio.removeAttribute('src'); track = null; soundPath = ''; resetParts(); }
     userSyms = []; symMasks.clear();
     for (const u of (Array.isArray(pj.syms) ? pj.syms : [])) if (u && u.dataUrl) await addSymbol({ name: String(u.name || 'symbol') }, u.dataUrl);
     symBank();
     if (pj.font && pj.font.dataUrl) { const blob = await (await fetch(pj.font.dataUrl)).blob(); await loadFont(new File([blob], pj.font.name)); }
+    logoPool = (Array.isArray(pj.pool) ? pj.pool : []).filter(q => q && q.dataUrl).map(q => ({ name: String(q.name || 'logo'), dataUrl: q.dataUrl }));
     if (pj.logo && pj.logo.dataUrl) { const blob = await (await fetch(pj.logo.dataUrl)).blob(); await loadLogo(new File([blob], pj.logo.name, { type: blob.type })); }
     let missing = '';
     if (pj.soundPath && window.nativeApp) {
@@ -1946,6 +2030,12 @@ window.__selfTest = async () => {
     r.restored = r.restored && editState() === base;
     r.tc = tcAt(0) + ' ' + tcString(parseTc('01:00:00:00', TC_RATES['29.97']) + 1800, TC_RATES['29.97']);
     r.rows = tlRows().length; r.tlHeight = $('tl').height;
+    { const lum = () => { const d = main.g.getImageData(0, 0, stage.width, stage.height).data; let lit = 0, dim = 0; for (let i = 0; i < d.length; i += 40) { if (d[i] > 200) lit++; else if (d[i] > 8) dim++; } return [lit, dim]; };
+      tau = score.D * 0.3; paint(); const a = lum(); S.gCon = 2.4; S.gBlack = 0.35; gradeSet(); paint(); const b = lum(); S.gCon = 1; S.gBlack = 0; gradeSet();
+      // and on a canvas that is not on the page, the way an export draws
+      const oc = document.createElement('canvas'); oc.width = oc.height = 8; const og = oc.getContext('2d'); og.fillStyle = 'rgb(60,60,60)'; og.fillRect(0, 0, 8, 8);
+      S.gCon = 2.4; S.gBlack = 0.35; gradeSet(); gradeFrame(oc); const px = og.getImageData(4, 4, 1, 1).data[0]; S.gCon = 1; S.gBlack = 0; gradeSet();
+      r.grade = b[1] < a[1] * 0.7 && a[0] + a[1] > 20 && px < 10; if (!r.grade) r.gradeWhy = [a, b, px]; }
     if (window.nativeApp && window.nativeApp.libSave) {     // two versions of a project into the library, then the first one back
       $('libName').value = 'Smoke test'; $('look-chunky').click(); await libSave('first');
       $('look-wire').click(); const two = await libSave('second');
@@ -1974,13 +2064,14 @@ symBank();
 /*__OUTPUT__*/
 /*__RING__*/
 /*__UI__*/
+/*__WORK__*/
 /*__LIBRARY__*/
 
 // Used by the app's export check (MALLCALL_EXPORT_TEST): a short piece through the real export, flat or as the ring in 3D.
 window.__exportTest = async (fmt, ringView) => {
   const set = (id, v) => { $(id).value = v; $(id).dispatchEvent(new Event('change')); };
   set('loop', '4'); $('tcStart').value = '01:00:00:00'; $('tcStart').dispatchEvent(new Event('change'));
-  if (ringView) { $('fmtRing').checked = true; $('fmtRing').dispatchEvent(new Event('change')); set('faces', '2'); set('panelsIn', '24'); set('exView', ringView); }
+  if (ringView) { set('faces', '2'); set('panelsIn', '24'); set('exView', ringView); }
   if (![...$('exFmt').options].some(o => o.value === fmt)) return { failed: 'format ' + fmt + ' is not offered' };
   set('exFmt', fmt);
   $('save').click();

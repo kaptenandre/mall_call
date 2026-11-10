@@ -243,6 +243,7 @@ ipcMain.handle('lib-pick-root', async () => {
   await fsp.writeFile(libFile(), JSON.stringify({ root: r.filePaths[0] }), 'utf8');
   return r.filePaths[0];
 });
+ipcMain.handle('lib-reveal', async (event, name) => { const root = await libRoot(), dir = path.join(root, safeName(name)); await fsp.mkdir(root, { recursive: true }); shell.openPath(name && fs.existsSync(dir) ? dir : root); return true; });
 ipcMain.handle('lib-list', async () => {
   const root = await libRoot(), out = [];
   let names = [];
