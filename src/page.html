@@ -192,8 +192,10 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 .montop{display:flex;gap:0;min-height:0}
 .monleft{flex:1 1 0;min-width:0;display:flex;flex-direction:column;min-height:0}
 .monleft .ring3d{flex:1 1 0;min-height:60px;height:auto}
-.pilmon{flex:none;display:flex;flex-direction:column;border:1px solid var(--rule);border-left:0;background:var(--panel);min-height:0}
-.pilmon canvas{display:block;flex:1 1 0;min-height:0;height:0;width:auto;aspect-ratio:264/384;image-rendering:pixelated;background:#000;align-self:center}
+/* one pillar on its own stands beside everything on the left, top to bottom; S, M, L sets how much of the width it takes */
+.pilmon{flex:none;display:flex;flex-direction:column;border:1px solid var(--rule);background:var(--panel);min-height:0;min-width:0}
+.pilmon canvas{display:block;width:100%;height:auto;min-height:0;max-height:calc(100% - 50px);object-fit:contain;aspect-ratio:264/384;image-rendering:pixelated;background:#000}
+.maincol{min-width:0}
 .pilhead,.pilfoot{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:3px 5px;font:500 10px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
 .pilhead b{font-weight:500;color:var(--ink)}
 .pilfoot{justify-content:space-around}
@@ -209,7 +211,9 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
   body{display:flex;flex-direction:column;overflow:hidden}
   .top{flex:none;padding-top:10px;padding-bottom:9px}
   .app{flex:1 1 0;min-height:0;grid-template-columns:minmax(0,1fr) 5px var(--railw,320px);gap:0;padding:0;align-items:stretch}
-  .stagecol{position:relative;top:0;display:flex;flex-direction:column;min-height:0;padding:10px 12px 8px;overflow:hidden}
+  .stagecol{position:relative;top:0;display:flex;flex-direction:row;gap:8px;min-height:0;padding:10px 12px 8px;overflow:hidden}
+  .maincol{flex:1 1 0;display:flex;flex-direction:column;min-height:0}
+  .pilmon{width:var(--pilw,36%)}
   .montop{flex:1 1 0;min-height:150px}
   .stage{flex:none;min-height:0}
   .stage.ring canvas{height:clamp(44px,11vh,130px)}
@@ -241,6 +245,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 <main class="app">
   <section class="stagecol">
+    <div class="maincol">
     <div class="lookflash" id="lookFlash" aria-live="polite"></div>
     <pre class="stats" id="stats" hidden></pre>
     <div class="montop">
@@ -248,11 +253,6 @@ body.rendering .rail fieldset { opacity: .55; }
       <div class="views" id="views" hidden><span>View</span></div>
         <canvas id="ring3d" class="ring3d" aria-label="The ring in 3D. Drag to turn, scroll to move in and out." hidden></canvas>
       <div class="stage wide" id="stageWrap"><canvas id="stage" width="1920" height="1080" aria-label="Preview"></canvas></div>
-      </div>
-      <div class="pilmon" id="pilMon">
-        <div class="pilhead"><button type="button" id="pilPrev" aria-label="Previous pillar" title="Previous pillar">‹</button><b id="pilName">Pillar 1</b><button type="button" id="pilNext" aria-label="Next pillar" title="Next pillar">›</button></div>
-        <canvas id="pilCv" width="264" height="384" aria-label="One pillar on its own: outside on the left, inside on the right"></canvas>
-        <div class="pilfoot"><span>Out</span><span>In</span></div>
       </div>
     </div>
     <div class="tlbar">
@@ -280,6 +280,12 @@ body.rendering .rail fieldset { opacity: .55; }
       <label class="tr">over <input type="number" id="transLen" min="0.2" max="6" step="0.1" value="1"> s</label>
       <p class="note" id="partNote" aria-live="polite"></p>
     </div>
+    </div>
+      <div class="pilmon" id="pilMon">
+        <div class="pilhead"><button type="button" id="pilPrev" aria-label="Previous pillar" title="Previous pillar">‹</button><b id="pilName">Pillar 1</b><button type="button" id="pilSize" aria-label="Pillar monitor size" title="Make the pillar monitor smaller or larger">M</button><button type="button" id="pilNext" aria-label="Next pillar" title="Next pillar">›</button></div>
+        <canvas id="pilCv" width="264" height="384" aria-label="One pillar on its own: outside on the left, inside on the right"></canvas>
+        <div class="pilfoot"><span>Out</span><span>In</span></div>
+      </div>
   </section>
 
   <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-label="Drag to make the settings wider or narrower" title="Drag to make the settings wider or narrower"></div>
@@ -532,7 +538,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 33;
+const BUILD = 34;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -1957,6 +1963,13 @@ $('fps').addEventListener('change', e => { S.fps = Number(e.target.value); syncU
 const pilSet = n => { S.pil = ((n % S.panels) + S.panels) % S.panels; touch(); if (!S.playing && !busy) paint(); };
 $('pilPrev').addEventListener('click', () => pilSet((S.pil | 0) - 1));
 $('pilNext').addEventListener('click', () => pilSet((S.pil | 0) + 1));
+{ // how wide the pillar monitor stands, remembered
+  const W = { S: '22%', M: '36%', L: '46%' }, order = ['S', 'M', 'L'];
+  let now = 'M'; try { const k = localStorage.getItem('mallcall-pilw'); if (W[k]) now = k; } catch (e) {}
+  const set = k => { now = k; $('pilMon').style.setProperty('--pilw', W[k]); $('pilMon').style.width = ''; document.querySelector('.stagecol').style.setProperty('--pilw', W[k]); $('pilSize').textContent = k; try { localStorage.setItem('mallcall-pilw', k); } catch (e) {} dispatchEvent(new Event('resize')); if (!S.playing && !busy) paint(); };
+  set(now);
+  $('pilSize').addEventListener('click', () => set(order[(order.indexOf(now) + 1) % 3]));
+}
 // press a pillar on the strips to see that one on its own
 stage.addEventListener('click', e => { const r = stage.getBoundingClientRect(), d = dims(), u = (e.clientX - r.left) / r.width * d.W / d.pw, inside = d.two && (e.clientY - r.top) / r.height > 0.5; pilSet(inside ? Math.round(Math.floor(u) * S.panels / S.panelsIn) : Math.floor(u)); });
 $('pq').addEventListener('change', e => { S.pq = e.target.value; pscale = S.pq === 'auto' ? 1 : Number(S.pq); slowFrames = 0; sizeStage(); touch(); if (!S.playing && !busy) paint(); });
