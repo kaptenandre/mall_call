@@ -87,4 +87,7 @@ function ringFrame() {
   const t = document.createElement('button'); t.type = 'button'; t.textContent = 'Turn'; t.title = 'Walk slowly round the ring while it plays. A 3D film turns too.'; t.setAttribute('aria-pressed', 'false'); t.style.marginLeft = 'auto';
   t.addEventListener('click', () => { ringTurn = !ringTurn; t.setAttribute('aria-pressed', String(ringTurn)); });
   bar.append(t);
+  const st = document.createElement('button'); st.type = 'button'; st.id = 'statsBtn'; st.textContent = 'Stats'; st.title = 'Show how hard the computer is working: time per frame, where it goes, processor and memory'; st.setAttribute('aria-pressed', 'false');
+  st.addEventListener('click', () => { S.stats = !S.stats; statsShow(); touch(); });
+  bar.append(st);
 }

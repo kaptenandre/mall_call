@@ -11,7 +11,7 @@ Object.assign(ICONS, {
   join: ['M2 8h12M5.5 5.5L8 8l-2.5 2.5M10.5 5.5L8 8l2.5 2.5'], loop: ['M3 8a5 5 0 0 1 8.5-3.5L13 6M13 3v3h-3M13 8a5 5 0 0 1-8.5 3.5L3 10M3 13v-3h3'], copy: ['M5 5h8v8H5zM3 11V3h8']
 });
 {
-  const NAMES = { 'Triggers': 'ev1', 'Ring': 'frame', 'Logo file': 'image', 'Sound': 'over', 'Symbols': 'ev5', 'Pillars': 'ev4', 'Base layer': 'ev0', 'Glitch layer': 'ev1', 'Logo layer': 'ev2', 'Variation': 'dice', 'Pixels': 'dots',
+  const NAMES = { 'Player': 'play', 'Palette': 'ev1', 'Ring': 'frame', 'Logo file': 'image', 'Sound': 'over', 'Symbols': 'ev5', 'Pillars': 'ev4', 'Base layer': 'ev0', 'Glitch layer': 'ev1', 'Logo layer': 'ev2', 'Variation': 'dice', 'Pixels': 'dots',
     'Format': 'frame', 'Look': 'sun', 'Playback': 'play', 'Project library': 'folder', 'Timecode': 'ruler', 'Output': 'screen', 'Export': 'down' };
   let shut = {};
   try { shut = JSON.parse(localStorage.getItem('mallcall-shut') || '{}'); } catch (e) {}

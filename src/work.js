@@ -68,5 +68,14 @@ function versTable(name, list) {
     $('versLeft').append(lib);
     if (window.nativeApp.libReveal) { const r = document.createElement('button'); r.type = 'button'; r.className = 'plain'; r.textContent = 'Show the folder'; r.addEventListener('click', () => window.nativeApp.libReveal($('libPick').value || '')); lib.insertBefore(r, $('libNoteP')); }
   } else { const p = document.createElement('p'); p.className = 'note'; p.textContent = 'Versions are kept by the Mac app. In a browser, nothing is saved between visits.'; $('versLeft').append(p); }
+  // Save, always in view: a new version in the library. The first time it asks for a name on the Versions page.
+  const say = t => { $('saveMsg').textContent = t; clearTimeout(say.t); say.t = setTimeout(() => { $('saveMsg').textContent = ''; }, 6000); };
+  $('saveNow').replaceChildren(ic('down'), 'Save');
+  $('saveNow').addEventListener('click', async () => {
+    if (!(window.nativeApp && window.nativeApp.libSave)) { say('Saving versions needs the Mac app'); return; }
+    if (!$('libName').value.trim()) { workShow('versions'); $('libName').focus(); say('Name the project, then save'); return; }
+    const r = await libSave();
+    say(r ? 'Saved ' + r.name + ' v' + r.n : 'Not saved, see Versions');
+  });
   workShow('edit');
 }

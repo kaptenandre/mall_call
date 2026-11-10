@@ -24,6 +24,7 @@ async function main() {
     dir: root, name: NAME, out: path.join(root, 'dist'), overwrite: true, prune: true,
     platform: process.platform, arch: process.arch,
     appBundleId: 'local.mall-call', appCategoryType: 'public.app-category.video',
+    extendInfo: { NSMicrophoneUsageDescription: 'Mall Call listens to a sound input to follow timecode from a lighting desk.' },
     icon: fs.existsSync(icns) ? icns : undefined,
     ignore: p => p !== '' && !keep.some(k => p === k || p.startsWith(k + '/'))
   });

@@ -31,7 +31,7 @@ function ic(name) {
 }
 // a button that shows an icon; what it does stays readable as its label and tooltip
 function setIcon(btn, name, label) { if (btn.dataset.ic === name) return; btn.dataset.ic = name; btn.replaceChildren(ic(name)); btn.setAttribute('aria-label', label); btn.title = label; }
-let tlSel = null, tlDrag = null, tlSnap = true, tlHeadSig = '', tlInspSig = '';
+let tlSel = null, tlDrag = null, tlSnap = true, tlHeadSig = '', tlInspSig = '', tlDropT = null;      // tlDropT: where something dragged from the palette would land
 
 // the slider behind a setting: its range as a 0..1 position, and the maps between position and value
 function aRange(key) {
@@ -252,6 +252,7 @@ function drawTimeline() {
     if (tlSel.kind === 'ev') { const r = rows[3 + layerOf(tlSel.e.k)]; for (const [x, w] of clipRects(tlSel.e, W)) g.strokeRect(x, r.y + 3, w, r.h - 8); }
     else { const r = rows.find(q => q.key === tlSel.key); if (r) { const R = aRange(r.key), y = r.y + r.h - 5 - clamp01((R.back(tlSel.k.v) - R.lo) / (R.hi - R.lo)) * (r.h - 10); g.strokeRect(t2x(tlSel.k.t) - 5, y - 5, 10, 10); } }
   }
+  if (tlDropT !== null) { const dx = Math.round(t2x(tlDropT)); g.fillStyle = S.tint; for (let y = 0; y < H; y += 6) g.fillRect(dx, y, 2, 3); g.fillRect(dx - 4, 0, 10, 3); }
   const x = Math.round(t2x(tau));
   g.fillStyle = '#fff'; g.fillRect(x, 0, 1.5, H); g.fillRect(x - 3, 0, 7.5, 4);
   c.setAttribute('aria-valuenow', String(Math.round(tau / D * 100)));
@@ -410,6 +411,32 @@ function tlInsp() {
     else if (h.kind === 'empty' && h.row.kind === 'parts') splitAt(t);
     else return;
     syncUI(); tlInsp();
+  });
+  // things dragged out of the palette land on the timeline at the time under the pointer, snapped to the sound
+  const carried = e => e.dataTransfer && [...e.dataTransfer.types].includes(DRAG_TYPE);
+  tl.addEventListener('dragover', e => {
+    if (!carried(e) || busy) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = 'copy';
+    const [x] = pos(e), t = Math.min(score.D - 0.01, Math.max(0, tlSnapT(x2t(x), e)));
+    if (t !== tlDropT) { tlDropT = t; if (!S.playing) paint(); }
+  });
+  tl.addEventListener('dragleave', () => { if (tlDropT !== null) { tlDropT = null; if (!S.playing && !busy) paint(); } });
+  tl.addEventListener('drop', e => {
+    if (!carried(e) || busy) return;
+    e.preventDefault(); e.stopPropagation();
+    const [x] = pos(e), t = Math.min(score.D - 0.01, Math.max(0, tlSnapT(x2t(x), e)));
+    tlDropT = null;
+    let d; try { d = JSON.parse(e.dataTransfer.getData(DRAG_TYPE)); } catch (err) { return; }
+    undoMark();
+    if (d.look && LOOKS[d.look]) {                          // a look goes onto the part it was dropped on
+      const i = partIdx(t);
+      savePart(); Object.assign(parts[i].P, LOOKS[d.look]);
+      if (i === sel && !face) Object.assign(S, parts[i].P);
+      pushAll(); syncUI(); lookFlash(d.look + ' on ' + partName(i));
+    } else if (d.type in EV) {
+      const c = mkEv(t, d.type, Math.floor(Math.random() * 1e6), null, d.more);
+      userEv.push(c); tlSel = { kind: 'ev', e: c }; mergeEv(); syncUI(); tlInsp();
+    }
   });
   tl.addEventListener('wheel', e => {
     const [x] = pos(e);

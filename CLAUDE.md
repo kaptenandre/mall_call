@@ -14,7 +14,7 @@ npm run dist     # package and ad-hoc sign dist/Mall Call-darwin-arm64/Mall Call
 
 Raise `BUILD` in `src/page.html` by one with every push. It shows in the page header ("build 12") and is how the user tells whether the app has updated.
 
-Run `npm run smoke` and `npm test` after every change. A clean smoke run has `"errors":[]`, `"roundTrip":true`, `"restored":true`, `"timeline":true`, `"type":true`, `"grade":true`, `"library":true`, `"h264":true`.
+Run `npm run smoke` and `npm test` after every change. A clean smoke run has `"errors":[]`, `"roundTrip":true`, `"restored":true`, `"timeline":true`, `"type":true`, `"ltcLoop":true`, `"grade":true`, `"library":true`, `"h264":true`.
 
 On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts/build.js && xvfb-run -a npx electron . --smoke --no-sandbox`. `"aac":false` is expected there.
 
@@ -27,6 +27,7 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 - `src/ui.js`: the interface pass over the rail: an icon on every section name, explaining notes folded behind an i, sections that shut (remembered). Notes with `aria-live` report things and stay in view. Inlined at `/*__UI__*/`. The user wants icons in place of text wherever a picture says it.
 - `src/work.js`: the workspaces (Edit, Media, Versions), the media pool and the version history page. Inlined at `/*__WORK__*/`.
 - `src/library.js`: the project library in the rail. Inlined at `/*__LIBRARY__*/`.
+- `src/player.js`: the Stats box, and the player's sound plumbing: music out to a chosen device, LTC timecode out as sound, LTC timecode in from an input. Inlined at `/*__PLAYER__*/`.
 - `src/output.js`: the clean output window and the timecode settings. Inlined at `/*__OUTPUT__*/`.
 - `scripts/test.js`: node checks for the two files with no DOM.
 - `src/page.html`: interface, the three layer fields (`baseField`, `fxField`, `logoField`), the five drawing styles (`DRAW.rods`, `streaks`, `ascii`, `ridge`, `dither`), `Renderer`, export, parts, trigger pad, project files. The engine is inlined at the `/*__SCORE__*/` marker.
@@ -56,6 +57,10 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 - **The window is a shell that does not scroll** (above 880 px wide): the monitor, the timeline and the part controls keep their place on the left, and only the rail of settings scrolls. The rail's width is dragged with the splitter and remembered; it lays itself out in one, two or three columns as it fits. The trigger pad lives at the top of the rail. Short windows squeeze the timeline and the strips so the 3D view keeps some room.
 - **The preview only paints when it must**: at the piece's frame rate while playing, and when something changes while paused (plus a slow safety repaint). It used to repaint 60 times a second even standing still, which made scrolling lag. `S.pq` is the preview size: auto, full, half or quarter. Anything that changes the picture while paused must call `paint()` itself.
 - **Parts have names** (`parts[i].name`, typed in the part bar; `partName(i)` falls back to the number). Split by sound names them Intro, Build, Drop, Quiet, Back in.
+- **Performance, as measured** (2026-11, headless Linux with software graphics, so only the proportions mean anything): of about 24 ms a frame at 3840 x 768, about 23 ms is drawing the layers. The 3D view, the pillar monitor, the grade and the timeline together are under 1 ms. Inside the layers the cost is working out each cell's value in JavaScript (`logoField`, `fxField`), not the canvas calls: gathering the cells by brightness and filling each step once (`litBegin`, `litEnd`) only took the logo layer from 19 to 14 ms. A smaller preview does not help, because the number of cells stays the same. So the real gain is moving the fields and styles to the GPU as shaders: that is the next big job, and it should start from numbers taken on the user's Mac with the Stats box. Stats (a button on the view bar) shows time per frame and where it goes, the preview rate, and in the Mac app processor use and memory (`metrics` in `main.js`).
+- **Player mode** (playing straight out of the app, the "welcome extra"): the Player section sends the music to a chosen output, sends timecode as LTC sound to another (`plOutStart`: blocks of five frames queued a little ahead, realigned on seek or drift, silent when paused), and can follow LTC from an input (`plInStart`, `plChase`: the desk leads, the piece and music follow, and stop when the timecode stops). Smoke loops LTC out into LTC in through the real audio graph (`ltcLoop`). A level meter sits by the timecode readout (`vuFrame`), read off the sound file at the playhead.
+- **The palette is dragged, not played.** The user does not want to trigger things with buttons; everything is programmed. The clip buttons, the symbols in the bank and the looks can all be dragged onto the timeline (`dragOut`, and the `drop` handler in `timeline.js`): a clip lands at the time under the pointer, snapped to the nearest hit, and a look lands on the part it is dropped on. A press still drops at the playhead.
+- The few numbers that matter sit small by the level meter at the top right (`#mini`): preview rate, milliseconds a frame, and in the Mac app processor and memory. They turn amber when a frame takes longer than its share. The Stats button gives the full breakdown.
 - **The output grade** (`gGain`, `gCon`, `gGam`, `gBlack`) is the last thing done to the frame, in the preview, the output window and every export (`gradeFrame`, an SVG filter). It exists because the screens are see-through LED mesh, where dim grey pixels read as haze: contrast and the black floor push them to black.
 - The looks on the trigger pad show which one is in force, on the button and in the line under the monitor.
 - **The ring has two faces.** `S.faces` 1 or 2, `S.panels` outside and `S.panelsIn` inside, `S.panelPx` for a panel's pixel width (0 picks one). With two faces the frame holds two strips: outside on top, inside under it, both from the left (`dims`, `drawFaces`). Each part says what the inside shows, `P.inner`: `same`, `mirror`, `off`, or `own`, which keeps a second set of settings `Q` beside `P`. `face` is which one the controls edit; `PAt(t, face)` reads it. A clip can play on both faces, the outside or the inside (`e.face` 0, 1, 2). The inside is only rendered separately when it really differs. The ring is pillars with air between them: `S.gap` is that air in pillar widths. With it set, each layer's field is as wide as the whole ring, air included, and every pillar is a window onto its own stretch (`Renderer.draw`), so a sweep travels at the right speed and the logo keeps its shape across pillars. The frame that goes out still holds only the pillars, packed side by side. All of these numbers are guesses until the real ring is known, which is why they are settings.
@@ -72,6 +77,7 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 - **Keys** animate a setting over time (`auto[key] = [{ t, v, c }]`). `PAt(t)` gives the settings in force at a time: the part's, with animated ones read off their keys. Use `PAt`, never `parts[...].P`, when drawing. Settings that change the schedule (How often, How much, Chaos, Easing) and Logo size are not animatable.
 - Timecode: the piece has a rate and a start timecode (`S.tcRate`, `S.tcStart` in frames) so the ruler reads like the lighting desk.
 - Export renders every frame offline. MP4 goes through WebCodecs and `mp4-muxer` in the page. ProRes 422 HQ, ProRes 4444 and HAP go through ffmpeg in the Mac app (`ff-start`, `ff-frame`, `ff-end` in `main.js`): the page sends raw frames, ffmpeg adds the sound from the sound file's path and writes the start timecode into the .mov. On a ring, an export can film the flat frame (for mapping) or the 3D view as it stands (`S.exView`, `exSource`).
+- **Saving**: the Save button in the header, and Cmd+S, save a new version of the project into the library (the first time it sends the user to Versions to name it). The session is also kept by itself between launches (`autosave`). File > Save as a File writes a single `.mallcall` file anywhere.
 - **The project library** is how projects get into the cloud with their assets and history. The app keeps a library folder (iCloud Drive's `Mall Call` folder when iCloud Drive exists, else Documents; the user can point it anywhere, such as Dropbox). Each project is a folder: `versions/0001.json`, `0002.json` and so on are whole projects with the logo and font inside, and `assets/` holds the sound, copied in once. Every save writes a new version and never overwrites one (`lib-save`, `lib-open`, `lib-versions` in `main.js`). There is no server and no account: syncing is left to the folder.
 - A font of the user's own for Type clips is dropped in as a file and kept in the project (`loadFont`, `fontFile`).
 
@@ -112,7 +118,8 @@ Only the page updates this way. A change to `main.js`, `preload.js`, `update.js`
 - Pillar patterns, part transitions, the At once control and the new Type modes have been seen as still frames in Chromium. None of them has been judged in motion.
 - The library is checked in smoke without a sound (two versions saved, the first reopened). Copying a sound file into a project, and the folder living in iCloud Drive or Dropbox, are untried.
 - The shell layout has been looked at in Chromium at 1280 x 720, 1512 x 945 and 2560 x 1300. Whether scrolling is smooth again on the Mac is unknown.
-- LTC and MTC are tested as maths only (encode, decode, round trip). No audio or MIDI device is wired up.
+- LTC out and in are tested looped back inside the app, with no sound device. Real outputs and inputs, the macOS microphone prompt, choosing devices, and a real lighting desk are all untried. MTC is maths only.
+- Performance on the Mac has not been measured. The numbers under How it works are from software graphics.
 
 - On macOS (Apple silicon) the smoke check passes with H.264 and AAC, and the packaged app builds and launches. Nobody has looked closely at the window yet, so the interface itself is unchecked on the Mac.
 - Save and open dialogs and a real export have not been exercised by hand.
@@ -129,9 +136,10 @@ Kept current so a new session can pick up without the old conversation. Update i
 
 Asked for and not done yet, newest first:
 
-1. The user wrote "få med poser.global också" while asking for the layout work. It is not clear what that means; ask.
-2. Icons on the trigger pad, if they want them.
-3. The real room from Vectorworks in the 3D view: waiting for an OBJ export from their collaborator.
+1. GPU rendering for performance. Measured first (see Performance under How it works); the port of the fields and styles to shaders is not started. Ask the user for a screenshot of the Stats box on their Mac before starting.
+2. The user wrote "få med poser.global också" while asking for the layout work. It is not clear what that means; ask.
+3. Icons on the trigger pad, if they want them.
+4. The real room from Vectorworks in the 3D view: waiting for an OBJ export from their collaborator.
 
 ## Next, roughly in order
 
