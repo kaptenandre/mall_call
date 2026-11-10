@@ -456,6 +456,7 @@ body.rendering .rail fieldset { opacity: .55; }
       <label class="row" for="loop"><span>Loop length</span><select id="loop"><option value="4">4 s</option><option value="8" selected>8 s</option><option value="16">16 s</option></select></label>
       <label class="row" for="fps"><span>Frame rate</span><select id="fps"><option value="25">25 fps</option><option value="30" selected>30 fps</option><option value="50">50 fps</option><option value="60">60 fps</option></select></label>
       <label class="row" for="pq"><span>Preview</span><select id="pq"><option value="auto">Full, drops to half if slow</option><option value="1">Always full size</option><option value="0.5">Half size, lighter</option><option value="0.25">Quarter size, lightest</option></select></label>
+      <label class="check" for="gpu"><input type="checkbox" id="gpu" checked> Draw on the graphics card (the logo layer so far)</label>
       <button type="button" class="plain" id="play">Pause</button>
     </fieldset>
 
@@ -540,14 +541,14 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 36;
+const BUILD = 37;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
 
 const STYLES = ['rods', 'streaks', 'ascii', 'ridge', 'dither'];
 const STYLE_NAMES = { rods: 'LED rods', streaks: 'Light streaks', ascii: 'ASCII', ridge: 'Ridge lines', dither: 'Dither' };
-const S = { cleanEnds: true, format: 'ring', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.4, size: 0.78, invert: false,
+const S = { gpu: true, cleanEnds: true, format: 'ring', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.4, size: 0.78, invert: false,
   loop: 8, fps: 30, playing: true, seed: 1,
   baseAmt: 0.45, baseStyle: 'dither', baseDen: 0.304,
   logoEach: false, outline: false, symAmt: 0.3, pilAmt: 0.4, busy: 0.4, trans: 'cut', transLen: 1, glitch: 0.7, lines: 0.8, lineMode: 1, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxAmt: 0.4, fxStyle: 'rods', fxDen: 0.784,
@@ -1124,8 +1125,11 @@ function litShape(p, x, y, w, h) {
   else if (SHAPE === 1) { const cx = x + w / 2, cy = y + h / 2, rx = Math.max(0.6, w / 2); p.moveTo(cx + rx, cy); p.ellipse(cx, cy, rx, Math.max(0.6, h / 2), 0, 0, TAU); }
   else { p.moveTo(x + w / 2, y - h * 0.1); p.lineTo(x + w * 1.1, y + h / 2); p.lineTo(x + w / 2, y + h * 1.1); p.lineTo(x - w * 0.1, y + h / 2); p.closePath(); }
 }
+let NOLIT = false;                      // measuring only: skip the drawing and keep the sums
+window.__bench = v => { if (v !== undefined) NOLIT = !!v; return JSON.parse(JSON.stringify(PERF)); };
 function lit(g, x, y, w, h, I, tint) {
   if (I < 0.03) return;
+  if (NOLIT) return;
   if (LIT) {
     const i = Math.max(1, Math.round(Math.min(1, I) * LIT_N));
     LIT.tint = tint; litShape(LIT.a[i] || (LIT.a[i] = new Path2D()), x, y, w, h);
@@ -1328,7 +1332,7 @@ class Renderer {
       const lc = this.lay[L], q = this.lg[L];
       if (lc.width !== W || lc.height !== H) { lc.width = W; lc.height = H; }
       q.globalCompositeOperation = 'source-over'; q.globalAlpha = 1; q.fillStyle = '#000'; q.fillRect(0, 0, W, H);
-      let f;
+      let f, over = false;
       const Wf = o.gapN ? W * (1 + o.gap) : W;             // with air between the pillars the picture is as wide as the whole ring, air included
       // and each pillar is a window onto its own stretch of that picture
       const gN = o.gapN, gk = 1 / (1 + (o.gap || 0)), goff = (1 - gk) / 2, win = u => { const x = u * gN, i = Math.floor(x); return (i + goff + (x - i) * gk) / gN; };
@@ -1344,15 +1348,21 @@ class Renderer {
           o = Object.assign({}, o, { wobA: 0, wobB: 0, travel: 0, outline: false, density: Math.max(o.density, 0.8) });
         }
         const each = o.logoEach && PN > 1, a = !st.lv ? null : each ? logoField(W, H, t, Object.assign({}, o, { repeats: PN, travel: 0 }), sL) : wrap(logoField(Wf, H, t, o, sL));
-        const fs = [a];
+        // the logo on the graphics card when it can be; symbols are then drawn the old way and laid over it
+        const onGpu = this.gpu && S.gpu !== false && st.lv && gpuLogo(q, W, H, Wf, t, o, sL, each, PN, st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style);
+        const fs = onGpu ? [] : [a];
         if (st.syN && !st.clean) { const w = symField(Wf, H, o, st, false, PN), pp = PN > 1 ? symField(W, H, o, st, true, PN) : null; fs.push(w ? wrap(w) : null, pp); }
         const live = fs.filter(Boolean);
-        f = live.length === 1 ? live[0] : { M: (u, v) => { let m = 0; for (let i = 0; i < live.length; i++) { const x = live[i].M(u, v); if (x > m) m = x; } return m; }, B: (u, v) => { let m = 0; for (let i = 0; i < live.length; i++) { const x = live[i].B(u, v); if (x > m) m = x; } return m; } };
+        over = onGpu;
+        f = !live.length ? null : live.length === 1 ? live[0] : { M: (u, v) => { let m = 0; for (let i = 0; i < live.length; i++) { const x = live[i].M(u, v); if (x > m) m = x; } return m; }, B: (u, v) => { let m = 0; for (let i = 0; i < live.length; i++) { const x = live[i].B(u, v); if (x > m) m = x; } return m; } };
       }
       const tl0 = performance.now();
-      litBegin();
-      DRAW[L < 3 && st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style](q, W, H, t, o, f.M, f.B);
-      litEnd(q);
+      if (f) {
+        let d = q;
+        if (over) { const c = this.tmp || (this.tmp = document.createElement('canvas')); if (c.width !== W || c.height !== H) { c.width = W; c.height = H; } d = this.tq || (this.tq = c.getContext('2d', { alpha: false })); d.globalCompositeOperation = 'source-over'; d.globalAlpha = 1; d.fillStyle = '#000'; d.fillRect(0, 0, W, H); }
+        litBegin(); DRAW[L < 3 && st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style](d, W, H, t, o, f.M, f.B); litEnd(d);
+        if (over) { q.globalCompositeOperation = 'lighten'; q.globalAlpha = 1; q.drawImage(this.tmp, 0, 0); q.globalCompositeOperation = 'source-over'; }      // the cells line up, so the brighter of the two is what one drawing would give
+      }
       PERF.layer[L] += (performance.now() - tl0 - PERF.layer[L]) * 0.15;
       const lm = L === 1 ? st.pmFx : L >= 2 ? st.pmLogo : null;          // a pattern that hides only this layer, pillar by pillar
       if (lm) { q.globalCompositeOperation = 'source-over'; q.fillStyle = '#000'; const pw = W / PN; for (let i = 0; i < PN; i++) { const a = 1 - lm[i]; if (a > 0.01) { q.globalAlpha = Math.min(1, a); q.fillRect(Math.round(i * pw), 0, Math.round((i + 1) * pw) - Math.round(i * pw), H); } } q.globalAlpha = 1; }
@@ -1445,6 +1455,7 @@ function rebuildScore(eventsOnly) {
 }
 
 const stage = $('stage'), main = new Renderer(stage);
+main.gpu = true;                         // the preview may draw on the graphics card; exports keep to the canvas version
 let tau = 0, last = performance.now(), busy = false, slowFrames = 0, pscale = 1, tlCache = null, fpsNow = 60;
 function sizeStage() {
   const { W, H } = dims();
@@ -1547,7 +1558,7 @@ function paint() {
   sizeStage();
   const two = S.format === 'ring' && S.faces === 2, P = PAt(tau, face);
   const T0 = performance.now();
-  if (two) { if (!mainRig) mainRig = mkRig(stage, ST); drawFaces(mainRig, tau, fpsNow); }
+  if (two) { if (!mainRig) { mainRig = mkRig(stage, ST); mainRig.a.gpu = mainRig.b.gpu = true; } drawFaces(mainRig, tau, fpsNow); }
   else renderOne(main, ST, PAt(tau, 0), tau, fpsNow);
   const T1 = performance.now();
   gradeFrame(stage);
@@ -1996,6 +2007,7 @@ $('pilNext').addEventListener('click', () => pilSet((S.pil | 0) + 1));
 }
 // press a pillar on the strips to see that one on its own
 stage.addEventListener('click', e => { const r = stage.getBoundingClientRect(), d = dims(), u = (e.clientX - r.left) / r.width * d.W / d.pw, inside = d.two && (e.clientY - r.top) / r.height > 0.5; pilSet(inside ? Math.round(Math.floor(u) * S.panels / S.panelsIn) : Math.floor(u)); });
+$('gpu').addEventListener('change', e => { S.gpu = e.target.checked; touch(); if (!S.playing && !busy) paint(); });
 $('cleanEnds').addEventListener('change', e => { S.cleanEnds = e.target.checked; rebuildScore(true); syncUI(); });
 $('pq').addEventListener('change', e => { S.pq = e.target.value; pscale = S.pq === 'auto' ? 1 : Number(S.pq); slowFrames = 0; sizeStage(); touch(); if (!S.playing && !busy) paint(); });
 $('play').addEventListener('click', () => setPlaying(!S.playing));
@@ -2186,7 +2198,7 @@ $('save').addEventListener('click', async () => {
 });
 
 /* ---------- project files (Mac app) ---------- */
-const GLOBAL_KEYS = ['cleanEnds', 'format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap', 'gGain', 'gCon', 'gGam', 'gBlack', 'pq', 'pil', 'stats'];
+const GLOBAL_KEYS = ['gpu', 'cleanEnds', 'format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap', 'gGain', 'gCon', 'gGam', 'gBlack', 'pq', 'pil', 'stats'];
 let loadingProject = false, saveTimer = 0;
 function getProject() {
   savePart();
@@ -2196,7 +2208,7 @@ function getProject() {
 function pushGlobals() {
   setRadio('format', S.format);
   for (const id of ['shape', 'panels', 'repeats', 'loop', 'fps', 'seed', 'range', 'faces', 'panelsIn', 'panelPx', 'gap']) $(id).value = S[id];
-  gradePush(); $('pq').value = S.pq; statsShow(); $('cleanEnds').checked = S.cleanEnds !== false;
+  gradePush(); $('pq').value = S.pq; statsShow(); $('cleanEnds').checked = S.cleanEnds !== false; $('gpu').checked = S.gpu !== false;
   $('view3d').checked = S.view3d; $('exView').value = S.exView; if ([...$('exFmt').options].some(o => o.value === S.exFmt)) $('exFmt').value = S.exFmt;
   $('orbit').checked = S.orbit; $('invert').checked = S.invert; $('outFit').value = S.outFit;
   if (!TC_RATES[S.tcRate]) S.tcRate = '25';
@@ -2272,6 +2284,7 @@ if (window.nativeApp) {
 // Used by the app's own start-up check: one frame, the encoders, and a project round trip.
 window.__typeShot = (mode, age, warp) => { userEv = userEv.filter(e => e.k !== 13); S.typeWarp = warp || 0; tau = 1; trigger('type', null, { mode }); const e = userEv[userEv.length - 1]; e.txt = 'MALL CALL'; e.d = 3; e.size = 0.5; mergeEv(); S.playing = false; tau = 1 + age; paint(); return stage.toDataURL('image/png'); };
 window.__cleanShot = on => { userEv = userEv.filter(e => !e.clean); if (on) { tau = 2; trigger('show', null, { clean: true }); } S.playing = false; tau = 3; paint(); return stage.toDataURL('image/png'); };
+window.__frameAt = (t, gpu, set) => { if (set) { Object.assign(S, set); savePart(); rebuildScore(true); } S.gpu = gpu; S.playing = false; tau = t; const n = GPU.used; paint(); return [stage.toDataURL('image/png'), GPU.used - n]; };      // one frame either way, for comparing the two
 window.__selfTest = async () => {
   const r = { native: !!window.nativeApp, muxer: !!window.Mp4Muxer, monoFont: !!(document.fonts && document.fonts.check('500 20px "DM Mono"')) };
   try { r.h264 = (await VideoEncoder.isConfigSupported({ codec: 'avc1.640034', width: 1920, height: 1080, bitrate: 8e6, framerate: 30 })).supported; } catch (e) { r.h264 = 'error: ' + e.message; }
@@ -2373,6 +2386,7 @@ symBank();
 /*__OUTPUT__*/
 /*__PLAYER__*/
 /*__RING__*/
+/*__GPU__*/
 /*__UI__*/
 /*__WORK__*/
 /*__DIAG__*/

@@ -13,6 +13,7 @@ function diagNow() {
     build: BUILD, at: new Date().toISOString(), started: DIAG.started, macApp: !!window.nativeApp, shell: window.nativeApp ? Object.keys(window.nativeApp).length + ' bridge calls' : 'none',
     screen: innerWidth + 'x' + innerHeight + ' @' + (window.devicePixelRatio || 1), agent: navigator.userAgent.replace(/^.*?\((.*?)\).*?(Chrome\/[\d.]+).*?(Electron\/[\d.]+)?.*$/, '$1 $2 $3').trim(),
     playing: S.playing, time: r(tau) + ' / ' + r(score.D), sound: track ? track.name + ' ' + r(track.ab.duration) + ' s' : 'none',
+    gpu: S.gpu === false ? 'switched off' : GPU.bad ? 'not available: ' + GPU.why : GPU.gl ? 'on, ' + GPU.used + ' layers drawn' : 'not used yet',
     piece: d.W + 'x' + d.H + ' @' + S.fps, preview: stage.width + 'x' + stage.height + ' at ' + Math.round(paintFps) + ' fps (asked ' + S.pq + ')',
     frameMs: r(PERF.all), budgetMs: r(1000 / PREVIEW_FPS()), worstMs: r(DIAG.worst),
     whereMs: { layers: r(PERF.draw), base: r(PERF.layer[0]), glitch: r(PERF.layer[1]), logo: r(PERF.layer[2]), type: r(PERF.layer[3]), grade: r(PERF.grade), monitors: r(PERF.views), timeline: r(PERF.rest) },

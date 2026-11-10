@@ -29,6 +29,7 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 - `src/library.js`: the project library in the rail. Inlined at `/*__LIBRARY__*/`.
 - `src/player.js`: the Stats box, and the player's sound plumbing: music out to a chosen device, LTC timecode out as sound, LTC timecode in from an input. Inlined at `/*__PLAYER__*/`.
 - `src/diag.js`: the app reporting on itself. Inlined at `/*__DIAG__*/`, last, because it uses icons that `ui.js` adds.
+- `src/gpu.js`: drawing on the graphics card (WebGL 2). One fragment shader per moved layer works out the field and draws the style. Inlined at `/*__GPU__*/`. See GPU rendering under the handover.
 - `src/output.js`: the clean output window and the timecode settings. Inlined at `/*__OUTPUT__*/`.
 - `scripts/test.js`: node checks for the two files with no DOM.
 - `src/page.html`: interface, the three layer fields (`baseField`, `fxField`, `logoField`), the five drawing styles (`DRAW.rods`, `streaks`, `ascii`, `ridge`, `dither`), `Renderer`, export, parts, trigger pad, project files. The engine is inlined at the `/*__SCORE__*/` marker.
@@ -145,7 +146,11 @@ A code review of build 31 found 15 faults; build 32 fixes all but one (a smaller
 
 Asked for and not done yet, newest first:
 
-1. GPU rendering. Confirmed as the right fix by numbers from the user's Mac (see above). Plan: keep `stateAt` on the CPU, pass its state to shaders as uniforms, and move `baseField`, `fxField`, `logoField`, `typeField`, `symField` and the five styles to WebGL fragment shaders, one layer at a time, comparing each against the canvas version (export must look the same). Not started.
+1. GPU rendering, started in build 37. Measured first (`window.__bench(true)` skips all canvas drawing and keeps the sums): the layer times do not change at all, so the cost is the script working out each cell, not the canvas. A half-way step with the fields left in script would gain nothing; each layer has to move whole.
+   - Done: the logo layer (`gpuLogo` in `src/gpu.js`): `logoField` with `mkDisp`, the gap windows and one-logo-per-pillar, drawn as Dither (ordered, lines, noise) or LED rods with square pixels. `hash` and `nz` are bit-for-bit in GLSL (uint maths). Compared against the canvas version on eleven states with `window.__frameAt(t, gpu, set)`: identical in ten, 50 pixels apart in one (noise dither). Symbols are still drawn in script and laid over with `lighten`.
+   - It falls back by itself (`gpuLogo` returns false) for the other styles, halftone and diffusion dither, dot and diamond pixels, and when WebGL 2 is missing. Only the preview uses it (`Renderer.gpu`); every export still runs the canvas version. The switch is `S.gpu`, a checkbox in Playback.
+   - Next, in order of what it buys: the glitch layer (`fxField`, the biggest cost on the user's Mac), then base, type and symbols, then the remaining styles (ascii needs a glyph atlas, ridge hides lines behind lines and may stay in script), then compositing, grade and glow in GL so nothing is read back, then exports.
+   - Not known: what it gains on the Mac. Here WebGL is software and reading it back costs more than it saves, so the numbers mean nothing. `PERF.layer[2]` reads 0 when the logo is on the card.
 2. The user wrote "få med poser.global också" while asking for the layout work. It is not clear what that means; ask.
 3. Icons on the trigger pad, if they want them.
 4. The real room from Vectorworks in the 3D view: waiting for an OBJ export from their collaborator.

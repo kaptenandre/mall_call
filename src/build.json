@@ -8,6 +8,7 @@
     ["/*__PLAYER__*/", "src/player.js"],
     ["/*__DIAG__*/", "src/diag.js"],
     ["/*__RING__*/", "src/ring.js"],
+    ["/*__GPU__*/", "src/gpu.js"],
     ["/*__LIBRARY__*/", "src/library.js"],
     ["/*__UI__*/", "src/ui.js"],
     ["/*__WORK__*/", "src/work.js"]
