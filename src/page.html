@@ -225,6 +225,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
   <h1>Mall Call <span id="build" style="color:var(--dim);font-weight:400"></span></h1>
   <nav class="tabs" id="tabs" aria-label="Workspaces"></nav>
   <button type="button" class="savebtn" id="saveNow" title="Save a new version of this project. Nothing is ever written over.">Save</button>
+  <button type="button" class="savebtn" id="reportBtn" style="border-color:var(--rule)" title="Copy a report of how the app is running: timings, settings, anything that went wrong. Paste it to whoever is helping.">Report</button>
   <span class="savemsg" id="saveMsg" aria-live="polite"></span>
 </header>
 
@@ -513,7 +514,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 29;
+const BUILD = 30;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -1408,12 +1409,15 @@ function drawFaces(rig, tf, fps) {
   const d = dims(), k = rig.cv.width / d.W, hs = Math.round(d.Hs * k), wo = Math.round(d.Wo * k), wi = Math.round(d.Wi * k), g = rig.g;
   const size = (c, w, h) => { if (c.width !== w || c.height !== h) { c.width = w; c.height = h; } };
   const P = PAt(tf, 0), mode = P.inner;
-  size(rig.a.cv, wo, hs); renderOne(rig.a, rig.stA, P, tf, fps, 0);
+  // In the preview, when two different faces do not fit in a frame's time, they take turns: each is redrawn every other frame.
+  const own = mode === 'own' || userEv.some(e => e.face), turns = rig === mainRig && own && PERF.all > 1000 / PREVIEW_FPS() && rig.b.cv.width === wi;
+  rig.turn = turns ? !rig.turn : false;
+  size(rig.a.cv, wo, hs); if (!turns || rig.turn) renderOne(rig.a, rig.stA, P, tf, fps, 0);
   g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.fillStyle = '#000'; g.fillRect(0, 0, rig.cv.width, rig.cv.height);
   g.drawImage(rig.a.cv, 0, 0);
   if (mode === 'off') return;
   let src = rig.a.cv;
-  if (mode === 'own' || userEv.some(e => e.face)) { size(rig.b.cv, wi, hs); renderOne(rig.b, rig.stB, mode === 'own' ? PAt(tf, 1) : P, tf, fps, 1); src = rig.b.cv; }   // only drawn twice when the faces really differ
+  if (own) { size(rig.b.cv, wi, hs); if (!turns || !rig.turn) renderOne(rig.b, rig.stB, mode === 'own' ? PAt(tf, 1) : P, tf, fps, 1); src = rig.b.cv; }   // only drawn twice when the faces really differ
   if (mode === 'mirror') { g.save(); g.translate(wi, hs); g.scale(-1, 1); g.drawImage(src, 0, 0, wi, hs); g.restore(); }
   else g.drawImage(src, 0, hs, wi, hs);
 }
@@ -1471,6 +1475,9 @@ function pillarFrame() {
 }
 // Where a frame's time goes, in milliseconds, smoothed: drawing the layers, the grade, the monitors (output, 3D, pillar), the rest (timeline, labels).
 const PERF = { draw: 0, grade: 0, views: 0, rest: 0, all: 0, layer: [0, 0, 0], field: 0, style: 0 };
+// The preview shows at most 30 pictures a second even when the piece is 50 or 60: the eye does not need more to judge it,
+// and the export always renders every frame.
+const PREVIEW_FPS = () => Math.min(30, S.fps);
 let mainRig = null, hudTick = 0, paintFps = 30, paintAt = 0;
 // what a part is called: its own name, or its number
 const partName = i => (parts[i] && parts[i].name) || 'Part ' + (i + 1);
@@ -1526,7 +1533,7 @@ function frame(now) {
       followPart();
     }
     // paint at the piece's own frame rate, not the screen's; standing still, only now and then in case something was missed
-    const every = S.playing ? 1000 / Math.min(60, S.fps) - 3 : 700;
+    const every = S.playing ? 1000 / PREVIEW_FPS() - 3 : 2000;
     if (now - paintAt < every) { requestAnimationFrame(frame); return; }
     if (S.playing && paintAt) paintFps = 0.9 * paintFps + 0.1 * Math.min(120, 1000 / Math.max(1, now - paintAt));
     paintAt = now;
@@ -2264,6 +2271,7 @@ symBank();
 /*__RING__*/
 /*__UI__*/
 /*__WORK__*/
+/*__DIAG__*/
 /*__LIBRARY__*/
 
 // Used by the app's export check (MALLCALL_EXPORT_TEST): a short piece through the real export, flat or as the ring in 3D.

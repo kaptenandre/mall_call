@@ -1,12 +1,13 @@
 /* ---------- stats: how hard the machine is working ---------- */
-let statsSys = null, statsTimer = 0;
+let statsSys = null, statsTimer = 0, miniSys = null;
+const statsSysNow = () => statsSys || miniSys;
 function statsShow() {
   $('stats').hidden = !S.stats; $('statsBtn').setAttribute('aria-pressed', String(!!S.stats));
   clearInterval(statsTimer);
   if (!S.stats) return;
   const tick = async () => {
     if (window.nativeApp && window.nativeApp.metrics) { try { statsSys = await window.nativeApp.metrics(); } catch (e) {} }
-    const f = n => n.toFixed(1).padStart(5), budget = 1000 / Math.min(60, S.fps), d = dims();
+    const f = n => n.toFixed(1).padStart(5), budget = 1000 / PREVIEW_FPS(), d = dims();
     const lines = ['FRAME     ' + f(PERF.all) + ' ms of ' + budget.toFixed(1) + (PERF.all > budget ? '  OVER' : ''),
       ' layers   ' + f(PERF.draw) + '   base ' + PERF.layer[0].toFixed(1) + '  glitch ' + PERF.layer[1].toFixed(1) + '  logo ' + PERF.layer[2].toFixed(1),
       ' grade    ' + f(PERF.grade), ' monitors ' + f(PERF.views), ' timeline ' + f(PERF.rest),
@@ -118,8 +119,8 @@ function plSay() {
 {
   let sys = null, n = 0;
   setInterval(async () => {
-    if (window.nativeApp && window.nativeApp.metrics && n++ % 2 === 0) { try { sys = await window.nativeApp.metrics(); } catch (e) {} }
-    const budget = 1000 / Math.min(60, S.fps), el = $('mini');
+    if (window.nativeApp && window.nativeApp.metrics && n++ % 2 === 0) { try { sys = miniSys = await window.nativeApp.metrics(); } catch (e) {} }
+    const budget = 1000 / PREVIEW_FPS(), el = $('mini');
     const a = (S.playing ? Math.round(paintFps) + ' FPS  ' : 'PAUSED  ') + PERF.all.toFixed(0) + ' MS';
     const b = sys ? 'CPU ' + Math.round(sys.cpu) + '%  ' + Math.round(sys.mem) + ' MB' : performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) + ' MB' : '';
     const t = a + '\n' + b;
