@@ -302,9 +302,12 @@ function buildLoopScore(L, seed, ch) {
 }
 
 /* ---------- three layers: base (rare and big), glitch (lines, chases, debris), logo (loader or appearing) ---------- */
-const EV = { sweep: 0, strobe: 1, flood: 2, blackout: 3, glitch: 4, chase: 5, lines: 6, sparks: 7, bars: 8, blocks: 9, load: 10, show: 11, hide: 12 };
-const EVD = { sweep: 0.9, strobe: 0.6, flood: 0.9, blackout: 0.4, glitch: 0.6, chase: 4, lines: 0.7, sparks: 0.6, bars: 0.6, blocks: 0.6, load: 3, show: 2, hide: 0 };
-const mkEv = (t, type, seed, d) => ({ t, type, k: EV[type], seed: seed | 0, d: d === undefined ? EVD[type] : d });
+const EV = { sweep: 0, strobe: 1, flood: 2, blackout: 3, glitch: 4, chase: 5, lines: 6, sparks: 7, bars: 8, blocks: 9, load: 10, show: 11, hide: 12, type: 13 };
+const EVD = { sweep: 0.9, strobe: 0.6, flood: 0.9, blackout: 0.4, glitch: 0.6, chase: 4, lines: 0.7, sparks: 0.6, bars: 0.6, blocks: 0.6, load: 3, show: 2, hide: 0, type: 2.5 };
+// A Type clip carries its words and how they arrive: txt, mode (slam, typeon, roll, ticker), size and y as parts of the frame height, font.
+const TYPE_NEW = { txt: 'MALL CALL', mode: 'slam', size: 0.5, y: 0.5, font: 'sans' };
+const evMore = e => e.k === 13 ? { txt: e.txt, mode: e.mode, size: e.size, y: e.y, font: e.font } : null;
+const mkEv = (t, type, seed, d, more) => { const e = { t, type, k: EV[type], seed: seed | 0, d: d === undefined || d === null ? EVD[type] : d }; return e.k === 13 ? Object.assign(e, TYPE_NEW, more) : e; };
 
 // The shape of the piece, read off the score once: where it drops, the builds that lead into drops, the quiet stretches,
 // and the moments each band of the spectrum jumps. The automatic cut hangs its clips on these.
@@ -453,7 +456,7 @@ function newState() {
     pn: 0, pHz: false, pp: new Float32Array(12), pc: new Float32Array(12), pL: new Float32Array(12), pI: new Float32Array(12), pE: new Float32Array(12),
     bn: 0, bt: new Int8Array(3), bx: new Float32Array(3), ba: new Float32Array(3), bs: new Int32Array(3),
     lsN: 0, lsX: new Float32Array(2), lsS: new Int32Array(2), chase: 0, chSeed: 0, chI: 1, fxGain: 1, tau: 0,
-    lv: 0, lp: 1, lseed: 0, lsince: 9, sty: new Int8Array(3) };
+    lv: 0, lp: 1, lseed: 0, lsince: 9, sty: new Int8Array(3), tyN: 0, tyE: [null, null], tyX: new Float32Array(2), tyA: new Float32Array(2) };
 }
 // relative weights of the hard glitch states; every section of the piece leans on a different few
 const GW = [0.2, 0.2, 0.22, 0.07, 0.12, 0.1, 0.14, 0.12, 0.12];
@@ -471,13 +474,14 @@ function stateAt(sc, tau, cfg, st) {
   const cv = a => a[h0] + (a[h1] - a[h0]) * hf;
   const pk = cv(sc.pulse);
   // everything scheduled or triggered that is live right now
-  st.bn = 0; st.lsN = 0; st.black = false;
+  st.bn = 0; st.lsN = 0; st.tyN = 0; st.black = false;
   let gX = 0, cz = 0, czSeed = 0, xLo = 0, xMid = 0, xHi = 0, lg = null, lgAge = 1e9, strike = 0;
   const all = sc.all;
   for (let q = 0; q < all.length; q++) {
     const e = all[q];
     let age = tau - e.t;
     if (age < 0) { if (!sc.cyclic) continue; age += D; }
+    if (e.k === 13) { if (age < e.d && st.tyN < 2) { st.tyE[st.tyN] = e; st.tyX[st.tyN] = age / e.d; st.tyA[st.tyN] = age; st.tyN++; } continue; }
     if (e.k >= 10) { if (age < lgAge && !(e.k === 11 && age >= e.d)) { lgAge = age; lg = e; } continue; }   // a Show that has run out hands back to whatever came before it
     if (age >= e.d) continue;
     const x = age / e.d;

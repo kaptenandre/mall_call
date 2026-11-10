@@ -12,7 +12,7 @@ npm test         # node checks for automation curves and timecode maths. Prints 
 npm run dist     # package and ad-hoc sign dist/Mall Call-darwin-arm64/Mall Call.app
 ```
 
-Run `npm run smoke` and `npm test` after every change. A clean smoke run has `"errors":[]`, `"roundTrip":true`, `"restored":true`, `"timeline":true`, `"h264":true`.
+Run `npm run smoke` and `npm test` after every change. A clean smoke run has `"errors":[]`, `"roundTrip":true`, `"restored":true`, `"timeline":true`, `"type":true`, `"h264":true`.
 
 On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts/build.js && xvfb-run -a npx electron . --smoke --no-sandbox`. `"aac":false` is expected there.
 
@@ -41,6 +41,9 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 - Each layer returns how lit a point is, 0 to 1. A style draws that field. The renderer adds the layers, then gain, trails, flash and glow.
 - **The timeline** is where the piece is programmed. Nothing is performed live: the show is pre-programmed and played back. Clips on the three layer lanes are events; the dim ones are the automatic cut (`autoEv`), the filled ones are the user's (`userEv`). `autoCut` (`base`, `fx`, `logo`) switches the automatic cut off per layer, and Bake turns it into user clips.
 - **The automatic cut** (`makeEvents`) hangs its clips on the shape of the track (`makeStructure`: drops, builds, breaks, and the moments bass, mids and highs jump). Base goes to drops first, with a blackout in the breath before one. The glitch lane gets a chase through a build, line volleys that come faster into the drop, and blocks, bars and sparks on their own bands. Breaks are left alone. How many: `baseAmt` and `fxAmt` (Auto clips), per part.
+- **Lines** in the glitch layer move one of two ways (`lineMode`, per part). **Pulse**, the default, follows a reference film the user likes: a rack of twelve parallel bars, each a short lit stretch with a hot middle and tapering tips, that strikes out in length and light within a frame of a hit and sinks back over about half a second, each bar slightly its own. Nothing glides; the stretches stand somewhere else after the next hit. **Slide** is the older full-frame hairlines easing from place to place. The user finds Slide too digital.
+- **Type** clips (`EV.type`, the fourth lane) put words on screen: `txt`, `mode` (slam, typeon, roll, ticker), `size`, `y`, `font`. `typeField` draws them in the logo layer with its style and its glitch. They only come from the user, never from the automatic cut.
+- Glow follows the bass (`st.pulse`) so it reads as light thrown by a hit. Trails are off by default. The user called constant glow and trails the softest part of the look.
 - **Keys** animate a setting over time (`auto[key] = [{ t, v, c }]`). `PAt(t)` gives the settings in force at a time: the part's, with animated ones read off their keys. Use `PAt`, never `parts[...].P`, when drawing. Settings that change the schedule (How often, How much, Chaos, Easing) and Logo size are not animatable.
 - Timecode: the piece has a rate and a start timecode (`S.tcRate`, `S.tcStart` in frames) so the ruler reads like the lighting desk.
 - Export renders every frame offline with WebCodecs and muxes MP4 with `mp4-muxer`.
@@ -49,7 +52,7 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 
 1. Three layers. **Base**: rare and big (sweeps, strobe), only on the strongest hits. **Glitch**: lines, chases, debris, mostly fairly high-res. **Logo** on top: a loader that builds it, or it cutting in sometimes.
 2. The logo never glides or zooms softly. It cuts between poses through a few wrong frames. Movement on the logo is glitch.
-3. Fast ease in and out belongs to the lines in the glitch layer.
+3. Fast ease in and out belongs to the lines in the glitch layer. (2026-11: the user asked for lines that feel analog instead, see Lines under How it works. The eased lines remain as Slide.)
 4. Nothing moves at constant speed. Everything surges and settles (the eased clock `phi`, per-element `swing`, eased chases and loader). If something looks linear, it is a bug.
 5. Glitch is organic: irregular holds, noise-driven tear and slip, never a fixed clock. Avoid visible repetition; variety comes from the seed.
 6. Debris in the glitch layer is driven by its own part of the spectrum: bass, mids, highs.
@@ -74,6 +77,7 @@ Only the page updates this way. A change to `main.js`, `preload.js`, `update.js`
 - The output window works in Chromium. Full screen on a chosen screen (`output-place` in `main.js`) is untried on any machine.
 - The updater is tested against a local stand-in for GitHub on Linux (first fetch, already current, missing branch, offline) and the two real GitHub addresses answer. It has not run in the packaged Mac app.
 - The automatic cut's structure reading is tested on one synthetic track. It has not been judged by eye or ear on real music.
+- Pulse lines and Type clips have been looked at as still frames in Chromium, not judged in motion or on the Mac.
 - LTC and MTC are tested as maths only (encode, decode, round trip). No audio or MIDI device is wired up.
 
 - On macOS (Apple silicon) the smoke check passes with H.264 and AAC, and the packaged app builds and launches. Nobody has looked closely at the window yet, so the interface itself is unchecked on the Mac.
@@ -82,8 +86,10 @@ Only the page updates this way. A change to `main.js`, `preload.js`, `update.js`
 
 ## Next, roughly in order
 
-1. Use it on the Mac for a real session and fix whatever that shows.
-2. ProRes or HAP export through ffmpeg (Homebrew ffmpeg is installed on the main machine), with the start timecode written into the file.
-3. More in the timeline: select and move several clips, copy and paste, loop a range, markers with names.
-4. If wanted: chase LTC or MTC for previewing against the desk (the maths is in `src/timecode.js`; needs Web MIDI and microphone permission handlers in `main.js`).
-5. If wanted: Syphon output. `node-syphon` 1.5.x ships a prebuilt binary and `SyphonMetalServer.publishImageData(data, region, size, flipped)`. Test against Resolume Arena.
+1. Inside and outside of the ring. The piece has two faces. Sometimes they show the same thing, sometimes different things. Needs: the panel count of each face, then a second surface in the format, per-part choice of same or own settings, and both strips in one output frame for mapping.
+2. A 3D preview of the ring. The user's collaborator draws the room in Vectorworks. Plan: show the output on a ring in the app (three.js, bundled), first from the panel numbers alone, then on a model exported from Vectorworks (glTF or OBJ with UVs on the LED faces). Also export that view as a film.
+3. ProRes or HAP export through ffmpeg (Homebrew ffmpeg is installed on the main machine), with the start timecode written into the file.
+4. Use it on the Mac for a real session and fix whatever that shows. Tune the automatic cut and the pulse lines on real music.
+5. More in the timeline: select and move several clips, copy and paste, loop a range, markers with names. Own fonts for Type clips.
+6. If wanted: chase LTC or MTC for previewing against the desk (the maths is in `src/timecode.js`; needs Web MIDI and microphone permission handlers in `main.js`).
+7. If wanted: Syphon output. `node-syphon` 1.5.x ships a prebuilt binary and `SyphonMetalServer.publishImageData(data, region, size, flipped)`. Test against Resolume Arena.

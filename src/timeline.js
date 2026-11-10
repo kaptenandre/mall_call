@@ -5,8 +5,9 @@
 const AKEYS = [['glitch', 'Glitch'], ['lines', 'Lines'], ['chase', 'Chases'], ['bgLo', 'Bass blocks'], ['bgMid', 'Mid bars'], ['bgHi', 'High sparks'], ['wob', 'Wobble'], ['wobSize', 'Wobble size'],
   ['eqAmt', 'EQ strength'], ['trail', 'Trails'], ['glow', 'Glow'], ['pfill', 'Pixel fill'], ['baseDen', 'Base pixels'], ['fxDen', 'Glitch pixels'], ['logoDen', 'Logo pixels']];
 const ANAME = Object.fromEntries(AKEYS), CURVES = ['Ease', 'Snap', 'Cut'];
-const LAYERS = ['Base', 'Glitch', 'Logo'], LAYER_NEW = ['sweep', 'glitch', 'show'];
-const layerOf = k => k < 4 ? 0 : k < 10 ? 1 : 2, CUTS = ['base', 'fx', 'logo'];
+const LAYERS = ['Base', 'Glitch', 'Logo', 'Type'], LAYER_NEW = ['sweep', 'glitch', 'show', 'type'];
+const TYPE_MODES = [['slam', 'Slam, word by word'], ['typeon', 'Type on'], ['roll', 'Roll and lock'], ['ticker', 'Ticker']];
+const layerOf = k => k < 4 ? 0 : k < 10 ? 1 : k === 13 ? 3 : 2, CUTS = ['base', 'fx', 'logo'];
 const TLH = { ruler: 20, over: 84, parts: 20, ev: 24, auto: 46 };
 const tlv = { z: 1, x0: 0 };
 let tlSel = null, tlDrag = null, tlSnap = true, tlHeadSig = '', tlInspSig = '';
@@ -35,7 +36,7 @@ function tlChanged() { tlCache = null; touch(); if (!S.playing && !busy) paint()
 /* undo: a click or a key press marks the state as it was; the first real change after it puts that state on the stack */
 const undoStack = [], redoStack = [];
 let undoPending = null, undoing = false;
-const editState = () => { const g = {}; for (const k of GLOBAL_KEYS) if (k !== 'range') g[k] = S[k]; return JSON.stringify({ S: g, parts, userEv: userEv.map(e => [e.t, e.type, e.seed, e.d]), auto, autoCut }); };
+const editState = () => { const g = {}; for (const k of GLOBAL_KEYS) if (k !== 'range') g[k] = S[k]; return JSON.stringify({ S: g, parts, userEv: userEv.map(e => [e.t, e.type, e.seed, e.d, evMore(e)]), auto, autoCut }); };
 function undoMark() { if (!score || undoing || loadingProject || busy) return; if (tlDrag && tlDrag.moved) return; savePart(); undoPending = editState(); }
 function undoCommit() {
   if (undoPending === null || undoing) return;
@@ -49,7 +50,7 @@ function undoApply(s) {
   try {
     const o = JSON.parse(s), inv = S.invert;
     Object.assign(S, o.S);
-    parts = o.parts; userEv = o.userEv.map(e => mkEv(e[0], e[1], e[2], e[3])); auto = o.auto; Object.assign(autoCut, o.autoCut);
+    parts = o.parts; userEv = o.userEv.map(e => mkEv(e[0], e[1], e[2], e[3], e[4])); auto = o.auto; Object.assign(autoCut, o.autoCut);
     tlSel = null; sel = Math.min(sel, parts.length - 1); Object.assign(S, parts[sel].P);
     if (S.invert !== inv) { mask = buildMask(logoSrc.img, logoSrc.w, logoSrc.h, S.invert); maskN++; }
     rebuildScore(); sel = partIdx(tau); Object.assign(S, parts[sel].P);
@@ -69,7 +70,7 @@ addEventListener('keydown', undoMark, true);
 /* rows and view */
 function tlRows() {
   const rows = [{ kind: 'ruler', h: TLH.ruler, name: 'Time' }, { kind: 'over', h: TLH.over, name: 'Sound' }, { kind: 'parts', h: TLH.parts, name: 'Parts' }];
-  for (let L = 0; L < 3; L++) rows.push({ kind: 'ev', L, h: TLH.ev, name: LAYERS[L] });
+  for (let L = 0; L < 4; L++) rows.push({ kind: 'ev', L, h: TLH.ev, name: LAYERS[L] });
   for (const key in auto) rows.push({ kind: 'auto', key, h: TLH.auto, name: ANAME[key] });
   let y = 0; for (const r of rows) { r.y = y; y += r.h; }
   rows.H = y;
@@ -100,7 +101,7 @@ function tlSnapT(t, e, skip) {
 // Logo state at a time, for the strip behind the logo lane: 0 gone, 1 loading, 2 up.
 function logoAt(t) {
   let best = null, age = 1e9;
-  for (const e of score.all) { if (e.k < 10) continue; let a = t - e.t; if (a < 0) { if (!score.cyclic) continue; a += score.D; } if (a < age && !(e.k === 11 && a >= e.d)) { age = a; best = e; } }
+  for (const e of score.all) { if (e.k < 10 || e.k === 13) continue; let a = t - e.t; if (a < 0) { if (!score.cyclic) continue; a += score.D; } if (a < age && !(e.k === 11 && a >= e.d)) { age = a; best = e; } }
   if (!best) return 0;
   return best.k === 10 ? (age < best.d ? 1 : 2) : best.k === 11 && age < best.d ? 2 : 0;
 }
@@ -121,7 +122,7 @@ function tlHeads(rows) {
   for (const r of rows) {
     const d = document.createElement('div'), lab = document.createElement('span'), tools = document.createElement('span');
     d.style.height = r.h + 'px'; lab.textContent = r.name; d.append(lab, tools);
-    if (r.kind === 'ev') {
+    if (r.kind === 'ev' && r.L < 3) {
       const name = CUTS[r.L];
       tools.append(btn('Auto', 'The automatic cut on this layer, on or off', () => { autoCut[name] = !autoCut[name]; tlSel = null; rebuildScore(); syncUI(); tlInsp(); }, autoCut[name]),
         btn('Bake', 'Turn the automatic clips into your own so they can be edited', () => tlBake(r.L)));
@@ -208,7 +209,7 @@ function drawTimeline() {
             if (x > W || x + w < 0) continue;
             q.fillStyle = user ? S.tint : '#1b1b22'; q.fillRect(x, r.y + 3, w, r.h - 8);
             if (!user) { q.strokeStyle = '#5a5968'; q.lineWidth = 1; q.strokeRect(x + 0.5, r.y + 3.5, w - 1, r.h - 9); }
-            if (w > 34) { q.save(); q.beginPath(); q.rect(x, r.y, w - 3, r.h); q.clip(); q.fillStyle = user ? '#000' : '#8d8b9e'; q.fillText(e.type.toUpperCase(), Math.max(x, 0) + 4, r.y + r.h / 2 - 0.5); q.restore(); }
+            if (w > 34) { q.save(); q.beginPath(); q.rect(x, r.y, w - 3, r.h); q.clip(); q.fillStyle = user ? '#000' : '#8d8b9e'; q.fillText(e.k === 13 ? e.txt : e.type.toUpperCase(), Math.max(x, 0) + 4, r.y + r.h / 2 - 0.5); q.restore(); }
           }
         }
       } else {
@@ -293,7 +294,14 @@ function tlInsp() {
     if (!s) box.textContent = 'Double-click a lane to add a clip or a key. Drag to move, drag a clip by its right edge for length, Alt-drag to copy, Backspace to delete.';
     else if (s.kind === 'ev' && !userEv.includes(s.e)) { const p = document.createElement('span'); p.id = 'inAuto'; box.append(p); }
     else if (s.kind === 'ev') {
-      field('Clip', select('inType', Object.keys(EV).filter(t => layerOf(EV[t]) === layerOf(s.e.k)).map(t => [t, t[0].toUpperCase() + t.slice(1)]), el => { const e = tlSel.e; e.type = el.value; e.k = EV[e.type]; e.d = e.k === 12 ? 0 : e.d || EVD[e.type]; mergeEv(); }));
+      if (s.e.k === 13) {
+        const txt = field('Words', input('inTxt', 'text', '', el => { tlSel.e.txt = el.value; })); txt.style.width = '220px';
+        txt.addEventListener('input', () => { tlSel.e.txt = txt.value; tlChanged(); });
+        field('Arrives as', select('inMode', TYPE_MODES, el => { tlSel.e.mode = el.value; }));
+        field('Size', input('inSize', 'number', '1', el => { tlSel.e.size = Math.min(1, Math.max(0.03, (Number(el.value) || 50) / 100)); }));
+        field('Height', input('inY', 'number', '1', el => { tlSel.e.y = Math.min(1, Math.max(0, (Number(el.value) || 0) / 100)); }));
+        field('Font', select('inFont', [['sans', 'Sans'], ['mono', 'Mono']], el => { tlSel.e.font = el.value; }));
+      } else field('Clip', select('inType', Object.keys(EV).filter(t => layerOf(EV[t]) === layerOf(s.e.k)).map(t => [t, t[0].toUpperCase() + t.slice(1)]), el => { const e = tlSel.e; e.type = el.value; e.k = EV[e.type]; e.d = e.k === 12 ? 0 : e.d || EVD[e.type]; mergeEv(); }));
       field('Start', input('inStart', 'number', '0.01', el => { tlSel.e.t = Math.min(score.D - 0.01, Math.max(0, Number(el.value) || 0)); mergeEv(); }));
       field('Length', input('inLen', 'number', '0.01', el => { if (tlSel.e.k !== 12) tlSel.e.d = Math.max(0.05, Number(el.value) || 0.05); mergeEv(); }));
       field('Seed', input('inSeed', 'number', '1', el => { tlSel.e.seed = Math.max(0, Math.round(Number(el.value)) || 0); }));
@@ -311,7 +319,7 @@ function tlInsp() {
   if (!s) return;
   if (s.kind === 'ev') {
     if ($('inAuto')) $('inAuto').textContent = 'Automatic ' + s.e.type + ' at ' + s.e.t.toFixed(2) + ' s, ' + tcAt(s.e.t) + '. Press Bake on the lane to edit the automatic clips, or Auto to switch them off.';
-    else { num('inType', s.e.type); num('inStart', s.e.t.toFixed(2)); num('inLen', s.e.d.toFixed(2)); num('inSeed', s.e.seed); $('inLen').disabled = s.e.k === 12; $('inTc').textContent = tcAt(s.e.t); }
+    else { num('inType', s.e.type); num('inTxt', s.e.txt); num('inMode', s.e.mode); num('inSize', Math.round(s.e.size * 100)); num('inY', Math.round(s.e.y * 100)); num('inFont', s.e.font); num('inStart', s.e.t.toFixed(2)); num('inLen', s.e.d.toFixed(2)); num('inSeed', s.e.seed); $('inLen').disabled = s.e.k === 12; $('inTc').textContent = tcAt(s.e.t); }
   } else { num('inStart', s.k.t.toFixed(2)); num('inVal', Math.round(aRange(s.key).back(s.k.v) * 100)); num('inCurve', s.k.c); $('inTc').textContent = tcAt(s.k.t); }
 }
 
@@ -335,7 +343,7 @@ function tlInsp() {
     if (!d.moved) {
       if (Math.abs(x - d.x) < 3 && (d.y === undefined || Math.abs(y - d.y) < 3)) return;
       d.moved = true;
-      if (d.dup) { const o = tlSel.e, c = mkEv(o.t, o.type, o.seed, o.d); userEv.push(c); tlSel = { kind: 'ev', e: c }; }
+      if (d.dup) { const o = tlSel.e, c = mkEv(o.t, o.type, o.seed, o.d, evMore(o)); userEv.push(c); tlSel = { kind: 'ev', e: c }; }
     }
     const D = score.D;
     if (d.mode === 'move') { tlSel.e.t = Math.min(D - 0.01, Math.max(0, tlSnapT(x2t(x) - d.grab, e))); mergeEv(); }
