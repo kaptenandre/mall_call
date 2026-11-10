@@ -62,6 +62,8 @@ h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase
 .parts button[aria-selected="true"]{background:var(--ink);color:#000;border-color:var(--ink)}
 .partbar{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin-bottom:12px}
 .partbar .note{flex:1 1 260px}
+.partbar .tr{display:flex;gap:6px;align-items:center;color:var(--dim);font-size:12.5px}
+.partbar .tr select{width:auto}.partbar .tr input{width:64px}
 .partbar button[aria-pressed="true"]{background:var(--signal);color:#000;border-color:var(--signal)}
 .pad{display:flex;flex-direction:column;gap:8px;border:1px solid var(--rule);background:var(--panel);padding:12px}
 .padrow{display:grid;grid-template-columns:64px minmax(0,1fr);gap:10px;align-items:center}
@@ -155,6 +157,8 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
       <button type="button" class="plain" id="merge">Merge with previous</button>
       <button type="button" class="plain" id="loopPart" aria-pressed="false">Loop this part</button>
       <button type="button" class="plain" id="copyAll">Copy to all parts</button>
+      <label class="tr">Comes in with <select id="trans"><option value="cut">A cut</option><option value="dip">A dip to black</option><option value="wipe">A wipe round the pillars</option><option value="split">A split open</option><option value="pop">Pillars at random</option><option value="spin">A spin</option><option value="glitch">A glitch burst</option><option value="strobe">A strobe</option></select></label>
+      <label class="tr">over <input type="number" id="transLen" min="0.2" max="6" step="0.1" value="1"> s</label>
       <p class="note" id="partNote" aria-live="polite"></p>
     </div>
     <div class="pad" id="pad">
@@ -178,6 +182,12 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
       <label class="drop" for="sfile"><strong>Drop audio or a video here</strong><span>or click to choose. It is read on this computer only.</span></label>
       <p class="note" id="soundNote" aria-live="polite">No sound yet. The piece runs as a seamless loop on a built-in half-second beat.</p>
       <button type="button" class="plain" id="soundOff" hidden>Remove sound</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>Pillars</legend>
+      <label class="row" for="pilAmt"><span>Auto patterns</span><input type="range" id="pilAmt" min="0" max="100" value="50"></label>
+      <p class="note">Patterns that play across the pillars so they stop doing the same thing: chases, spins, pops on the hit, a pillar per band of the sound. A pattern either lights whole pillars or shows the picture only where it is on. This sets how often the automatic cut uses them. Your own go on the Pillars lane.</p>
     </fieldset>
 
     <fieldset class="layer">
@@ -232,12 +242,13 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
     <fieldset>
       <legend>Variation</legend>
       <label class="row" for="ease"><span>Easing</span><input type="range" id="ease" min="0" max="100" value="85"></label>
+      <label class="row" for="busy"><span>At once</span><input type="range" id="busy" min="0" max="100" value="40"></label>
       <label class="row" for="chaos"><span>Chaos</span><input type="range" id="chaos" min="0" max="100" value="60"></label>
       <label class="row" for="trail"><span>Trails</span><input type="range" id="trail" min="0" max="100" value="20"></label>
       <label class="check" for="mix"><input type="checkbox" id="mix"> Each section redraws the layers in other styles</label>
       <label class="row" for="seed"><span>Seed</span><input type="number" id="seed" min="1" max="9999" value="1"></label>
       <div class="two"><button type="button" class="plain" id="shuffle">New variation</button><button type="button" class="plain" id="randAll">Randomise all</button></div>
-      <p class="note">Easing sets how much everything that moves surges on a hit and settles after it, instead of running at one speed. A seed always gives the same cut, so note the number when you like one.</p>
+      <p class="note">At once is how much may happen at the same time: lower it and the debris, the chases and the automatic clips all thin out together. Easing sets how much everything that moves surges on a hit and settles after it, instead of running at one speed. A seed always gives the same cut, so note the number when you like one.</p>
     </fieldset>
 
     <fieldset>
@@ -339,7 +350,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 13;
+const BUILD = 16;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -349,13 +360,13 @@ const STYLE_NAMES = { rods: 'LED rods', streaks: 'Light streaks', ascii: 'ASCII'
 const S = { format: 'wide', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.4, size: 0.78, invert: false,
   loop: 8, fps: 30, playing: true, seed: 1,
   baseAmt: 0.45, baseStyle: 'dither', baseDen: 0.304,
-  glitch: 0.7, lines: 0.8, lineMode: 1, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxAmt: 0.4, fxStyle: 'rods', fxDen: 0.784,
+  pilAmt: 0.4, busy: 0.4, trans: 'cut', transLen: 1, glitch: 0.7, lines: 0.8, lineMode: 1, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxAmt: 0.4, fxStyle: 'rods', fxDen: 0.784,
   logoMode: 0, loader: 0, presence: 0.5, eq: 1, logoStyle: 'dither', logoDen: 0.64,
   chaos: 0.6, trail: 0, mix: false, pshape: 0, pfill: 0.78, dither: 'bayer4', wob: 0.5, wobSize: 0.5, eqAmt: 0.6, ease: 0.85, range: 'all',
   tcRate: '25', tcStart: 0, tcShow: false, outFit: 'contain',
   faces: 1, panelsIn: 30, panelPx: 0, view3d: true, inner: 'same', exFmt: 'mp4', exView: 'flat', gap: 0 };
 // The piece can be split into parts. Everything from the three layers down to the look is kept per part; S holds the part being edited.
-const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'glitch', 'lines', 'lineMode', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxAmt', 'fxStyle', 'fxDen',
+const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'pilAmt', 'busy', 'trans', 'transLen', 'glitch', 'lines', 'lineMode', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxAmt', 'fxStyle', 'fxDen',
   'logoMode', 'loader', 'presence', 'eq', 'logoStyle', 'logoDen', 'chaos', 'trail', 'mix', 'pshape', 'pfill', 'dither', 'wob', 'wobSize', 'eqAmt', 'ease', 'inner'];
 const snap = () => { const o = {}; for (const k of PART_KEYS) o[k] = S[k]; return o; };
 let parts = [{ t: 0, P: snap() }], sel = 0, loopPart = false;
@@ -375,7 +386,7 @@ function setFace(n) {
 }
 // Animated settings: keys per setting, { glitch: [{ t, v, c }] }. autoCut: whether the engine schedules its own clips on a layer.
 let auto = {};
-const autoCut = { base: true, fx: true, logo: true };
+const autoCut = { base: true, fx: true, logo: true, pil: true };
 
 /* ---------- logo mask ---------- */
 let mask = null, logoSrc = null, maskN = 0;
@@ -466,11 +477,43 @@ function mkDisp(st, W, H, amt, o) {
     DU = u; DV = v;
   };
 }
+// Pillar patterns: one value per pillar from each live Pillar clip. Sets st.pl (light) and st.pm (mask); null when there is none.
+// N is how many pillars this face has. Everything is stepped to whole pillars and timed off hits and the eased clock.
+function pillarGains(st, N, o) {
+  st.pl = null; st.pm = null;
+  if (!st.pfN || N < 2) return;
+  for (let c = 0; c < st.pfN; c++) {
+    const e = st.pfE[c], x = st.pfX[c], sd = e.seed, sp = e.sp || 1, wd = Math.min(1, Math.max(0.02, e.wd || 0.25)), dir = sd & 1 ? 1 : -1, off = hash(sd, 4, 250);
+    // seconds into the clip on the eased clock, so a pattern surges with the sound instead of ticking
+    let ck = st.pfA[c];
+    const a0 = phiAt(score, e.t), a1 = phiAt(score, Math.min(score.D, e.t + e.d));
+    if (a1 > a0 + 1e-4 && st.tau >= e.t) ck = lerp(ck, (phiAt(score, st.tau) - a0) / (a1 - a0) * e.d, o.ease);
+    const out = new Float32Array(N), hi = Math.min(score.nh - 1, Math.max(0, st.tau / score.hop | 0));
+    for (let i = 0; i < N; i++) {
+      let u = (i + 0.5) / N * dir + off; u -= Math.floor(u);
+      let v = 0;
+      if (e.fx === 'chase') { const head = (Math.floor((ck * sp * 0.45 % 1) * N) + 0.5) / N; let d = head - u; d -= Math.floor(d); v = d < wd ? 1 - 0.8 * d / wd : 0; }
+      else if (e.fx === 'spin') { const n = 2 + sd % 3, turn = sp * e.d * 0.3 * ioQuint(x); let q = u * n - turn * n; q -= Math.floor(q); v = q < Math.min(0.6, wd * 1.6) ? 1 : 0; }
+      else if (e.fx === 'ping') { const tri = Math.abs(((ck * sp * 0.35) % 1) * 2 - 1), pos = (Math.floor(ioQuint(tri) * (N - 1)) + 0.5) / N; v = Math.abs((i + 0.5) / N - pos) < Math.max(0.5 / N, wd / 2) ? 1 : 0; }
+      else if (e.fx === 'wave') { const w = 0.5 + 0.5 * Math.sin(TAU * (u * (1 + sd % 3) - ck * sp * 0.4)); v = w * w; }
+      else if (e.fx === 'random') v = hash(i, st.seed, sd) < wd * 1.4 ? 1 : 0;
+      else if (e.fx === 'alt') v = (i + st.mi) & 1 ? 1 : 0;
+      else if (e.fx === 'pop') v = hash(i, st.mi, sd) < Math.max(0.12, wd) ? Math.exp(-st.dtm / 0.28) : 0;
+      else if (e.fx === 'vu') { const b = Math.abs((i + 0.5) / N - 0.5) * 2, l = score.spec ? score.spec[hi * NB + Math.min(NB - 1, Math.floor(b * NB))] : [score.lo, score.mid, score.hi][i % 3][hi]; v = Math.pow(Math.min(1, l), 1.6); }
+      else if (e.fx === 'build') v = u < prog(x, sd) / 0.97 * 1.02 ? 1 : 0;
+      else if (e.fx === 'drain') v = u >= prog(x, sd) / 0.97 * 1.02 ? 1 : 0;
+      else { const d = Math.abs(u - 0.5) * 2; v = d < ioExpo(x) * 1.05 ? 1 : 0; }
+      out[i] = v;
+    }
+    const key = e.pm === 'light' ? 'pl' : 'pm';
+    if (st[key]) for (let i = 0; i < N; i++) st[key][i] = Math.max(st[key][i], out[i]); else st[key] = out;
+  }
+}
 // 1 Base: sweeps, strobes and floods. Clean and large, never displaced.
 function baseField(W, H, st) {
-  const n = st.bn, asp = W / H;
+  const n = st.bn, asp = W / H, pl = st.pl, pn = pl ? pl.length : 0;
   const f = (u, v) => {
-    let val = 0;
+    let val = pl ? pl[Math.min(pn - 1, Math.max(0, Math.floor(u * pn)))] : 0;        // whole pillars lit by a Pillar clip
     for (let i = 0; i < n; i++) {
       const x = st.bx[i], sd = st.bs[i];
       let b = 0;
@@ -619,20 +662,21 @@ function logoField(W, H, t, o, st) {
 // roll (the picture loses vertical hold, rolls and locks), ticker (runs across, surging with the sound).
 const TYPE_FONTS = { sans: '600 120px "Instrument Sans", system-ui, sans-serif', mono: '500 120px "DM Mono", ui-monospace, monospace' };
 const typeMasks = new Map();
-function typeMask(text, font) {
-  const key = font + '|' + text;
+function typeMask(text, font, trk) {
+  const key = font + '|' + (trk || 0) + '|' + text;
   let m = typeMasks.get(key);
   if (m) return m;
-  const c = document.createElement('canvas'), g = c.getContext('2d', { willReadFrequently: true }), f = TYPE_FONTS[font] || TYPE_FONTS.sans;
-  g.font = f;
+  const c = document.createElement('canvas'), g = c.getContext('2d', { willReadFrequently: true }), f = TYPE_FONTS[font] || TYPE_FONTS.sans, sp = Math.round((trk || 0) * 120) + 'px';
+  const style = () => { g.font = f; if ('letterSpacing' in g) g.letterSpacing = sp; };
+  style();
   const tw = Math.max(1, g.measureText(text).width), k = Math.min(1, 4000 / tw), w = Math.max(2, Math.ceil(tw * k) + 8), h = Math.ceil(150 * k);
   c.width = w; c.height = h;
-  g.font = f; g.fillStyle = '#fff'; g.textBaseline = 'alphabetic'; g.setTransform(k, 0, 0, k, 4, 0); g.fillText(text, 0, 112);
+  style(); g.fillStyle = '#fff'; g.textBaseline = 'alphabetic'; g.setTransform(k, 0, 0, k, 4, 0); g.fillText(text, 0, 112);
   const px = g.getImageData(0, 0, w, h).data, data = new Float32Array(w * h), adv = [];
   for (let i = 0; i < data.length; i++) data[i] = px[i * 4 + 3] / 255;
   for (let i = 0; i <= text.length; i++) adv.push((4 + g.measureText(text.slice(0, i)).width * k) / w);
   m = { w, h, data, adv };
-  if (typeMasks.size > 200) typeMasks.clear();
+  if (typeMasks.size > 300) typeMasks.clear();
   typeMasks.set(key, m);
   return m;
 }
@@ -651,51 +695,96 @@ async function loadFont(file) {
     return true;
   } catch (e) { $('trigNote').textContent = 'That file could not be read as a font. Try a TTF, OTF or WOFF.'; return false; }
 }
+// Each live Type clip becomes a few rows of text, each row a mask with its own place and its own way of showing.
+// Modes: slam (a word at a time), typeon (left to right with a cursor), letters (letters land in scattered order),
+// roll (vertical hold lost, then locked), ticker (runs across once), band (a small repeating ticker that keeps running),
+// stack (the line repeated in rows that slide against each other), stretch (snaps to a new width and height on every hit),
+// wave (the letters ride a stepped wave).
 function typeField(W, H, o, st) {
-  const disp = mkDisp(st, W, H, 1, o), items = [];
+  const disp = mkDisp(st, W, H, 1, o), rows = [], asp = H / W;
   for (let i = 0; i < st.tyN; i++) {
-    const e = st.tyE[i], x = st.tyX[i], age = st.tyA[i], mode = e.mode;
-    let text = String(e.txt || '').trim(), grow = 1, jx = 0, jy = 0;
+    const e = st.tyE[i], x = st.tyX[i], age = st.tyA[i], mode = e.mode, sd = e.seed;
+    let text = String(e.txt || '').trim(); if (e.caps !== false) text = text.toUpperCase();
     if (!text) continue;
+    // leaving the way it came: the last stretch of the clip runs the entrance backwards
+    const tail = Math.min(0.6, e.d * 0.3), left = e.d - age, back = e.out === 'same' && left < tail ? left / tail : 1;
+    const cx = e.x === undefined ? 0.5 : e.x;
+    if (mode === 'band') {                               // one row that keeps running: the words repeat end to end
+      const m = typeMask(text.replace(/\s*\|\s*/g, '  ·  ') + '  ·  ', e.font, e.trk), hR = Math.max(0.03, e.size), tile = hR * (m.w / m.h) * asp;
+      let ck = age; const a0 = phiAt(score, e.t), a1 = phiAt(score, Math.min(score.D, e.t + e.d));
+      if (a1 > a0 + 1e-4 && st.tau >= e.t) ck = lerp(age, (phiAt(score, st.tau) - a0) / (a1 - a0) * e.d, o.ease);
+      rows.push({ m, hT: hR, wT: tile, left: 0, top: e.y - hR / 2, tile: ck * 0.12 / Math.max(0.2, tile), gain: 1, cut: 2, cur: -1, roll: 0, tear: 0, ph: 0, sc: null, wv: null });
+      continue;
+    }
+    if (mode === 'stack') {
+      const line = text.replace(/\s*\|\s*/g, ' ') + '   ', m = typeMask(line, e.font, e.trk), hR = Math.max(0.05, e.size * 0.5), n = Math.max(1, Math.ceil(1 / hR)), tile = hR * (m.w / m.h) * asp;
+      let ck = age; const a0 = phiAt(score, e.t), a1 = phiAt(score, Math.min(score.D, e.t + e.d));
+      if (a1 > a0 + 1e-4 && st.tau >= e.t) ck = lerp(age, (phiAt(score, st.tau) - a0) / (a1 - a0) * e.d, o.ease);
+      const shown = Math.min(prog(Math.min(1, x / 0.25), sd) / 0.97, back);
+      for (let r = 0; r < n; r++) if (hash(r, sd, 262) <= shown) rows.push({ m, hT: hR, wT: tile, left: 0, top: r * hR, tile: (r & 1 ? -1 : 1) * ck * (0.05 + 0.05 * hash(r, sd, 263)) + hash(r, sd, 264), gain: r & 1 ? 0.5 : 1, cut: 2, cur: -1, roll: 0, tear: 0, ph: 0, sc: null, wv: null });
+      continue;
+    }
+    let lines = text.split(/\s*\|\s*/).filter(Boolean), grow = 1, jx = 0, jy = 0;
     if (mode === 'slam') {                               // which word is up, and how long it has been
-      const words = text.split(/\s+/), wt = words.map(w => 1 + 0.25 * w.length), tot = wt.reduce((a, b) => a + b, 0);
+      const words = text.replace(/\|/g, ' ').split(/\s+/).filter(Boolean), wt = words.map(w => 1 + 0.25 * w.length), tot = wt.reduce((a, b) => a + b, 0);
       let acc = 0, wi = 0;
       for (; wi < words.length - 1 && x * tot >= acc + wt[wi]; wi++) acc += wt[wi];
       const fr = Math.floor((x * tot - acc) / tot * e.d * 30 + 1e-4);
-      text = words[wi];
-      if (fr === 0) { grow = 1.3 + 0.3 * hash(wi, e.seed, 220); jx = (hash(wi, e.seed, 221) - 0.5) * 0.12; jy = (hash(wi, e.seed, 222) - 0.5) * 0.1; }
-      else if (fr === 1) { grow = 0.9; jx = (hash(wi, e.seed, 223) - 0.5) * 0.04; }
+      lines = [words[wi]];
+      if (fr === 0) { grow = 1.3 + 0.3 * hash(wi, sd, 220); jx = (hash(wi, sd, 221) - 0.5) * 0.12; jy = (hash(wi, sd, 222) - 0.5) * 0.1; }
+      else if (fr === 1) { grow = 0.9; jx = (hash(wi, sd, 223) - 0.5) * 0.04; }
     }
-    const m = typeMask(text, e.font);
-    let hT = Math.max(0.03, e.size) * grow, wT = hT * (m.w / m.h) * H / W;
-    if (mode !== 'ticker' && wT > 0.94) { hT *= 0.94 / wT; wT = 0.94; }
-    const it = { m, mode, hT, wT, left: 0.5 - wT / 2 + jx, top: e.y - hT / 2 + jy, cut: 2, cur: -1, roll: 0, tear: 0, ph: age * 31 };
-    if (mode === 'typeon') {
-      const n = text.length, shown = Math.min(n, Math.floor(prog(Math.min(1, x / 0.7), e.seed) / 0.97 * n + 1e-4));
-      it.cut = m.adv[x >= 0.7 ? n : shown]; it.cur = (st.seed + (x >= 0.7 ? 0 : 1)) % 2 || x < 0.7 ? it.cut : -1;
-    } else if (mode === 'roll') {
-      const lock = oExpo(Math.min(1, x / 0.4));
-      it.roll = (1 - lock) * 3.2; it.tear = (1 - lock) * 0.05;
-    } else if (mode === 'ticker') {
-      let p = x;
-      const a = phiAt(score, e.t), b = phiAt(score, Math.min(score.D, e.t + e.d));
-      if (b > a + 1e-4 && st.tau >= e.t) p = lerp(x, clamp01((phiAt(score, st.tau) - a) / (b - a)), o.ease);
-      it.left = 1 - p * (1 + wT);
-    }
-    items.push(it);
+    const ms = lines.map(l => typeMask(l, e.font, e.trk)), n = ms.length;
+    let hT = Math.max(0.03, e.size) * grow / n, widest = 0;
+    for (const m of ms) widest = Math.max(widest, hT * (m.w / m.h) * asp);
+    if (mode !== 'ticker' && widest > 0.94) hT *= 0.94 / widest;
+    const total = hT * n, chars = lines.reduce((a, l) => a + l.length, 0);
+    let before = 0;
+    // stretch: on every hit the block cuts to another width and height, never easing between them
+    const kx = mode === 'stretch' ? [0.45, 0.7, 1, 1, 1.5, 2.2][Math.floor(hash(st.mi, sd, 265) * 5.99)] : 1, ky = mode === 'stretch' ? [0.5, 1, 1, 1.5, 2][Math.floor(hash(st.mi, sd, 266) * 4.99)] : 1;
+    ms.forEach((m, li) => {
+      const hL = hT * ky, wT = Math.min(mode === 'ticker' ? 99 : 0.98, hT * (m.w / m.h) * asp * kx), len = lines[li].length;
+      const it = { m, hT: hL, wT, left: cx - wT / 2 + jx, top: e.y - total * ky / 2 + li * hL + jy, tile: null, gain: 1, cut: 2, cur: -1, roll: 0, tear: 0, ph: age * 31, sc: null, wv: null };
+      if (mode === 'wave') it.wv = { amp: 0.32, ph: st.seed * 0.11 + li * 0.3, f: 0.13 + 0.1 * hash(sd, 1, 267) };      // moves on the glitch clock's holds, so it steps
+      if (mode === 'typeon') {                           // the lines fill one after another, as if typed
+        const p = Math.min(x >= 0.7 ? 1 : prog(x / 0.7, sd) / 0.97, back), shown = Math.max(0, Math.min(len, Math.floor(p * chars + 1e-4) - before));
+        it.cut = m.adv[shown];
+        if (shown < len ? shown > 0 || li === 0 || before <= p * chars : li === n - 1 && st.seed % 2) it.cur = it.cut;
+        if (shown === 0 && !(li === 0 && p * chars < 1)) it.cur = shown < len && before <= p * chars ? it.cut : -1;
+      } else if (mode === 'letters') it.sc = { p: Math.min(x >= 0.6 ? 1.01 : prog(x / 0.6, sd) / 0.97, back < 1 ? back : 2), sd: sd + li * 17, k: st.seed };
+      else if (mode === 'roll') { const lock = Math.min(oExpo(Math.min(1, x / 0.4)), back); it.roll = (1 - lock) * 3.2; it.tear = (1 - lock) * 0.05; }
+      else if (mode === 'ticker') {
+        let p = x; const a0 = phiAt(score, e.t), a1 = phiAt(score, Math.min(score.D, e.t + e.d));
+        if (a1 > a0 + 1e-4 && st.tau >= e.t) p = lerp(x, clamp01((phiAt(score, st.tau) - a0) / (a1 - a0)), o.ease);
+        it.left = 1 - p * (1 + wT);
+      }
+      before += len;
+      rows.push(it);
+    });
   }
   const f = (u0, v0) => {
     disp(u0, v0);
     let val = 0;
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
+    for (let i = 0; i < rows.length; i++) {
+      const it = rows[i], m = it.m;
       let u = DU, v = DV;
       if (it.roll) { v += it.roll; v -= Math.floor(v); u += it.tear * nz(v * 9 + it.ph, 21); }
-      const lu = (u - it.left) / it.wT, lv = (v - it.top) / it.hT;
-      if (lu < 0 || lv < 0 || lv > 1) continue;
-      if (it.cur >= 0 && lu >= it.cur && lu < it.cur + 0.5 * it.hT * (it.m.h / it.m.w) / it.hT * 1.1 && lv > 0.12 && lv < 0.88) { val = 1; continue; }
+      let lv = (v - it.top) / it.hT;
+      if (lv < 0 || lv > 1) continue;
+      let lu = (u - it.left) / it.wT;
+      if (it.tile !== null) { lu += it.tile; lu -= Math.floor(lu); }
+      else if (lu < 0) continue;
+      if (it.cur >= 0 && lu >= it.cur && lu < it.cur + 0.55 * m.h / m.w && lv > 0.12 && lv < 0.88) { val = 1; continue; }
       if (lu > 1 || lu > it.cut) continue;
-      const b = sample(it.m.data, it.m, lu, lv);
+      if (it.wv) { let c = 0; while (c < m.adv.length - 2 && m.adv[c + 1] <= lu) c++; lv = (lv - 0.5) * (1 + it.wv.amp * 2) + 0.5 + Math.round(Math.sin(TAU * (c * it.wv.f - it.wv.ph)) * 3) / 3 * it.wv.amp; if (lv < 0 || lv > 1) continue; }
+      if (it.sc) {                                       // letters: each has its own moment, and lands through a wrong frame
+        let c = 0; while (c < m.adv.length - 2 && m.adv[c + 1] <= lu) c++;
+        const th = hash(c, it.sc.sd, 260);
+        if (th > it.sc.p) continue;
+        if (it.sc.p - th < 0.07 && it.sc.p < 1) lv += (hash(c, it.sc.k, 261) - 0.5) * 0.5;
+        if (lv < 0 || lv > 1) continue;
+      }
+      const b = sample(m.data, m, lu, lv) * it.gain;
       if (b > val) val = b;
     }
     return val;
@@ -901,8 +990,10 @@ class Renderer {
     g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
     if (st.black || st.gain < 0.01) { this.fbOk = false; return; }
     CORE = LO[0].hot ? '#fff' : LO[0].tint; SHAPE = LO[0].pshape;
+    const PN = LO[0].gapN || LO[0].cols;
+    pillarGains(st, PN, LO[0]);
     for (let L = 0; L < 3; L++) {
-      if ((L === 0 && !st.bn) || (L === 2 && !st.lv && !st.tyN)) continue;
+      if ((L === 0 && !st.bn && !st.pl) || (L === 2 && !st.lv && !st.tyN)) continue;
       const o = LO[L];
       o.va = st.va; o.vb = st.vb; o.amb = L === 1 ? 1 : 0;
       if (L === 2 && st.dens !== 1) o.density = Math.min(1.2, (lerp(22, 96, o.density) * st.dens - 22) / 74);
@@ -924,6 +1015,7 @@ class Renderer {
       g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1; g.drawImage(lc, 0, 0);
     }
     g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+    if (st.pm) { g.fillStyle = '#000'; const pw = W / PN; for (let i = 0; i < PN; i++) { const a = 1 - st.pm[i]; if (a > 0.01) { g.globalAlpha = Math.min(1, a); g.fillRect(Math.round(i * pw), 0, Math.round((i + 1) * pw) - Math.round(i * pw), H); } } g.globalAlpha = 1; }   // the picture shows only on the pillars the pattern has on
     if (st.gain < 0.995) { g.globalAlpha = 1 - st.gain; g.fillStyle = '#000'; g.fillRect(0, 0, W, H); g.globalAlpha = 1; }
     const o = LO[0];
     if (o.trail > 0.01) {            // the last frame lingers, slipped a little along the smear direction
@@ -974,7 +1066,9 @@ function layerOpts(fps, P) {
     wobA: P.wob * 2, wobB: Math.max(0, P.wob - 0.5) * 0.05, wobF: Math.pow(4, 0.5 - P.wobSize), eqAmt: P.eqAmt, ease: P.ease, tw: 0 });
   return [mk(P.baseStyle, P.baseDen), mk(P.fxStyle, P.fxDen), mk(P.logoStyle, P.logoDen)];
 }
-const motion = (P, tw) => ({ glitch: P.glitch, eq: track ? P.eq : 0, chaos: P.chaos, lines: P.lines, lineMode: P.lineMode, chase: P.chase, bgLo: P.bgLo, bgMid: P.bgMid, bgHi: P.bgHi, mix: P.mix, ease: P.ease, tw });
+// How much is allowed to happen at once: thins the debris, the chases and the automatic clips together.
+const busyK = P => lerp(0.3, 1.3, P.busy === undefined ? 0.7 : P.busy);
+const motion = (P, tw) => ({ glitch: P.glitch, eq: track ? P.eq : 0, chaos: P.chaos, lines: P.lines, lineMode: P.lineMode, chase: P.chase * busyK(P), bgLo: Math.min(1, P.bgLo * busyK(P)), bgMid: Math.min(1, P.bgMid * busyK(P)), bgHi: Math.min(1, P.bgHi * busyK(P)), mix: P.mix, ease: P.ease, tw });
 // eased seconds: real time blended toward the organic clock by the part's Easing amount
 const warp = (tau, P) => tau + (phiAt(score, tau) - tau) * P.ease;
 const phase = tw => score.cyclic ? tw / score.D : tw / 8;
@@ -984,7 +1078,21 @@ function rebuildScore() {
   const chAt = t => parts[partIdx(t)].P.chaos;
   score = track ? buildTrackScore(track.an, S.seed, chAt) : buildLoopScore(S.loop, S.seed, chAt);
   autoEv = [];
-  parts.forEach((p, i) => { for (const e of makeEvents(score, { base: p.P.baseAmt, fx: p.P.fxAmt, mode: p.P.logoMode, presence: p.P.presence, ring: S.format === 'ring' }, p.t, partEnd(i), i)) if (isBase(e.k) ? autoCut.base : e.k < 10 ? autoCut.fx : autoCut.logo) autoEv.push(e); });
+  parts.forEach((p, i) => { for (const e of makeEvents(score, { base: p.P.baseAmt, fx: Math.min(1, p.P.fxAmt * busyK(p.P)), mode: p.P.logoMode, presence: p.P.presence, pil: Math.min(1, p.P.pilAmt * busyK(p.P)), ring: S.format === 'ring' }, p.t, partEnd(i), i)) if (e.k === 17 ? autoCut.pil : isBase(e.k) ? autoCut.base : e.k < 10 ? autoCut.fx : autoCut.logo) autoEv.push(e); });
+  // how each part comes in: a short move across the edge between it and the part before
+  parts.forEach((p, i) => {
+    const tr = p.P.trans, t = p.t, sd = S.seed * 31 + i * 7;
+    if (!tr || tr === 'cut' || (i === 0 && score.cyclic)) return;
+    const L = Math.min(p.P.transLen || 1, (partEnd(i) - t) * 0.4), pre = i > 0 ? Math.min(L, (t - parts[i - 1].t) * 0.4) : 0;
+    const pil = (t0, d, fx, pm) => { if (d > 0.08) autoEv.push(mkEv(t0, 'pillar', sd, d, { fx, pm: pm || 'mask', sp: 1.4, wd: 0.3 })); };
+    if (tr === 'dip') { if (pre > 0.08) autoEv.push(mkEv(t - pre * 0.6, 'blackout', sd, pre * 0.6)); }
+    else if (tr === 'wipe') { pil(t - pre, pre, 'drain'); pil(t, L, 'build'); }
+    else if (tr === 'split') { pil(t - pre, pre, 'drain'); pil(t, L, 'split'); }
+    else if (tr === 'pop') { pil(t - pre, pre + L, 'random'); }
+    else if (tr === 'spin') { pil(t - pre * 0.5, pre * 0.5 + L, 'spin', 'light'); }
+    else if (tr === 'glitch') autoEv.push(mkEv(t - pre * 0.5, 'glitch', sd, pre * 0.5 + L * 0.5));
+    else if (tr === 'strobe') autoEv.push(mkEv(t - pre * 0.4, 'strobe', sd, pre * 0.4 + L * 0.3));
+  });
   mergeEv();
   if (tau >= score.D) tau = 0;
 }
@@ -1001,6 +1109,7 @@ function renderOne(R, st, P, tf, fps, fc) {
   const tw = warp(tf, P), LO = layerOpts(fps, P), mo = motion(P, tw);
   LO[1].tw = tw; mo.face = fc;
   if (S.format === 'ring' && S.gap > 0) for (const o of LO) { o.gap = S.gap; o.gapN = fc ? S.panelsIn : S.panels; }
+  LO[0].cols = S.format === 'ring' ? (fc ? S.panelsIn : S.panels) : S.format === 'wide' ? 16 : 1;      // how many pillars a Pillar clip plays across
   stateAt(score, tf, mo, st);
   R.draw(phase(tw), LO, st);
 }
@@ -1115,11 +1224,12 @@ const PAD = [
   ['Base', [['sweep', 'Sweep', '1'], ['strobe', 'Strobe', '2'], ['flood', 'Flood', '3'], ['blackout', 'Blackout', '4'], ['orbit', 'Orbit', '5'], ['spokes', 'Spokes', '6'], ['meet', 'Meet', '7']]],
   ['Glitch', [['glitch', 'Glitch', 'Q'], ['chase', 'Chase', 'W'], ['lines', 'Lines', 'E'], ['sparks', 'Sparks', 'R'], ['bars', 'Bars', 'T'], ['blocks', 'Blocks', 'Y']]],
   ['Logo', [['load', 'Loader', 'A'], ['show', 'Show', 'S'], ['hide', 'Hide', 'D']]],
-  ['Type', [['type', 'Words', 'F']]]
+  ['Type', [['type', 'Words', 'F'], ['type', 'Ticker', 'V', { fx: 'band', mode: 'band', size: 0.1, y: 0.9, txt: 'MALL CALL', trk: 0.08 }], ['type', 'Stack', 'B', { fx: 'stack', mode: 'stack', size: 0.36 }], ['type', 'Stretch', 'N', { fx: 'stretch', mode: 'stretch' }]]],
+  ['Pillars', [['pillar', 'Chase', 'G', { fx: 'chase' }], ['pillar', 'Spin', 'H', { fx: 'spin', pm: 'light' }], ['pillar', 'Pop', 'J', { fx: 'pop' }], ['pillar', 'Build', 'K', { fx: 'build' }], ['pillar', 'VU', 'L', { fx: 'vu', pm: 'light' }], ['pillar', 'Alt', 'Z', { fx: 'alt' }], ['pillar', 'Wave', 'X', { fx: 'wave' }]]]
 ];
 const KEYS = {};
-function trigger(type, btn) {
-  userEv.push(mkEv(tau, type, Math.floor(Math.random() * 1e6)));
+function trigger(type, btn, more) {
+  userEv.push(mkEv(tau, type, Math.floor(Math.random() * 1e6), null, more));
   mergeEv();
   const n = userEv.length;
   $('trigNote').textContent = n + (n === 1 ? ' clip' : ' clips') + ' of your own on the timeline. They play back at the same moment every time and go into the export.';
@@ -1132,12 +1242,12 @@ function trigger(type, btn) {
     const row = document.createElement('div'); row.className = 'padrow';
     const lab = document.createElement('span'); lab.textContent = name;
     const box = document.createElement('div'); box.className = 'padbtns';
-    for (const [type, label, key] of items) {
-      const b = document.createElement('button'); b.type = 'button'; b.id = 'trig-' + type;
+    for (const [type, label, key, more] of items) {
+      const b = document.createElement('button'); b.type = 'button'; b.id = 'trig-' + type + (more ? '-' + more.fx : '');
       const k = document.createElement('kbd'); k.textContent = key;
       b.append(label, k);
-      b.addEventListener('click', () => trigger(type, b));
-      box.append(b); KEYS[key.toLowerCase()] = [type, b];
+      b.addEventListener('click', () => trigger(type, b, more));
+      box.append(b); KEYS[key.toLowerCase()] = [type, b, more];
     }
     row.append(lab, box); pad.insertBefore(row, foot);
   }
@@ -1153,7 +1263,7 @@ const LOOKS = {
 };
 function pushAll() {
   pushRanges();
-  for (const id of ['baseStyle', 'fxStyle', 'logoStyle', 'dither', 'loader', 'lineMode']) $(id).value = S[id];
+  for (const id of ['baseStyle', 'fxStyle', 'logoStyle', 'dither', 'loader', 'lineMode', 'trans', 'transLen']) $(id).value = S[id];
   setRadio('logoMode', S.logoMode); setRadio('pshape', S.pshape); setRadio('eq', S.eq);
   $('mix').checked = S.mix; $('hot').checked = S.hot;
   $('tintPick').value = S.tint; $('tintHex').value = S.tint.toUpperCase();
@@ -1180,7 +1290,7 @@ addEventListener('keydown', e => {
   if (e.code === 'Space' && tag !== 'BUTTON') { e.preventDefault(); setPlaying(!S.playing); return; }
   if ((e.key === 'Backspace' || e.key === 'Delete') && tlSel) { e.preventDefault(); tlDelete(); return; }
   const hit = KEYS[e.key.toLowerCase()];
-  if (hit) { e.preventDefault(); trigger(hit[0], hit[1]); }
+  if (hit) { e.preventDefault(); trigger(hit[0], hit[1], hit[2]); }
 });
 
 /* ---------- logo and sound input ---------- */
@@ -1269,7 +1379,7 @@ const clampInt = (el, lo, hi, d) => { const n = Math.round(Number(el.value)); re
 const px2den = v => 1 - 1.2 * v, den2px = d => (1 - d) / 1.2;
 // id, state key, value from 0..1 slider position, and back; rebuild = the schedule depends on it
 const RANGES = [['baseAmt', 'baseAmt', 1], ['basePx', 'baseDen', 0, px2den, den2px], ['glitch', 'glitch'], ['lines', 'lines'], ['chase', 'chase'], ['bgLo', 'bgLo'], ['bgMid', 'bgMid'], ['bgHi', 'bgHi'], ['fxAmt', 'fxAmt', 1],
-  ['fxPx', 'fxDen', 0, px2den, den2px], ['wob', 'wob'], ['wobSize', 'wobSize'], ['eqAmt', 'eqAmt'], ['ease', 'ease'], ['presence', 'presence', 1], ['logoPx', 'logoDen', 0, px2den, den2px], ['size', 'size'], ['chaos', 'chaos', 1], ['trail', 'trail'], ['pfill', 'pfill'], ['glow', 'glow']];
+  ['fxPx', 'fxDen', 0, px2den, den2px], ['wob', 'wob'], ['wobSize', 'wobSize'], ['eqAmt', 'eqAmt'], ['ease', 'ease'], ['presence', 'presence', 1], ['pilAmt', 'pilAmt', 1], ['busy', 'busy', 1], ['logoPx', 'logoDen', 0, px2den, den2px], ['size', 'size'], ['chaos', 'chaos', 1], ['trail', 'trail'], ['pfill', 'pfill'], ['glow', 'glow']];
 for (const [id, key, rebuild, to] of RANGES) $(id).addEventListener('input', e => { const v = e.target.value / 100, x = to ? to(v) : v; if (auto[key] && auto[key].length) setKey(key, tau, x); else S[key] = x; if (rebuild) rebuildScore(); syncUI(); });
 function pushRanges() { for (const [id, key, , , back] of RANGES) $(id).value = Math.round((back ? back(S[key]) : S[key]) * 100); }
 for (const id of ['baseStyle', 'fxStyle', 'logoStyle']) {
@@ -1292,6 +1402,8 @@ radios('logoMode', v => { S.logoMode = Number(v); rebuildScore(); syncUI(); });
 radios('pshape', v => { S.pshape = Number(v); syncUI(); });
 $('invert').addEventListener('change', e => { S.invert = e.target.checked; mask = buildMask(logoSrc.img, logoSrc.w, logoSrc.h, S.invert); maskN++; syncUI(); });
 $('loader').addEventListener('change', e => { S.loader = Number(e.target.value); syncUI(); });
+$('trans').addEventListener('change', e => { S.trans = e.target.value; rebuildScore(); syncUI(); });
+$('transLen').addEventListener('change', e => { const n = Number(e.target.value); S.transLen = Number.isFinite(n) ? Math.min(6, Math.max(0.2, n)) : 1; e.target.value = S.transLen; rebuildScore(); syncUI(); });
 $('lineMode').addEventListener('change', e => { S.lineMode = Number(e.target.value); syncUI(); });
 $('dither').addEventListener('change', e => { S.dither = e.target.value; syncUI(); });
 $('mix').addEventListener('change', e => { S.mix = e.target.checked; syncUI(); });
@@ -1563,7 +1675,7 @@ async function applyProject(pj) {
   try {
     audio.pause(); S.playing = false;
     for (const k of GLOBAL_KEYS) if (k in pj.S) S[k] = pj.S[k];
-    pushGlobals(); undoReset(); tlSel = null; auto = {}; autoCut.base = autoCut.fx = autoCut.logo = true;
+    pushGlobals(); undoReset(); tlSel = null; auto = {}; autoCut.base = autoCut.fx = autoCut.logo = autoCut.pil = true;
     if (!pj.soundPath && track) { audio.removeAttribute('src'); track = null; soundPath = ''; resetParts(); }
     if (pj.font && pj.font.dataUrl) { const blob = await (await fetch(pj.font.dataUrl)).blob(); await loadFont(new File([blob], pj.font.name)); }
     if (pj.logo && pj.logo.dataUrl) { const blob = await (await fetch(pj.logo.dataUrl)).blob(); await loadLogo(new File([blob], pj.logo.name, { type: blob.type })); }
@@ -1574,11 +1686,11 @@ async function applyProject(pj) {
     }
     if (!track) { soundPath = ''; rebuildScore(); }
     if (!missing) {
-      parts = pj.parts.filter(p => p.t < score.D).map(p => { const o = { t: p.t, P: Object.assign(snap(), { fxAmt: 0, lineMode: 0, inner: 'same' }, p.P) }; if (p.Q) o.Q = Object.assign({}, o.P, p.Q, { inner: 'own' }); return o; });      // a project from before Auto clips keeps its cut
+      parts = pj.parts.filter(p => p.t < score.D).map(p => { const o = { t: p.t, P: Object.assign(snap(), { fxAmt: 0, lineMode: 0, inner: 'same', pilAmt: 0, busy: 0.7, trans: 'cut', transLen: 1 }, p.P) }; if (p.Q) o.Q = Object.assign({}, o.P, p.Q, { inner: 'own' }); return o; });      // a project from before Auto clips keeps its cut
       if (!parts.length || parts[0].t !== 0) parts.unshift({ t: 0, P: snap() });
-      userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d, e.type === 'type' ? { txt: String(e.txt || ''), mode: String(e.mode || 'slam'), size: Number(e.size) || 0.5, y: Number(e.y) || 0.5, font: ['mono', 'own'].includes(e.font) ? e.font : 'sans', face: e.face | 0 } : { face: e.face | 0 }));
+      userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d, e.type === 'type' ? { txt: String(e.txt || ''), mode: String(e.mode || 'slam'), size: Number(e.size) || 0.5, y: Number(e.y) || 0.5, font: ['mono', 'own'].includes(e.font) ? e.font : 'sans', x: e.x === undefined ? 0.5 : Number(e.x) || 0, caps: e.caps !== false, trk: Number(e.trk) || 0, out: e.out === 'same' ? 'same' : 'cut', face: e.face | 0 } : e.type === 'pillar' ? { fx: PILLAR_FX.includes(e.fx) ? e.fx : 'chase', pm: e.pm === 'light' ? 'light' : 'mask', sp: Number(e.sp) || 1, wd: Number(e.wd) || 0.25, face: e.face | 0 } : { face: e.face | 0 }));
       for (const [k] of AKEYS) if (pj.auto && Array.isArray(pj.auto[k])) auto[k] = pj.auto[k].filter(q => q.t <= score.D).map(q => ({ t: Number(q.t) || 0, v: Number(q.v) || 0, c: q.c | 0 })).sort((a, b) => a.t - b.t);
-      if (pj.autoCut) { autoCut.base = pj.autoCut.base !== false; autoCut.fx = pj.autoCut.fx !== false; autoCut.logo = pj.autoCut.logo !== false; }
+      if (pj.autoCut) { autoCut.base = pj.autoCut.base !== false; autoCut.fx = pj.autoCut.fx !== false; autoCut.logo = pj.autoCut.logo !== false; autoCut.pil = pj.autoCut.pil !== false; }
     } else $('soundNote').textContent = 'The sound for this project was not found at ' + missing + '. Drop it in again and reopen the project.';
     sel = 0; tau = 0; loadPart();
     rebuildScore(); pushAll(); syncUI(); tlInsp();
@@ -1604,7 +1716,7 @@ if (window.nativeApp) {
       const r = await window.nativeApp.projectOpen();
       if (r && !(await applyProject(JSON.parse(r.json)))) say('That file is not a project from this app.');
     } else if (cmd === 'new-project') {
-      audio.pause(); audio.removeAttribute('src'); track = null; soundPath = ''; userEv = []; tau = 0; auto = {}; autoCut.base = autoCut.fx = autoCut.logo = true; tlSel = null; resetParts(); rebuildScore(); syncUI(); undoReset(); tlInsp();
+      audio.pause(); audio.removeAttribute('src'); track = null; soundPath = ''; userEv = []; tau = 0; auto = {}; autoCut.base = autoCut.fx = autoCut.logo = autoCut.pil = true; tlSel = null; resetParts(); rebuildScore(); syncUI(); undoReset(); tlInsp();
       $('soundNote').textContent = 'No sound yet. The piece runs as a seamless loop on a built-in half-second beat.';
     } else if (cmd === 'export') $('save').click();
     else if (cmd === 'play') setPlaying(!S.playing);

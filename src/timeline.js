@@ -5,9 +5,10 @@
 const AKEYS = [['glitch', 'Glitch'], ['lines', 'Lines'], ['chase', 'Chases'], ['bgLo', 'Bass blocks'], ['bgMid', 'Mid bars'], ['bgHi', 'High sparks'], ['wob', 'Wobble'], ['wobSize', 'Wobble size'],
   ['eqAmt', 'EQ strength'], ['trail', 'Trails'], ['glow', 'Glow'], ['pfill', 'Pixel fill'], ['baseDen', 'Base pixels'], ['fxDen', 'Glitch pixels'], ['logoDen', 'Logo pixels']];
 const ANAME = Object.fromEntries(AKEYS), CURVES = ['Ease', 'Snap', 'Cut'];
-const LAYERS = ['Base', 'Glitch', 'Logo', 'Type'], LAYER_NEW = ['sweep', 'glitch', 'show', 'type'];
-const TYPE_MODES = [['slam', 'Slam, word by word'], ['typeon', 'Type on'], ['roll', 'Roll and lock'], ['ticker', 'Ticker']];
-const layerOf = k => isBase(k) ? 0 : k < 10 ? 1 : k === 13 ? 3 : 2, CUTS = ['base', 'fx', 'logo'];
+const LAYERS = ['Base', 'Glitch', 'Logo', 'Type', 'Pillars'], LAYER_NEW = ['sweep', 'glitch', 'show', 'type', 'pillar'];
+const PIL_NAMES = { drain: 'Drain away', chase: 'Chase', spin: 'Spin', ping: 'Ping pong', wave: 'Wave', random: 'Random', alt: 'Every other, swaps on the hit', pop: 'Pop on the hit', vu: 'A band of the sound each', build: 'Build up', split: 'Split open' };
+const TYPE_MODES = [['slam', 'Slam, word by word'], ['typeon', 'Type on'], ['letters', 'Letters, scattered'], ['roll', 'Roll and lock'], ['ticker', 'Ticker, one pass'], ['band', 'Ticker band, keeps running'], ['stack', 'Stack, rows sliding'], ['stretch', 'Stretch, snaps on the hit'], ['wave', 'Wave, stepped']];
+const layerOf = k => isBase(k) ? 0 : k < 10 ? 1 : k === 13 ? 3 : k === 17 ? 4 : 2, CUTS = ['base', 'fx', 'logo', null, 'pil'];
 const TLH = { ruler: 20, over: 84, parts: 20, ev: 24, auto: 46 };
 const tlv = { z: 1, x0: 0 };
 // Small line icons, drawn on a 16 unit grid. f: filled instead of stroked.
@@ -17,7 +18,7 @@ const ICONS = {
   fit: ['M2 8h12M2 8l3-3M2 8l3 3M14 8l-3-3M14 8l-3 3M2 3v10M14 3v10'], snap: ['M4 2.5v5.5a4 4 0 0 0 8 0V2.5M4 5.5h2.6M9.4 5.5H12M6.6 2.5v5.5a1.4 1.4 0 0 0 2.8 0V2.5'],
   undo: ['M6 3L3 6l3 3M3 6h6.5a3.5 3.5 0 0 1 0 7H6'], redo: ['M10 3l3 3-3 3M13 6H6.5a3.5 3.5 0 0 0 0 7H10'],
   ruler: ['M13.5 8a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0zM8 5v3l2 1.5'], over: ['M2 8h.01M4.5 6v4M7 3.5v9M9.5 5.5v5M12 7v2M14 8h.01'], parts: ['M2 4h5v8H2zM9 4h5v8H9z'],
-  ev0: ['M2 3h12v10H2zM2 8h12'], ev1: ['M2 4.5h7M6 8h8M2 11.5h4M9 11.5h5'], ev2: ['M13 8A5 5 0 1 1 3 8a5 5 0 0 1 10 0zM10 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0z'], ev3: ['M3 4V3h10v1M8 3v10M6 13h4'],
+  ev0: ['M2 3h12v10H2zM2 8h12'], ev1: ['M2 4.5h7M6 8h8M2 11.5h4M9 11.5h5'], ev2: ['M13 8A5 5 0 1 1 3 8a5 5 0 0 1 10 0zM10 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0z'], ev3: ['M3 4V3h10v1M8 3v10M6 13h4'], ev4: ['M3 3v10M6.3 6v7M9.7 3v10M13 8v5'],
   auto: ['M3 13c2-6 3-9 5-9s3 3 5 9']
 };
 function ic(name) {
@@ -90,7 +91,7 @@ addEventListener('keydown', undoMark, true);
 /* rows and view */
 function tlRows() {
   const rows = [{ kind: 'ruler', h: TLH.ruler, name: 'Time' }, { kind: 'over', h: TLH.over, name: 'Sound' }, { kind: 'parts', h: TLH.parts, name: 'Parts' }];
-  for (let L = 0; L < 4; L++) rows.push({ kind: 'ev', L, h: TLH.ev, name: LAYERS[L] });
+  for (let L = 0; L < 5; L++) rows.push({ kind: 'ev', L, h: TLH.ev, name: LAYERS[L] });
   for (const key in auto) rows.push({ kind: 'auto', key, h: TLH.auto, name: ANAME[key] });
   let y = 0; for (const r of rows) { r.y = y; y += r.h; }
   rows.H = y;
@@ -134,7 +135,7 @@ function clipRects(e, W) {
   return out;
 }
 function tlHeads(rows) {
-  const sig = rows.map(r => r.kind + (r.key || r.L || '')).join() + '|' + autoCut.base + autoCut.fx + autoCut.logo + '|' + Object.keys(auto).map(k => auto[k].length ? 1 : 0).join('');
+  const sig = rows.map(r => r.kind + (r.key || r.L || '')).join() + '|' + autoCut.base + autoCut.fx + autoCut.logo + autoCut.pil + '|' + Object.keys(auto).map(k => auto[k].length ? 1 : 0).join('');
   if (sig === tlHeadSig) return;
   tlHeadSig = sig;
   const box = $('tlHead'); box.textContent = '';
@@ -142,7 +143,7 @@ function tlHeads(rows) {
   for (const r of rows) {
     const d = document.createElement('div'), lab = document.createElement('span'), tools = document.createElement('span');
     d.style.height = r.h + 'px'; lab.append(ic(r.kind === 'ev' ? 'ev' + r.L : r.kind === 'auto' ? 'auto' : r.kind), r.name); lab.style.cssText = 'display:flex;gap:6px;align-items:center'; d.append(lab, tools);
-    if (r.kind === 'ev' && r.L < 3) {
+    if (r.kind === 'ev' && CUTS[r.L]) {
       const name = CUTS[r.L];
       tools.append(btn('Auto', 'The automatic cut on this layer, on or off', () => { autoCut[name] = !autoCut[name]; tlSel = null; rebuildScore(); syncUI(); tlInsp(); }, autoCut[name]),
         btn('Bake', 'Turn the automatic clips into your own so they can be edited', () => tlBake(r.L)));
@@ -221,7 +222,7 @@ function drawTimeline() {
             if (x > W || x + w < 0) continue;
             q.fillStyle = user ? S.tint : '#1b1b22'; q.fillRect(x, r.y + 3, w, r.h - 8);
             if (!user) { q.strokeStyle = '#5a5968'; q.lineWidth = 1; q.strokeRect(x + 0.5, r.y + 3.5, w - 1, r.h - 9); }
-            if (w > 34) { q.save(); q.beginPath(); q.rect(x, r.y, w - 3, r.h); q.clip(); q.fillStyle = user ? '#000' : '#8d8b9e'; q.fillText(e.k === 13 ? e.txt : e.type.toUpperCase(), Math.max(x, 0) + 4, r.y + r.h / 2 - 0.5); q.restore(); }
+            if (w > 34) { q.save(); q.beginPath(); q.rect(x, r.y, w - 3, r.h); q.clip(); q.fillStyle = user ? '#000' : '#8d8b9e'; q.fillText(e.k === 13 ? e.txt : e.k === 17 ? e.fx.toUpperCase() + (e.pm === 'light' ? ' ●' : '') : e.type.toUpperCase(), Math.max(x, 0) + 4, r.y + r.h / 2 - 0.5); q.restore(); }
           }
         }
       } else {
@@ -307,13 +308,22 @@ function tlInsp() {
     else if (s.kind === 'ev' && !userEv.includes(s.e)) { const p = document.createElement('span'); p.id = 'inAuto'; box.append(p); }
     else if (s.kind === 'ev') {
       if (s.e.k === 13) {
-        const txt = field('Words', input('inTxt', 'text', '', el => { tlSel.e.txt = el.value; })); txt.style.width = '220px';
+        const txt = field('Words', input('inTxt', 'text', '', el => { tlSel.e.txt = el.value; })); txt.style.width = '240px'; txt.title = 'A | starts a new line'; txt.placeholder = 'A | starts a new line';
         txt.addEventListener('input', () => { tlSel.e.txt = txt.value; tlChanged(); });
         field('Arrives as', select('inMode', TYPE_MODES, el => { tlSel.e.mode = el.value; }));
         field('Size', input('inSize', 'number', '1', el => { tlSel.e.size = Math.min(1, Math.max(0.03, (Number(el.value) || 50) / 100)); }));
         field('Height', input('inY', 'number', '1', el => { tlSel.e.y = Math.min(1, Math.max(0, (Number(el.value) || 0) / 100)); }));
+        field('Across', input('inX', 'number', '1', el => { tlSel.e.x = Math.min(1, Math.max(0, (Number(el.value) || 0) / 100)); }));
+        field('Spacing', input('inTrk', 'number', '1', el => { tlSel.e.trk = Math.min(1, Math.max(-0.1, (Number(el.value) || 0) / 100)); }));
+        field('Leaves', select('inOut', [['cut', 'With a cut'], ['same', 'The way it came']], el => { tlSel.e.out = el.value; }));
+        const caps = document.createElement('input'); caps.type = 'checkbox'; caps.id = 'inCaps'; caps.addEventListener('change', () => { tlSel.e.caps = caps.checked; tlChanged(); }); field('Caps', caps);
         field('Font', select('inFont', [['sans', 'Sans'], ['mono', 'Mono'], ['own', fontFile ? fontFile.name : 'Own font…']], el => { if (el.value === 'own' && !fontFile) { el.value = tlSel.e.font; $('ffile').click(); } else tlSel.e.font = el.value; }));
         const pick = document.createElement('button'); pick.type = 'button'; pick.textContent = 'Load font'; pick.addEventListener('click', () => $('ffile').click()); box.append(pick);
+      } else if (s.e.k === 17) {
+        field('Pattern', select('inFx', PILLAR_FX.map(f => [f, PIL_NAMES[f]]), el => { tlSel.e.fx = el.value; }));
+        field('It', select('inPm', [['mask', 'Shows the picture where it is on'], ['light', 'Lights whole pillars']], el => { tlSel.e.pm = el.value; }));
+        field('Speed', input('inSp', 'number', '5', el => { tlSel.e.sp = Math.min(6, Math.max(0.05, (Number(el.value) || 100) / 100)); }));
+        field('On', input('inWd', 'number', '5', el => { tlSel.e.wd = Math.min(1, Math.max(0.02, (Number(el.value) || 25) / 100)); }));
       } else field('Clip', select('inType', Object.keys(EV).filter(t => layerOf(EV[t]) === layerOf(s.e.k)).map(t => [t, t[0].toUpperCase() + t.slice(1)]), el => { const e = tlSel.e; e.type = el.value; e.k = EV[e.type]; e.d = e.k === 12 ? 0 : e.d || EVD[e.type]; mergeEv(); }));
       field('Start', input('inStart', 'number', '0.01', el => { tlSel.e.t = Math.min(score.D - 0.01, Math.max(0, Number(el.value) || 0)); mergeEv(); }));
       field('Length', input('inLen', 'number', '0.01', el => { if (tlSel.e.k !== 12) tlSel.e.d = Math.max(0.05, Number(el.value) || 0.05); mergeEv(); }));
@@ -333,7 +343,7 @@ function tlInsp() {
   if (!s) return;
   if (s.kind === 'ev') {
     if ($('inAuto')) $('inAuto').textContent = 'Automatic ' + s.e.type + ' at ' + s.e.t.toFixed(2) + ' s, ' + tcAt(s.e.t) + '. Press Bake on the lane to edit the automatic clips, or Auto to switch them off.';
-    else { num('inType', s.e.type); num('inTxt', s.e.txt); num('inMode', s.e.mode); num('inSize', Math.round(s.e.size * 100)); num('inY', Math.round(s.e.y * 100)); num('inFont', s.e.font); num('inStart', s.e.t.toFixed(2)); num('inLen', s.e.d.toFixed(2)); num('inSeed', s.e.seed); num('inFace', s.e.face | 0); $('inLen').disabled = s.e.k === 12; $('inTc').textContent = tcAt(s.e.t); }
+    else { num('inType', s.e.type); num('inTxt', s.e.txt); num('inMode', s.e.mode); num('inSize', Math.round(s.e.size * 100)); num('inY', Math.round(s.e.y * 100)); num('inFont', s.e.font); num('inX', Math.round((s.e.x === undefined ? 0.5 : s.e.x) * 100)); num('inTrk', Math.round((s.e.trk || 0) * 100)); num('inOut', s.e.out || 'cut'); if ($('inCaps')) $('inCaps').checked = s.e.caps !== false; num('inFx', s.e.fx); num('inPm', s.e.pm); num('inSp', Math.round((s.e.sp || 1) * 100)); num('inWd', Math.round((s.e.wd || 0.25) * 100)); num('inStart', s.e.t.toFixed(2)); num('inLen', s.e.d.toFixed(2)); num('inSeed', s.e.seed); num('inFace', s.e.face | 0); $('inLen').disabled = s.e.k === 12; $('inTc').textContent = tcAt(s.e.t); }
   } else { num('inStart', s.k.t.toFixed(2)); num('inVal', Math.round(aRange(s.key).back(s.k.v) * 100)); num('inCurve', s.k.c); $('inTc').textContent = tcAt(s.k.t); }
 }
 
