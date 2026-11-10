@@ -27,6 +27,9 @@ body{background:var(--room);color:var(--ink);font-family:var(--body);font-size:1
 .top{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 20px;padding:18px 20px 14px;border-bottom:1px solid var(--rule)}
 h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase;margin:0;text-wrap:balance}
 .top p{margin:0;color:var(--dim);max-width:65ch}
+.top{padding-right:250px}
+.smpte{position:fixed;top:8px;right:14px;z-index:20;background:#000;border:1px solid var(--rule);padding:7px 12px;font:500 24px/1 var(--display);letter-spacing:.06em;font-variant-numeric:tabular-nums;color:var(--ink)}
+@media (max-width:620px){.top{padding-right:16px}.smpte{font-size:16px;top:auto;bottom:8px}}
 .app{display:grid;grid-template-columns:minmax(0,1fr) 304px;gap:20px;padding:20px;align-items:start}
 .stagecol{position:sticky;top:12px;min-width:0}
 .stage{background:#000;border:1px solid var(--rule);display:flex;justify-content:center;align-items:center;min-height:180px;overflow-x:auto}
@@ -129,6 +132,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 </style>
 </head>
 <body>
+<div class="smpte" id="smpte" role="timer" aria-label="Timecode at the playhead" title="Timecode at the playhead. Set the rate and the start under Timecode.">00:00:00:00</div>
 <header class="top">
   <h1>Mall Call <span id="build" style="color:var(--dim);font-weight:400"></span></h1>
   <p>Three layers cut to your sound. A base layer for the rare big sweep or strobe, a glitch layer of lines, chases and debris, and the logo on top as a loader or popping through. Trigger any of it by hand.</p>
@@ -364,7 +368,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 19;
+const BUILD = 20;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
