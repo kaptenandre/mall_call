@@ -171,8 +171,20 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 .bar{height:3px;background:var(--rule)}
 .bar i{display:block;height:100%;width:0;background:var(--signal)}
 [hidden]{display:none!important}
-.rail.two{display:block;columns:2;column-gap:14px}.rail.two fieldset{break-inside:avoid;margin-bottom:14px}
-.rail.three{columns:3}
+/* the columns sit on an inner box of free height; put on the scrolling rail itself they would spill sideways */
+.railin{display:flex;flex-direction:column;gap:14px;min-width:0}
+.railin.two{display:block;columns:2;column-gap:14px}.railin.two fieldset{break-inside:avoid;margin-bottom:14px}
+.railin.three{columns:3}
+.monrow{display:flex;gap:0;border:1px solid var(--rule);border-bottom:0;background:#000;min-height:0}
+.monrow .ring3d{border:0;flex:1 1 0;min-width:0}
+.pilmon{flex:none;display:flex;flex-direction:column;border-left:1px solid var(--rule);background:var(--panel);min-height:0}
+.pilmon canvas{display:block;flex:1 1 0;min-height:0;height:0;width:auto;aspect-ratio:264/384;image-rendering:pixelated;background:#000;align-self:center}
+.pilhead,.pilfoot{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:3px 5px;font:500 10px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.pilhead b{font-weight:500;color:var(--ink)}
+.pilfoot{justify-content:space-around}
+.pilhead button{appearance:none;border:1px solid var(--rule);background:#000;color:var(--ink);width:22px;height:20px;padding:0;cursor:pointer;font:500 14px/1 var(--display)}
+.pilhead button:hover{border-color:var(--ink)}
+.stage canvas{cursor:pointer}
 .splitter{cursor:col-resize;background:var(--rule);touch-action:none}
 .splitter:hover,.splitter.on{background:var(--ink)}
 /* On anything wider than a phone the window is a shell that never scrolls as a whole: the monitor and the timeline keep their
@@ -183,19 +195,20 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
   .top{flex:none;padding-top:10px;padding-bottom:9px}
   .app{flex:1 1 0;min-height:0;grid-template-columns:minmax(0,1fr) 5px var(--railw,320px);gap:0;padding:0;align-items:stretch}
   .stagecol{position:relative;top:0;display:flex;flex-direction:column;min-height:0;padding:10px 12px 8px;overflow:hidden}
-  .ring3d{flex:1 1 0;min-height:90px;height:auto}
+  .monrow{flex:1 1 0;min-height:90px}
+  .ring3d{height:auto}
   .stage{flex:none;min-height:0}
   .stage.ring canvas{height:clamp(44px,11vh,130px)}
   .tlwrap{flex:0 1 auto;min-height:96px;max-height:40vh;overflow-y:auto}
   .tlbar,.tlinsp,.hud,.partbar,.views{flex:none}
   .partbar{margin-bottom:0}
-  .rail{overflow-y:auto;min-height:0;padding:12px}
+  .rail{display:block;overflow-y:auto;overflow-x:hidden;min-height:0;padding:12px}
   .work{flex:1 1 0;min-height:0;overflow-y:auto;align-content:start}
 }
 @media (min-width:1500px){.app{--railw:640px}}
 @media (min-width:881px) and (max-height:820px){.tlwrap{max-height:31vh}.stage.ring canvas{height:44px}}
 @media (min-width:881px) and (max-height:760px){.hud{padding:4px 2px 4px}.tlinsp{min-height:30px;padding:3px 8px}.views{padding:3px 6px}.tlbar{padding:3px 6px}}
-@media (max-width:880px){.app{grid-template-columns:minmax(0,1fr)}.stagecol{position:static}.splitter{display:none}}
+@media (max-width:880px){.monrow{height:46vh}.app{grid-template-columns:minmax(0,1fr)}.stagecol{position:static}.splitter{display:none}}
 @media (max-width:620px){.top,.app{padding-left:16px;padding-right:16px}.padrow{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
@@ -210,7 +223,14 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
   <section class="stagecol">
     <div class="lookflash" id="lookFlash" aria-live="polite"></div>
     <div class="views" id="views" hidden><span>View</span></div>
-    <canvas id="ring3d" class="ring3d" aria-label="The ring in 3D. Drag to turn, scroll to move in and out." hidden></canvas>
+    <div class="monrow">
+      <canvas id="ring3d" class="ring3d" aria-label="The ring in 3D. Drag to turn, scroll to move in and out." hidden></canvas>
+      <div class="pilmon" id="pilMon">
+        <div class="pilhead"><button type="button" id="pilPrev" aria-label="Previous pillar" title="Previous pillar">‹</button><b id="pilName">Pillar 1</b><button type="button" id="pilNext" aria-label="Next pillar" title="Next pillar">›</button></div>
+        <canvas id="pilCv" width="264" height="384" aria-label="One pillar on its own: outside on the left, inside on the right"></canvas>
+        <div class="pilfoot"><span>Out</span><span>In</span></div>
+      </div>
+    </div>
     <div class="stage wide" id="stageWrap"><canvas id="stage" width="1920" height="1080" aria-label="Preview"></canvas></div>
     <div class="tlbar">
       <button type="button" id="tlPlay">Pause</button>
@@ -470,7 +490,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 25;
+const BUILD = 26;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -485,7 +505,7 @@ const S = { format: 'ring', shape: 3, panels: 30, repeats: 3, orbit: true, tint:
   chaos: 0.6, trail: 0, mix: false, pshape: 0, pfill: 0.78, dither: 'bayer4', wob: 0.5, wobSize: 0.5, eqAmt: 0.6, ease: 0.85, range: 'all',
   tcRate: '25', tcStart: 0, tcShow: false, outFit: 'contain',
   faces: 2, panelsIn: 30, panelPx: 0, view3d: true, inner: 'same', exFmt: 'mp4', exView: 'flat', gap: 0,
-  gGain: 1, gCon: 1, gGam: 1, gBlack: 0, pq: 'auto' };
+  gGain: 1, gCon: 1, gGam: 1, gBlack: 0, pq: 'auto', pil: 0 };
 // The piece can be split into parts. Everything from the three layers down to the look is kept per part; S holds the part being edited.
 const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'logoEach', 'outline', 'symAmt', 'pilAmt', 'busy', 'trans', 'transLen', 'glitch', 'lines', 'lineMode', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxAmt', 'fxStyle', 'fxDen',
   'logoMode', 'loader', 'presence', 'eq', 'logoStyle', 'logoDen', 'chaos', 'trail', 'mix', 'pshape', 'pfill', 'dither', 'wob', 'wobSize', 'eqAmt', 'ease', 'inner'];
@@ -1369,6 +1389,19 @@ function gradeFrame(cv) {
   t.globalCompositeOperation = 'copy'; t.drawImage(cv, 0, 0);
   g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'copy'; g.globalAlpha = 1; g.filter = 'url(#grade)'; g.drawImage(gradeTmp, 0, 0); g.restore(); g.filter = 'none';
 }
+// One pillar on its own, pixel for pixel: its outside, and beside it the inside pillar that stands at the same place on the ring.
+function pillarFrame() {
+  const d = dims(), c = $('pilCv'), k = stage.width / d.W, pw = d.pw * k, hs = d.Hs * k, W = Math.round(pw), H = Math.round(hs), gap = Math.max(2, Math.round(W / 16));
+  const i = Math.min(S.panels - 1, Math.max(0, S.pil | 0)), j = Math.min(S.panelsIn - 1, Math.round(i * S.panelsIn / S.panels));
+  if (c.width !== W * 2 + gap || c.height !== H) { c.width = W * 2 + gap; c.height = H; c.style.aspectRatio = c.width + '/' + c.height; }
+  const g = c.getContext('2d');
+  g.fillStyle = '#16161d'; g.fillRect(0, 0, c.width, c.height);
+  g.imageSmoothingEnabled = false;
+  g.drawImage(stage, Math.round(i * pw), 0, W, H, 0, 0, W, H);
+  if (d.two) g.drawImage(stage, Math.round(j * pw), H, W, H, W + gap, 0, W, H); else { g.fillStyle = '#000'; g.fillRect(W + gap, 0, W, H); }
+  const name = 'Pillar ' + (i + 1) + ' of ' + S.panels;
+  if ($('pilName').textContent !== name) $('pilName').textContent = name;
+}
 let mainRig = null, hudTick = 0, paintFps = 30, paintAt = 0;
 // what a part is called: its own name, or its number
 const partName = i => (parts[i] && parts[i].name) || 'Part ' + (i + 1);
@@ -1377,12 +1410,13 @@ function paint() {
   if (two) { if (!mainRig) mainRig = mkRig(stage, ST); drawFaces(mainRig, tau, fpsNow); }
   else renderOne(main, ST, PAt(tau, 0), tau, fpsNow);
   gradeFrame(stage);
-  outFrame(); ringFrame();
+  outFrame(); ringFrame(); pillarFrame();
   for (const k in auto) if (auto[k].length) { const R = aRange(k), v = String(Math.round(R.back(P[k]) * 100)); if (R.el.value !== v && document.activeElement !== R.el) R.el.value = v; }   // animated sliders follow their keys
   if (S.format === 'ring') {
     const d = dims(), g = main.g, k = stage.width / d.W, pw = d.pw * k, hs = d.Hs * k, gw = Math.max(1, Math.round(hs / 200));
     g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.fillStyle = '#3a3947';
     for (let i = 1; i < S.panels; i++) g.fillRect(Math.round(i * pw - gw / 2), 0, gw, hs);
+    { const i = Math.min(S.panels - 1, Math.max(0, S.pil | 0)), m = Math.max(2, gw * 2); g.fillStyle = '#eceaf4'; g.fillRect(Math.round(i * pw), 0, Math.round(pw), m); g.fillRect(Math.round(i * pw), hs - m, Math.round(pw), m); g.fillStyle = '#3a3947'; }   // the pillar shown on its own
     if (two) { for (let i = 1; i < S.panelsIn; i++) g.fillRect(Math.round(i * pw - gw / 2), hs, gw, hs); g.fillRect(0, Math.round(hs - gw / 2), stage.width, gw); }
   }
   const hud = (id, t) => { const el = $(id); if (el.textContent !== t) el.textContent = t; };
@@ -1446,7 +1480,7 @@ function syncUI() {
   $('fmtNote').textContent = S.format === 'wide' ? 'One 16:9 screen, ' + W + ' × ' + H + '.'
     : S.format === 'panel' ? 'One tall panel, 1 × ' + S.shape + ', ' + W + ' × ' + H + '.'
     : (S.faces === 2 ? 'Two strips in one frame, ' + W + ' × ' + H + ': the ' + S.panels + ' outside panels on top, the ' + S.panelsIn + ' inside panels under them.' : 'All ' + S.panels + ' panels side by side as one strip, ' + W + ' × ' + H + '.') + ' Each panel is 1 × ' + S.shape + ', ' + pw + ' × ' + (pw * S.shape) + ' pixels. Air between is the gap from one pillar to the next, counted in pillar widths: with it set, the picture runs behind the pillars and each one shows its own stretch. Panel pixels 0 picks a size by itself. The thin lines mark the panel edges and are not in the export. What the inside shows is set per part.';
-  { const two = S.format === 'ring' && S.faces === 2; $('panelsInRow').hidden = $('innerRow').hidden = !two; $('faceSeg').hidden = !two || S.inner !== 'own'; if (face && (!two || S.inner !== 'own')) face = 0; setRadio('face', face); $('inner').value = S.inner; $('ring3d').hidden = $('views').hidden = !(S.format === 'ring' && S.view3d); $('exViewRow').hidden = S.format !== 'ring'; }
+  { const two = S.format === 'ring' && S.faces === 2; $('panelsInRow').hidden = $('innerRow').hidden = !two; $('faceSeg').hidden = !two || S.inner !== 'own'; if (face && (!two || S.inner !== 'own')) face = 0; setRadio('face', face); $('inner').value = S.inner; $('ring3d').hidden = $('views').hidden = !(S.format === 'ring' && S.view3d); if (S.pil >= S.panels) S.pil = 0; $('exViewRow').hidden = S.format !== 'ring'; }
   $('modeNote').textContent = S.logoMode === 0 ? 'The logo builds like a loading screen with a progress bar, lands on a hit, holds, then drops out.'
     : S.logoMode === 1 ? 'The logo stays out and cuts in on some of the hits.' : 'The logo is up the whole time and cuts between poses on the hits.';
   $('loader').disabled = S.logoMode !== 0;
@@ -1776,6 +1810,11 @@ $('merge').addEventListener('click', () => {
 $('loopPart').addEventListener('click', e => { loopPart = !loopPart; e.currentTarget.setAttribute('aria-pressed', String(loopPart)); });
 $('copyAll').addEventListener('click', () => { if (face) setFace(0); savePart(); for (const p of parts) { p.P = snap(); if (parts[sel].Q) p.Q = Object.assign({}, parts[sel].Q); else delete p.Q; } rebuildScore(); syncUI(); partSay('All ' + parts.length + ' parts now share the settings of part ' + (sel + 1) + '.'); });
 $('fps').addEventListener('change', e => { S.fps = Number(e.target.value); syncUI(); });
+const pilSet = n => { S.pil = ((n % S.panels) + S.panels) % S.panels; touch(); if (!S.playing && !busy) paint(); };
+$('pilPrev').addEventListener('click', () => pilSet((S.pil | 0) - 1));
+$('pilNext').addEventListener('click', () => pilSet((S.pil | 0) + 1));
+// press a pillar on the strips to see that one on its own
+stage.addEventListener('click', e => { const r = stage.getBoundingClientRect(), d = dims(), u = (e.clientX - r.left) / r.width * d.W / d.pw, inside = d.two && (e.clientY - r.top) / r.height > 0.5; pilSet(inside ? Math.round(Math.floor(u) * S.panels / S.panelsIn) : Math.floor(u)); });
 $('pq').addEventListener('change', e => { S.pq = e.target.value; pscale = S.pq === 'auto' ? 1 : Number(S.pq); slowFrames = 0; sizeStage(); touch(); if (!S.playing && !busy) paint(); });
 $('play').addEventListener('click', () => setPlaying(!S.playing));
 
@@ -1965,7 +2004,7 @@ $('save').addEventListener('click', async () => {
 });
 
 /* ---------- project files (Mac app) ---------- */
-const GLOBAL_KEYS = ['format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap', 'gGain', 'gCon', 'gGam', 'gBlack', 'pq'];
+const GLOBAL_KEYS = ['format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap', 'gGain', 'gCon', 'gGam', 'gBlack', 'pq', 'pil'];
 let loadingProject = false, saveTimer = 0;
 function getProject() {
   savePart();

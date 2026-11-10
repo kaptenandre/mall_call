@@ -51,6 +51,7 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 - **Type** clips (`EV.type`, the fourth lane) put words on screen: `txt`, `mode` (slam, typeon, roll, ticker), `size`, `y`, `font`. `typeField` draws them in the logo layer with its style and its glitch. They only come from the user, never from the automatic cut.
 - Glow follows the bass (`st.pulse`) so it reads as light thrown by a hit. Trails are off by default. The user called constant glow and trails the softest part of the look.
 - **The piece is always the double ring** (user, 2026-11: "everything will be this double circle"). The Wide and Panel formats are gone from the interface; `S.format` is always `ring` and `S.faces` starts at 2. Do not add flat or square formats back. The 3D view is the main monitor, with set views (`RING_VIEWS`: outside, eye level, close, inside, centre, above) and Turn, which walks round the ring and also turns a 3D film.
+- **One pillar on its own** is always shown beside the 3D view (`pillarFrame`): the chosen pillar's outside and the inside pillar at the same place on the ring, pixel for pixel. `S.pil` is which; the arrows or a press on the strips choose it, and the strips mark it.
 - **Workspaces**: Edit is the piece. Media is the pool of what the project holds: every logo it has been given (`logoPool`, press one to use it), the sound, the user's own symbols and font. Versions is the project library as a page with a history table.
 - **The window is a shell that does not scroll** (above 880 px wide): the monitor, the timeline and the part controls keep their place on the left, and only the rail of settings scrolls. The rail's width is dragged with the splitter and remembered; it lays itself out in one, two or three columns as it fits. The trigger pad lives at the top of the rail. Short windows squeeze the timeline and the strips so the 3D view keeps some room.
 - **The preview only paints when it must**: at the piece's frame rate while playing, and when something changes while paused (plus a slow safety repaint). It used to repaint 60 times a second even standing still, which made scrolling lag. `S.pq` is the preview size: auto, full, half or quarter. Anything that changes the picture while paused must call `paint()` itself.
@@ -132,7 +133,6 @@ Asked for and not done yet, newest first:
 2. Icons on the trigger pad, if they want them.
 3. The real room from Vectorworks in the 3D view: waiting for an OBJ export from their collaborator.
 
-## Next, roughly in order
 ## Next, roughly in order
 
 1. The real room in the 3D view. The user's collaborator draws in Vectorworks. Load a model exported from there (OBJ first, it is easy to read; glTF after) and put the frame on its LED faces, so the piece is seen in the space as drawn. Also save the 3D view as a film.

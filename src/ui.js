@@ -43,7 +43,8 @@ Object.assign(ICONS, {
 // the settings column: as wide as the user drags it, in as many columns as fit, and remembered
 {
   const app = document.querySelector('.app'), rail = $('rail'), sp = $('splitter');
-  const cols = () => { const w = rail.clientWidth; rail.classList.toggle('two', w >= 560); rail.classList.toggle('three', w >= 900); };
+  const inner = document.createElement('div'); inner.className = 'railin'; inner.append(...rail.children); rail.append(inner);
+  const cols = () => { const w = rail.clientWidth; inner.classList.toggle('two', w >= 560); inner.classList.toggle('three', w >= 900); };
   try { const w = Number(localStorage.getItem('mallcall-railw')); if (w >= 240) app.style.setProperty('--railw', w + 'px'); } catch (e) {}
   let down = false;
   sp.addEventListener('pointerdown', e => { down = true; sp.setPointerCapture(e.pointerId); sp.classList.add('on'); });
