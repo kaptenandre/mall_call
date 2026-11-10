@@ -52,8 +52,8 @@ Object.assign(ICONS, {
     $('rail').prepend(bar);
   }
   // the part buttons say what they do with a picture and a word
-  for (const [id, icon] of [['split', 'cut'], ['splitSound', 'cutSound'], ['merge', 'join'], ['loopPart', 'loop'], ['copyAll', 'copy']]) {
-    const b = $(id), text = b.textContent.trim(), short = { split: 'Split', splitSound: 'By sound', merge: 'Merge', loopPart: 'Loop', copyAll: 'To all' }[id];
+  for (const [id, icon] of [['split', 'cut'], ['splitSound', 'cutSound'], ['merge', 'join'], ['loopPart', 'loop'], ['copyAll', 'copy'], ['blank', 'frame']]) {
+    const b = $(id), text = b.textContent.trim(), short = { split: 'Split', splitSound: 'By sound', merge: 'Merge', loopPart: 'Loop', copyAll: 'To all', blank: 'Blank' }[id];
     if (!b.title) b.title = text;
     b.setAttribute('aria-label', text); b.replaceChildren(ic(icon), short);
   }

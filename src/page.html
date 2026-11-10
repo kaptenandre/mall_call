@@ -281,6 +281,7 @@ body.rendering .rail fieldset { opacity: .55; }
       <button type="button" class="plain" id="merge">Merge with previous</button>
       <button type="button" class="plain" id="loopPart" aria-pressed="false">Loop this part</button>
       <button type="button" class="plain" id="copyAll">Copy to all parts</button>
+      <button type="button" class="plain" id="blank" title="Start from nothing: the automatic cut off on every lane and the glitch layer silent in every part, so the frame is black until you put clips on it. Your own clips stay. Undo brings it all back.">Blank slate</button>
       <label class="tr">Name <input type="text" id="partName" placeholder="Part 1" maxlength="24" spellcheck="false" autocomplete="off" style="width:120px"></label>
       <label class="tr">Comes in with <select id="trans"><option value="cut">A cut</option><option value="dip">A dip to black</option><option value="wipe">A wipe round the pillars</option><option value="split">A split open</option><option value="pop">Pillars at random</option><option value="spin">A spin</option><option value="glitch">A glitch burst</option><option value="strobe">A strobe</option></select></label>
       <label class="tr">over <input type="number" id="transLen" min="0.2" max="6" step="0.1" value="1"> s</label>
@@ -541,7 +542,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 40;
+const BUILD = 41;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -1327,7 +1328,7 @@ class Renderer {
     for (let L = 0; L < 4; L++) {
       if ((L === 0 && !st.bn && !st.pl && !st.pf) || (L === 2 && !st.lv && !st.syN) || (L === 3 && !st.tyN)) continue;
       let o = LO[L];
-      o.va = st.va; o.vb = st.vb; o.amb = L === 1 ? 1 : 0;
+      o.va = st.va; o.vb = st.vb; o.amb = L === 1 && !o.quiet ? 1 : 0;      // a glitch layer with everything at nought is black, not faintly lit
       if (L === 2 && st.dens !== 1) o.density = Math.min(1.2, (lerp(22, 96, o.density) * st.dens - 22) / 74);
       const lc = this.lay[L], q = this.lg[L];
       if (lc.width !== W || lc.height !== H) { lc.width = W; lc.height = H; }
@@ -1418,7 +1419,8 @@ function layerOpts(fps, P) {
   const mk = (style, density) => ({ style, density, tint: P.tint, hot: P.hot, glow: P.glow, size: P.size, loop, k: loop / 8, loopD: track ? 0 : S.loop,
     repeats: ring ? S.repeats : 1, travel: ring && S.orbit ? 1 : 0, fan: S.format === 'wide', trail: P.trail, fps,
     pshape: P.pshape, pfill: P.pfill, dither: P.dither, loader: P.loader, va: 0.3, vb: 0.7, amb: 0,
-    logoEach: !!P.logoEach, outline: !!P.outline, wobA: P.wob * 2, wobB: Math.max(0, P.wob - 0.5) * 0.05, wobF: Math.pow(4, 0.5 - P.wobSize), eqAmt: P.eqAmt, ease: P.ease, tw: 0 });
+    logoEach: !!P.logoEach, outline: !!P.outline, wobA: P.wob * 2, wobB: Math.max(0, P.wob - 0.5) * 0.05, wobF: Math.pow(4, 0.5 - P.wobSize), eqAmt: P.eqAmt, ease: P.ease, tw: 0,
+    quiet: !(P.glitch > 0.02 || P.lines > 0.02 || P.chase > 0.02 || P.bgLo > 0.02 || P.bgMid > 0.02 || P.bgHi > 0.02) });
   // words are a layer of their own: their own style and pixel size, and only as much of the glitch as Warp lets in
   const ty = mk(P.typeStyle || 'dither', P.typeDen === undefined ? 0.8 : P.typeDen); ty.tyWarp = P.typeWarp || 0;
   return [mk(P.baseStyle, P.baseDen), mk(P.fxStyle, P.fxDen), mk(P.logoStyle, P.logoDen), ty];
@@ -1995,6 +1997,15 @@ $('merge').addEventListener('click', () => {
   rebuildScore(); pushAll(); syncUI();
 });
 $('loopPart').addEventListener('click', e => { loopPart = !loopPart; e.currentTarget.setAttribute('aria-pressed', String(loopPart)); });
+// Blank slate: nothing happens by itself any more. The frame is black until clips are laid on it, layer by layer.
+$('blank').addEventListener('click', () => {
+  undoMark(); if (face) setFace(0); savePart();
+  const hush = P => { if (P) Object.assign(P, { glitch: 0, lines: 0, chase: 0, bgLo: 0, bgMid: 0, bgHi: 0, baseAmt: 0, fxAmt: 0, pilAmt: 0, symAmt: 0, trans: 'cut' }); };
+  for (const p of parts) { hush(p.P); hush(p.Q); }
+  autoCut.base = autoCut.fx = autoCut.logo = autoCut.pil = autoCut.sym = false; S.cleanEnds = false;
+  loadPart(); pushAll(); rebuildScore(); syncUI();
+  partSay('Blank slate. Nothing plays by itself now: drag clips from the palette onto the timeline to build it up. Auto on a lane brings its automatic cut back.');
+});
 $('copyAll').addEventListener('click', () => { if (face) setFace(0); savePart(); for (const p of parts) { p.P = snap(); if (parts[sel].Q) p.Q = Object.assign({}, parts[sel].Q); else delete p.Q; } rebuildScore(); syncUI(); partSay('All ' + parts.length + ' parts now share the settings of part ' + (sel + 1) + '.'); });
 $('fps').addEventListener('change', e => { S.fps = Number(e.target.value); syncUI(); });
 const pilSet = n => { S.pil = ((n % S.panels) + S.panels) % S.panels; touch(); if (!S.playing && !busy) paint(); };
