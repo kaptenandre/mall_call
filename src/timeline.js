@@ -116,6 +116,7 @@ function tlSnapT(t, e, skip) {
   tryT(0); tryT(tau);
   for (const h of score.hitList) tryT(h.t);
   for (let i = 1; i < parts.length; i++) if (i !== skip) tryT(parts[i].t);
+  if (skip !== undefined) { bd = Math.min(bd, lim) ; const far = 14 / tlW() * tlSpan(); for (const c of soundCuts()) { const d = Math.abs(c - t); if (d < far && d < bd * 2.2) { bd = d / 2.2; best = c; } } }   // a part edge reaches further for a change in the sound
   return best;
 }
 
@@ -204,6 +205,12 @@ function drawTimeline() {
         q.fillStyle = '#25252f'; q.fillRect(0, mid, W, 1);
         q.fillStyle = '#eceaf4';
         for (const h of score.hitList) { const x = t2x(h.t); if (x >= 0 && x <= W) q.fillRect(Math.round(x), r.y, 1, 3 + Math.round(4 * Math.min(1, h.v))); }
+        if (score.struct) {
+          q.globalAlpha = 0.5; q.fillStyle = '#8d8b9e';
+          for (const u of score.struct.builds) { const x0 = t2x(u.a), x1 = t2x(u.b); if (x1 > 0 && x0 < W) { q.fillRect(x0, r.y + r.h - 3, x1 - x0, 2); q.fillText('BUILD', Math.max(0, x0) + 3, r.y + r.h - 9); } }
+          for (const u of score.struct.breaks) { const x0 = t2x(u.a), x1 = t2x(u.b); if (x1 > 0 && x0 < W) { q.fillRect(x0, r.y + r.h - 3, 1, 3); q.fillRect(x1, r.y + r.h - 3, 1, 3); q.fillText('QUIET', Math.max(0, x0) + 3, r.y + r.h - 9); } }
+          q.globalAlpha = 1; q.fillStyle = '#eceaf4';
+        }
         for (const d of (score.struct ? score.struct.drops : [])) { const x = t2x(d.t); if (x >= 0 && x <= W) { q.fillRect(Math.round(x) - 3, r.y, 7, 3); q.fillText('DROP', Math.round(x) + 6, r.y + 6); } }
       } else if (r.kind === 'parts') {
         parts.forEach((p, i) => {

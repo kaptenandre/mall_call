@@ -154,6 +154,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
     <div class="hud"><span><b id="hudState">Logo out</b></span><span id="hudRes">1920 × 1080 · 30 fps</span><span id="hudTime">0.00 / 8 s</span></div>
     <div class="partbar">
       <button type="button" class="plain" id="split">Split at playhead</button>
+      <button type="button" class="plain" id="splitSound" title="Cut the piece into parts where the sound changes: at drops, where a build starts, and where a quiet stretch begins and ends">Split by sound</button>
       <button type="button" class="plain" id="merge">Merge with previous</button>
       <button type="button" class="plain" id="loopPart" aria-pressed="false">Loop this part</button>
       <button type="button" class="plain" id="copyAll">Copy to all parts</button>
@@ -352,7 +353,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 17;
+const BUILD = 18;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -1472,7 +1473,41 @@ async function updateReload() {
 }
 function resetParts() { face = 0; S.inner = 'same'; parts = [{ t: 0, P: snap() }]; sel = 0; loopPart = false; $('loopPart').setAttribute('aria-pressed', 'false'); }
 const partSay = s => { partsSig = ''; renderParts(); $('partNote').textContent = s; };
-$('split').addEventListener('click', () => splitAt(tau));
+$('split').addEventListener('click', () => splitAt(tlSnap ? nearHit(tau, 0.25) : tau));
+// the nearest hit, drop or change in the sound to a time, when one is within reach
+function nearHit(t, reach) {
+  let best = t, bd = reach;
+  const tryT = c => { const d = Math.abs(c - t); if (d < bd) { bd = d; best = c; } };
+  for (const h of score.hitList) tryT(h.t);
+  for (const c of soundCuts()) tryT(c);
+  return best;
+}
+// where the sound changes: drops, the start of a build, and both ends of a quiet stretch
+function soundCuts() {
+  const st = score.struct || (score.struct = makeStructure(score)), out = [];
+  for (const d of st.drops) out.push(d.t);
+  for (const u of st.builds) out.push(u.a);
+  for (const u of st.breaks) { out.push(u.a); out.push(u.b); }
+  return out.filter(t => t > 1 && t < score.D - 1).sort((a, b) => a - b);
+}
+$('splitSound').addEventListener('click', () => {
+  let cuts = soundCuts().map(t => nearHit(t, 0.2));
+  if (!cuts.length) {                                    // nothing structural to go on: fall back to the strongest hits, well apart
+    const hs = score.hitList.filter(h => h.t > 1 && h.t < score.D - 1).sort((a, b) => b.v - a.v), gap = Math.max(2, score.D / 6);
+    for (const h of hs) if (cuts.every(c => Math.abs(c - h.t) > gap)) cuts.push(h.t);
+    cuts.sort((a, b) => a - b);
+  }
+  const keep = [];
+  for (const t of cuts) if (!keep.length || t - keep[keep.length - 1] >= 1.5) keep.push(t);
+  if (!keep.length) { partSay('There is nothing in the sound to split on here.'); return; }
+  if (face) setFace(0);
+  savePart();
+  const old = parts, at = t => { let i = 0; while (i + 1 < old.length && old[i + 1].t <= t) i++; return old[i]; };
+  parts = [0, ...keep].map(t => { const src = at(t), o = { t, P: Object.assign({}, src.P) }; if (src.Q) o.Q = Object.assign({}, src.Q); return o; });
+  sel = partIdx(tau); loadPart();
+  rebuildScore(); pushAll(); syncUI();
+  partSay('Split into ' + parts.length + ' parts where the sound changes. Drag an edge on the timeline to move it; it snaps to the hits.');
+});
 $('merge').addEventListener('click', () => {
   if (sel === 0) { partSay('The first part has nothing before it to merge with.'); return; }
   face = 0; parts.splice(sel, 1); sel--; loadPart();
