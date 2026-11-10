@@ -5,3 +5,4 @@ web/
 icon/icon.iconset/
 icon/icon.icns
 .DS_Store
+.claude/worktrees/

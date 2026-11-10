@@ -108,6 +108,48 @@ float field(float u, float v) {
   return val * uFxg;
 }
 `;
+// the base layer: whole pillars and pillar outlines from Pillar clips, then up to three big moves (baseField).
+// Everything that depends only on the clip and the time is worked out in script and handed over.
+const GPU_BASE = `
+uniform ivec4 uBI[3];
+uniform vec4 uBA[3], uBB[3];
+uniform float uPl[64], uPf[64], uPgk, uEy, uAsp;
+uniform int uBnn, uPnn;
+uniform bool uHasPl, uHasPf;
+float field(float u, float v) {
+  float val = 0.;
+  if (uPnn > 0) {
+    float x = u * float(uPnn); int i = clamp(int(floor(x)), 0, uPnn - 1);
+    if (uHasPl) val = uPl[i];
+    if (uHasPf && uPf[i] > val) { float fr = (x - float(i) - (1. - uPgk) / 2.) / uPgk; if (fr < .07 || fr > .93 || v < uEy || v > 1. - uEy) val = uPf[i]; }
+  }
+  for (int i = 0; i < 3; i++) {
+    if (i >= uBnn) break;
+    int ty = uBI[i].x; vec4 A = uBA[i], B = uBB[i]; float b = 0.;
+    if (ty == 0) {                                        // sweep: A = width, eased time
+      int dir = uBI[i].y; float w = A.x, e = A.y, d;
+      if (dir < 4) { float c = dir < 2 ? u : v; if ((dir & 1) == 1) c = 1. - c; d = -.02 + (1.04 + w) * e - c; }
+      else if (dir == 4) d = abs(u - .5) * 2. - (1.05 - (1.05 + w) * e);
+      else { float dx = (u - .5) * uAsp, dy = v - .5; d = (.6 * max(1., uAsp) + w) * e - sqrt(dx * dx + dy * dy); }
+      b = d >= 0. && d < w ? 1. - .85 * d / w : 0.;
+    } else if (ty == 1) {                                 // strobe: A = on, which half, level
+      if (A.x > .5) {
+        int pat = uBI[i].y;
+        b = pat == 0 ? 1. : pat == 1 ? ((u < .5) == (A.y > .5) ? 1. : 0.) : (hash(int(floor(u * 6.)), int(floor(v * 3.)) + uBI[i].z * 7, uBI[i].w) < .5 ? 1. : 0.);
+        b *= A.z;
+      }
+    } else if (ty == 2) b = A.x;                          // flood
+    else {                                                // the ring moves: B = direction, start
+      float a = u * B.x + B.y; a -= floor(a);
+      if (ty == 14) { float w = A.x, d = A.y - a, d2 = d - 1.; b = d >= 0. && d < w ? 1. - .8 * d / w : d2 >= 0. && d2 < w ? 1. - .8 * d2 / w : 0.; }
+      else if (ty == 15) { float n = A.x, w = A.z, q = a * n - A.y * n; q -= floor(q); b = q < w ? (1. - .5 * q / w) * A.w : 0.; }
+      else { float d = abs(a - .5) * 2., w = .16, g = A.x - (1. - d); b = g >= 0. && g < w ? 1. - .8 * g / w : 0.; if (A.y >= 0. && d < .06) b = max(b, A.y); }
+    }
+    val = max(val, b);
+  }
+  return val;
+}
+`;
 const GPU_TAIL = `
 // each pillar is a window onto its own stretch of a picture as wide as the whole ring, air included
 float M(float u, float v) { if (uGapN > 0.) { float x = u * uGapN, i = floor(x); u = (i + uGoff + (x - i) * uGk) / uGapN; } return field(u, v); }
@@ -162,7 +204,7 @@ function gpuInit() {
     { const x = gl.getExtension('WEBGL_debug_renderer_info'), name = x ? String(gl.getParameter(x.UNMASKED_RENDERER_WEBGL)) : ''; GPU.name = name; if (!GPU.force && /swiftshader|llvmpipe|software|basic render/i.test(name)) throw new Error('software graphics (' + name + ')'); }
     const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
     const vs = sh(gl.VERTEX_SHADER, GPU_VS), mk = body => { const pr = gl.createProgram(); gl.attachShader(pr, vs); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, GPU_HEAD + body + GPU_TAIL)); gl.bindAttribLocation(pr, 0, 'p'); gl.linkProgram(pr); if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr)); return { pr, loc: {} }; };
-    const progs = { logo: mk(GPU_LOGO), fx: mk(GPU_FX) };
+    const progs = { logo: mk(GPU_LOGO), fx: mk(GPU_FX), base: mk(GPU_BASE) };
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     cv.addEventListener('webglcontextlost', e => { e.preventDefault(); GPU.gl = null; GPU.progs = null; GPU.maskN = -1; });      // comes back by itself on the next frame
@@ -269,6 +311,32 @@ function gpuFx(q, W, H, Wf, t, o, st, sn) {
     }
     i1('uLaneN', nl); gl.uniform4fv(at('uLaneA[0]'), a); gl.uniform4fv(at('uLaneB[0]'), b); }
   gpuDisp(u, o, st, Wf, H, 0.6);
+  gpuDraw(u, q, W, H, t, o, sn, o.gapN || 0);
+  return true;
+}
+// The base layer, with the same sums as baseField.
+function gpuBase(q, W, H, Wf, t, o, st, sn) {
+  const pl = st.pl, pf = st.pf, pn = pl ? pl.length : pf ? pf.length : 0;
+  if (pn > 64 || st.bn > 3 || !gpuCan(sn, o, st)) return false;
+  const u = gpuUse('base', W, H), { gl, f1, i1, at } = u, gk = st.pgK || 1;
+  i1('uPnn', pn); i1('uHasPl', pl ? 1 : 0); i1('uHasPf', pf ? 1 : 0); f1('uPgk', gk); f1('uEy', pn ? 0.07 * (Wf * gk / pn) / H : 0); f1('uAsp', Wf / H);
+  { const a = new Float32Array(64), b = new Float32Array(64); if (pl) a.set(pl); if (pf) b.set(pf); gl.uniform1fv(at('uPl[0]'), a); gl.uniform1fv(at('uPf[0]'), b); }
+  const I = new Int32Array(12), A = new Float32Array(12), B = new Float32Array(12);
+  for (let i = 0; i < st.bn; i++) {
+    const x = st.bx[i], sd = st.bs[i], ty = st.bt[i], k = i * 4;
+    I[k] = ty; I[k + 3] = sd | 0;
+    if (ty === 0) { I[k + 1] = sd % 6; A[k] = 0.14 + 0.16 * hash(sd, 1, 181); A[k + 1] = ioExpo(x); }
+    else if (ty === 1) { const fr = Math.floor(st.ba[i] * 30 + 1e-4); I[k + 1] = sd % 3; I[k + 2] = fr; A[k] = (fr & 1) === 0 && hash(fr, sd, 182) > 0.15 ? 1 : 0; A[k + 1] = (fr >> 1 & 1) === 0 ? 1 : 0; A[k + 2] = 1 - 0.5 * x; }
+    else if (ty === 2) A[k] = Math.pow(1 - x, 2.2);
+    else {
+      B[k] = sd & 1 ? 1 : -1; B[k + 1] = hash(sd, 3, 183);
+      if (ty === 14) { const w = 0.1 + 0.14 * hash(sd, 1, 184); A[k] = w; A[k + 1] = ioExpo(x) * (1 + w + 0.2); }
+      else if (ty === 15) { A[k] = 2 + (sd % 5); A[k + 1] = (0.6 + 1.2 * hash(sd, 1, 185)) * ioQuint(x); A[k + 2] = 0.1 + 0.2 * hash(sd, 2, 186); A[k + 3] = x < 0.08 ? x / 0.08 : 1 - x * x * x; }
+      else { A[k] = ioExpo(x) * 1.16; A[k + 1] = x > 0.82 ? 1 - (x - 0.82) / 0.18 : -1; }
+    }
+  }
+  i1('uBnn', st.bn); gl.uniform4iv(at('uBI[0]'), I); gl.uniform4fv(at('uBA[0]'), A); gl.uniform4fv(at('uBB[0]'), B);
+  i1('uNSl', 0); u.f2('uCrush', 0, 0); f1('uTA', 0); f1('uDA', 0);
   gpuDraw(u, q, W, H, t, o, sn, o.gapN || 0);
   return true;
 }
