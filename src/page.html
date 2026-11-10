@@ -374,6 +374,14 @@ body.rendering .rail fieldset { opacity: .55; }
     </fieldset>
 
     <fieldset>
+      <legend>4 Type layer</legend>
+      <p class="note">Words are a layer of their own, on top, and only there while a Type clip plays. They keep clear of the glitch unless Warp lets it in. How a clip arrives is chosen on the clip.</p>
+      <label class="row" for="typeStyle"><span>Drawn as</span><select id="typeStyle"></select></label>
+      <label class="row" for="typePx"><span>Pixel size</span><input type="range" id="typePx" min="0" max="100" value="20"></label>
+      <label class="row" for="typeWarp"><span>Warp</span><input type="range" id="typeWarp" min="0" max="100" value="0"></label>
+    </fieldset>
+
+    <fieldset>
       <legend>Variation</legend>
       <label class="row" for="ease"><span>Easing</span><input type="range" id="ease" min="0" max="100" value="85"></label>
       <label class="row" for="busy"><span>At once</span><input type="range" id="busy" min="0" max="100" value="40"></label>
@@ -524,7 +532,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 32;
+const BUILD = 33;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -535,14 +543,14 @@ const S = { format: 'ring', shape: 3, panels: 30, repeats: 3, orbit: true, tint:
   loop: 8, fps: 30, playing: true, seed: 1,
   baseAmt: 0.45, baseStyle: 'dither', baseDen: 0.304,
   logoEach: false, outline: false, symAmt: 0.3, pilAmt: 0.4, busy: 0.4, trans: 'cut', transLen: 1, glitch: 0.7, lines: 0.8, lineMode: 1, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxAmt: 0.4, fxStyle: 'rods', fxDen: 0.784,
-  logoMode: 0, loader: 0, presence: 0.5, eq: 1, logoStyle: 'dither', logoDen: 0.64,
+  logoMode: 0, loader: 0, presence: 0.5, eq: 1, logoStyle: 'dither', logoDen: 0.64, typeStyle: 'dither', typeDen: 0.8, typeWarp: 0,
   chaos: 0.6, trail: 0, mix: false, pshape: 0, pfill: 0.78, dither: 'bayer4', wob: 0.5, wobSize: 0.5, eqAmt: 0.6, ease: 0.85, range: 'all',
   tcRate: '25', tcStart: 0, tcShow: false, outFit: 'contain',
   faces: 2, panelsIn: 30, panelPx: 0, view3d: true, inner: 'same', exFmt: 'mp4', exView: 'flat', gap: 0,
   gGain: 1, gCon: 1, gGam: 1, gBlack: 0, pq: 'auto', pil: 0, stats: false };
 // The piece can be split into parts. Everything from the three layers down to the look is kept per part; S holds the part being edited.
 const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'logoEach', 'outline', 'symAmt', 'pilAmt', 'busy', 'trans', 'transLen', 'glitch', 'lines', 'lineMode', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxAmt', 'fxStyle', 'fxDen',
-  'logoMode', 'loader', 'presence', 'eq', 'logoStyle', 'logoDen', 'chaos', 'trail', 'mix', 'pshape', 'pfill', 'dither', 'wob', 'wobSize', 'eqAmt', 'ease', 'inner'];
+  'logoMode', 'loader', 'presence', 'eq', 'logoStyle', 'logoDen', 'typeStyle', 'typeDen', 'typeWarp', 'chaos', 'trail', 'mix', 'pshape', 'pfill', 'dither', 'wob', 'wobSize', 'eqAmt', 'ease', 'inner'];
 const snap = () => { const o = {}; for (const k of PART_KEYS) o[k] = S[k]; return o; };
 let parts = [{ t: 0, P: snap() }], sel = 0, loopPart = false;
 const partIdx = t => { let i = 0; while (i + 1 < parts.length && parts[i + 1].t <= t) i++; return i; };
@@ -929,7 +937,7 @@ function symField(W, H, o, st, per, N) {
   };
   return { M: f, B: f };
 }
-// Type: words as clips on the timeline, drawn in the logo layer with its style and its glitch. Four ways to arrive:
+// Type: words as clips on the timeline, drawn as the fourth layer with its own style. Among the ways to arrive:
 // slam (one word at a time, cut in hard through two wrong frames), typeon (letter by letter in fits and starts, with a cursor),
 // roll (the picture loses vertical hold, rolls and locks), ticker (runs across, surging with the sound).
 const TYPE_FONTS = { sans: '600 120px "Instrument Sans", system-ui, sans-serif', mono: '500 120px "DM Mono", ui-monospace, monospace' };
@@ -975,7 +983,7 @@ async function loadFont(file) {
 // stack (the line repeated in rows that slide against each other), stretch (snaps to a new width and height on every hit),
 // wave (the letters ride a stepped wave).
 function typeField(W, H, o, st) {
-  const disp = mkDisp(st, W, H, 1, o), rows = [], asp = H / W;
+  const warpK = o.tyWarp || 0, glitchy = warpK > 0.01 ? mkDisp(st, W, H, warpK, o) : null, disp = glitchy || ((u, v) => { DU = u; DV = v; }), rows = [], asp = H / W;
   for (let i = 0; i < st.tyN; i++) {
     const e = st.tyE[i], x = st.tyX[i], age = st.tyA[i], mode = e.mode, sd = e.seed;
     let text = String(e.txt || '').trim(); if (e.caps !== false) text = text.toUpperCase();
@@ -1017,10 +1025,21 @@ function typeField(W, H, o, st) {
     const total = hT * n, chars = lines.reduce((a, l) => a + l.length, 0);
     let before = 0;
     // stretch: on every hit the block cuts to another width and height, never easing between them
+    // kinetic arrivals: the whole block is scaled, turned or thrown about its own middle. Springs and eased locks, never a steady glide.
+    let tf = null;
+    if (mode === 'bump' || mode === 'spin' || mode === 'flip' || mode === 'drop') {
+      const sp = (k, w) => Math.exp(-k * age) * Math.cos(w * age), gone = back < 1 ? back * back * (3 - 2 * back) : 1, hit = st.pulse || 0, dir = sd & 1 ? 1 : -1;
+      let s = 1, sx = 1, ang = 0, dy = 0;
+      if (mode === 'bump') s = (1 - sp(7, 15)) * (1 + 0.16 * hit) * gone;                    // shoots past its size, settles, and takes a knock from every hit
+      else if (mode === 'spin') { const lock = Math.min(oExpo(Math.min(1, age / 0.7)), gone); ang = dir * ((1 - lock) * TAU * 1.5 + 0.1 * sp(5, 13) + 0.05 * hit * (st.mi & 1 ? 1 : -1)); s = 0.25 + 0.75 * lock; }
+      else if (mode === 'flip') { const lock = Math.min(oExpo(Math.min(1, age / 0.8)), gone); sx = Math.cos(Math.PI * 3 * (1 - lock)) * (1 + 0.1 * hit); }      // turns about its upright axis like a sign, and stops facing out
+      else { dy = -(1.1 * Math.exp(-5 * age) * Math.abs(Math.cos(9 * age)) + (1 - gone) * 1.2); s = 1 + 0.08 * hit; }      // drop: falls in from above and bounces
+      tf = { cx, cy: e.y, c: Math.cos(ang), s: Math.sin(ang), sx: s * sx, sy: s, dy };
+    }
     const kx = mode === 'stretch' ? [0.45, 0.7, 1, 1, 1.5, 2.2][Math.floor(hash(st.mi, sd, 265) * 5.99)] : 1, ky = mode === 'stretch' ? [0.5, 1, 1, 1.5, 2][Math.floor(hash(st.mi, sd, 266) * 4.99)] : 1;
     ms.forEach((m, li) => {
       const hL = hT * ky, wT = Math.min(mode === 'ticker' ? 99 : 0.98, hT * (m.w / m.h) * asp * kx), len = lines[li].length;
-      const it = { m, hT: hL, wT, left: cx - wT / 2 + jx, top: e.y - total * ky / 2 + li * hL + jy, tile: null, gain: 1, cut: 2, cur: -1, roll: 0, tear: 0, ph: age * 31, sc: null, wv: null, ol: !!e.ol };
+      const it = { m, hT: hL, wT, left: cx - wT / 2 + jx, top: e.y - total * ky / 2 + li * hL + jy, tile: null, gain: 1, cut: 2, cur: -1, roll: 0, tear: 0, ph: age * 31, sc: null, wv: null, ol: !!e.ol, tf };
       if (mode === 'wave') it.wv = { amp: 0.32, ph: st.seed * 0.11 + li * 0.3, f: 0.13 + 0.1 * hash(sd, 1, 267) };      // moves on the glitch clock's holds, so it steps
       if (mode === 'typeon') {                           // the lines fill one after another, as if typed
         const p = Math.min(x >= 0.7 ? 1 : prog(x / 0.7, sd) / 0.97, back), shown = Math.max(0, Math.min(len, Math.floor(p * chars + 1e-4) - before));
@@ -1044,6 +1063,11 @@ function typeField(W, H, o, st) {
     for (let i = 0; i < rows.length; i++) {
       const it = rows[i], m = it.m;
       let u = DU, v = DV;
+      if (it.tf) {                                         // back through the block's own turn and scale, in real pixels so a turn stays round
+        const k = it.tf; if (Math.abs(k.sx) < 0.03 || k.sy < 0.03) continue;
+        const dx = (u - k.cx) * W, dy = (v - k.cy - k.dy) * H, rx = dx * k.c + dy * k.s, ry = dy * k.c - dx * k.s;
+        u = k.cx + rx / (W * k.sx); v = k.cy + ry / (H * k.sy);
+      }
       if (it.roll) { v += it.roll; v -= Math.floor(v); u += it.tear * nz(v * 9 + it.ph, 21); }
       let lv = (v - it.top) / it.hT;
       if (lv < 0 || lv > 1) continue;
@@ -1274,12 +1298,12 @@ class Renderer {
   constructor(cv) {
     this.cv = cv; this.g = cv.getContext('2d', { alpha: false });
     const mk = () => document.createElement('canvas');
-    this.lay = [mk(), mk(), mk()]; this.lg = this.lay.map(c => c.getContext('2d', { alpha: false }));
+    this.lay = [mk(), mk(), mk(), mk()]; this.lg = this.lay.map(c => c.getContext('2d', { alpha: false }));
     this.fb = mk(); this.fq = this.fb.getContext('2d', { alpha: false }); this.fbOk = false;
     this.b1 = mk(); this.b2 = mk(); this.g1 = this.b1.getContext('2d'); this.g2 = this.b2.getContext('2d');
     this.canBlur = typeof this.g1.filter === 'string';
   }
-  // LO: options for base, glitch and logo layer, in that order
+  // LO: options for the base, glitch, logo and type layers, in that order
   draw(t, LO, st) {
     const { cv, g } = this, W = cv.width, H = cv.height;
     g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
@@ -1287,8 +1311,8 @@ class Renderer {
     CORE = LO[0].hot ? '#fff' : LO[0].tint; SHAPE = LO[0].pshape;
     const PN = LO[0].gapN || LO[0].cols;
     pillarGains(st, PN, LO[0]); st.pgK = LO[0].gapN ? 1 / (1 + LO[0].gap) : 1;
-    for (let L = 0; L < 3; L++) {
-      if ((L === 0 && !st.bn && !st.pl && !st.pf) || (L === 2 && !st.lv && !st.tyN && !st.syN)) continue;
+    for (let L = 0; L < 4; L++) {
+      if ((L === 0 && !st.bn && !st.pl && !st.pf) || (L === 2 && !st.lv && !st.syN) || (L === 3 && !st.tyN)) continue;
       const o = LO[L];
       o.va = st.va; o.vb = st.vb; o.amb = L === 1 ? 1 : 0;
       if (L === 2 && st.dens !== 1) o.density = Math.min(1.2, (lerp(22, 96, o.density) * st.dens - 22) / 74);
@@ -1301,20 +1325,21 @@ class Renderer {
       const gN = o.gapN, gk = 1 / (1 + (o.gap || 0)), goff = (1 - gk) / 2, win = u => { const x = u * gN, i = Math.floor(x); return (i + goff + (x - i) * gk) / gN; };
       const wrap = a => gN ? { M: (u, v) => a.M(win(u), v), B: (u, v) => a.B(win(u), v) } : a;
       if (L === 0) f = wrap(baseField(Wf, H, st)); else if (L === 1) f = wrap(fxField(Wf, H, t, o, st));
-      else {                                               // the logo and any words share the top layer
+      else if (L === 3) f = wrap(typeField(Wf, H, o, st));   // words, on their own
+      else {                                               // the logo and any symbols share a layer
         // a logo in every pillar sits in the pillar itself, not in the picture behind them
         const each = o.logoEach && PN > 1, a = !st.lv ? null : each ? logoField(W, H, t, Object.assign({}, o, { repeats: PN, travel: 0 }), st) : wrap(logoField(Wf, H, t, o, st));
-        const fs = [a, st.tyN ? wrap(typeField(Wf, H, o, st)) : null];
+        const fs = [a];
         if (st.syN) { const w = symField(Wf, H, o, st, false, PN), pp = PN > 1 ? symField(W, H, o, st, true, PN) : null; fs.push(w ? wrap(w) : null, pp); }
         const live = fs.filter(Boolean);
         f = live.length === 1 ? live[0] : { M: (u, v) => { let m = 0; for (let i = 0; i < live.length; i++) { const x = live[i].M(u, v); if (x > m) m = x; } return m; }, B: (u, v) => { let m = 0; for (let i = 0; i < live.length; i++) { const x = live[i].B(u, v); if (x > m) m = x; } return m; } };
       }
       const tl0 = performance.now();
       litBegin();
-      DRAW[st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style](q, W, H, t, o, f.M, f.B);
+      DRAW[L < 3 && st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style](q, W, H, t, o, f.M, f.B);
       litEnd(q);
       PERF.layer[L] += (performance.now() - tl0 - PERF.layer[L]) * 0.15;
-      const lm = L === 1 ? st.pmFx : L === 2 ? st.pmLogo : null;          // a pattern that hides only this layer, pillar by pillar
+      const lm = L === 1 ? st.pmFx : L >= 2 ? st.pmLogo : null;          // a pattern that hides only this layer, pillar by pillar
       if (lm) { q.globalCompositeOperation = 'source-over'; q.fillStyle = '#000'; const pw = W / PN; for (let i = 0; i < PN; i++) { const a = 1 - lm[i]; if (a > 0.01) { q.globalAlpha = Math.min(1, a); q.fillRect(Math.round(i * pw), 0, Math.round((i + 1) * pw) - Math.round(i * pw), H); } } q.globalAlpha = 1; }
       g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1; g.drawImage(lc, 0, 0);
     }
@@ -1368,7 +1393,9 @@ function layerOpts(fps, P) {
     repeats: ring ? S.repeats : 1, travel: ring && S.orbit ? 1 : 0, fan: S.format === 'wide', trail: P.trail, fps,
     pshape: P.pshape, pfill: P.pfill, dither: P.dither, loader: P.loader, va: 0.3, vb: 0.7, amb: 0,
     logoEach: !!P.logoEach, outline: !!P.outline, wobA: P.wob * 2, wobB: Math.max(0, P.wob - 0.5) * 0.05, wobF: Math.pow(4, 0.5 - P.wobSize), eqAmt: P.eqAmt, ease: P.ease, tw: 0 });
-  return [mk(P.baseStyle, P.baseDen), mk(P.fxStyle, P.fxDen), mk(P.logoStyle, P.logoDen)];
+  // words are a layer of their own: their own style and pixel size, and only as much of the glitch as Warp lets in
+  const ty = mk(P.typeStyle || 'dither', P.typeDen === undefined ? 0.8 : P.typeDen); ty.tyWarp = P.typeWarp || 0;
+  return [mk(P.baseStyle, P.baseDen), mk(P.fxStyle, P.fxDen), mk(P.logoStyle, P.logoDen), ty];
 }
 // How much is allowed to happen at once: thins the debris, the chases and the automatic clips together.
 const busyK = P => lerp(0.3, 1.3, P.busy === undefined ? 0.7 : P.busy);
@@ -1490,7 +1517,7 @@ function pillarFrame() {
   if ($('pilName').textContent !== name) $('pilName').textContent = name;
 }
 // Where a frame's time goes, in milliseconds, smoothed: drawing the layers, the grade, the monitors (output, 3D, pillar), the rest (timeline, labels).
-const PERF = { draw: 0, grade: 0, views: 0, rest: 0, all: 0, layer: [0, 0, 0], field: 0, style: 0 };
+const PERF = { draw: 0, grade: 0, views: 0, rest: 0, all: 0, layer: [0, 0, 0, 0], field: 0, style: 0 };
 // The preview shows at most 30 pictures a second even when the piece is 50 or 60: the eye does not need more to judge it,
 // and the export always renders every frame.
 const PREVIEW_FPS = () => Math.min(30, S.fps);
@@ -1627,7 +1654,7 @@ const PAD = [
   ['Base', [['sweep', 'Sweep', '1'], ['strobe', 'Strobe', '2'], ['flood', 'Flood', '3'], ['blackout', 'Blackout', '4'], ['orbit', 'Orbit', '5'], ['spokes', 'Spokes', '6'], ['meet', 'Meet', '7']]],
   ['Glitch', [['glitch', 'Glitch', 'Q'], ['chase', 'Chase', 'W'], ['lines', 'Lines', 'E'], ['sparks', 'Sparks', 'R'], ['bars', 'Bars', 'T'], ['blocks', 'Blocks', 'Y']]],
   ['Logo', [['load', 'Loader', 'A'], ['show', 'Show', 'S'], ['hide', 'Hide', 'D']]],
-  ['Type', [['type', 'Words', 'F'], ['type', 'Ticker', 'V', { fx: 'band', mode: 'band', size: 0.1, y: 0.9, txt: 'MALL CALL', trk: 0.08 }], ['type', 'Stack', 'B', { fx: 'stack', mode: 'stack', size: 0.36 }], ['type', 'Stretch', 'N', { fx: 'stretch', mode: 'stretch' }]]],
+  ['Type', [['type', 'Words', 'F'], ['type', 'Ticker', 'V', { fx: 'band', mode: 'band', size: 0.1, y: 0.9, txt: 'MALL CALL', trk: 0.08 }], ['type', 'Stack', 'B', { fx: 'stack', mode: 'stack', size: 0.36 }], ['type', 'Stretch', 'N', { fx: 'stretch', mode: 'stretch' }], ['type', 'Bump', '8', { fx: 'bump', mode: 'bump' }], ['type', 'Spin', '9', { fx: 'spin', mode: 'spin' }], ['type', 'Flip', '0', { fx: 'flip', mode: 'flip' }], ['type', 'Drop', 'U', { fx: 'drop', mode: 'drop' }]]],
   ['Pillars', [['pillar', 'Chase', 'G', { fx: 'chase' }], ['pillar', 'Spin', 'H', { fx: 'spin', pm: 'light' }], ['pillar', 'Pop', 'J', { fx: 'pop' }], ['pillar', 'Build', 'K', { fx: 'build' }], ['pillar', 'VU', 'L', { fx: 'vu', pm: 'light' }], ['pillar', 'Alt', 'Z', { fx: 'alt' }], ['pillar', 'Wave', 'X', { fx: 'wave' }], ['pillar', 'Frames', 'C', { fx: 'chase', pm: 'frame', wd: 0.4 }], ['pillar', 'Echo', 'M', { fx: 'echo', pm: 'light', wd: 0.6 }]]],
   ['Symbols', [['sym', 'Symbols', 'O', { fx: 'walk', step: true }], ['sym', 'In pillars', 'P', { fx: 'each', step: true, each: true, echo: 0, size: 0.8, dl: 0.5 }]]]
 ];
@@ -1675,7 +1702,7 @@ let lookTimer = 0;
 function lookFlash(name) { const el = $('lookFlash'); el.textContent = 'Look: ' + name; el.classList.add('on'); clearTimeout(lookTimer); lookTimer = setTimeout(() => el.classList.remove('on'), 1400); }
 function pushAll() {
   pushRanges();
-  for (const id of ['baseStyle', 'fxStyle', 'logoStyle', 'dither', 'loader', 'lineMode', 'trans', 'transLen']) $(id).value = S[id];
+  for (const id of ['baseStyle', 'fxStyle', 'logoStyle', 'typeStyle', 'dither', 'loader', 'lineMode', 'trans', 'transLen']) $(id).value = S[id];
   setRadio('logoMode', S.logoMode); setRadio('pshape', S.pshape); setRadio('eq', S.eq);
   $('mix').checked = S.mix; $('hot').checked = S.hot; $('outline').checked = !!S.outline; $('logoEach').checked = !!S.logoEach;
   $('tintPick').value = S.tint; $('tintHex').value = S.tint.toUpperCase();
@@ -1796,10 +1823,10 @@ const clampInt = (el, lo, hi, d) => { const n = Math.round(Number(el.value)); re
 const px2den = v => 1 - 1.2 * v, den2px = d => (1 - d) / 1.2;
 // id, state key, value from 0..1 slider position, and back; rebuild = the schedule depends on it
 const RANGES = [['baseAmt', 'baseAmt', 1], ['basePx', 'baseDen', 0, px2den, den2px], ['glitch', 'glitch'], ['lines', 'lines'], ['chase', 'chase'], ['bgLo', 'bgLo'], ['bgMid', 'bgMid'], ['bgHi', 'bgHi'], ['fxAmt', 'fxAmt', 1],
-  ['fxPx', 'fxDen', 0, px2den, den2px], ['wob', 'wob'], ['wobSize', 'wobSize'], ['eqAmt', 'eqAmt'], ['ease', 'ease'], ['presence', 'presence', 1], ['pilAmt', 'pilAmt', 1], ['symAmt', 'symAmt', 1], ['busy', 'busy', 1], ['logoPx', 'logoDen', 0, px2den, den2px], ['size', 'size'], ['chaos', 'chaos', 1], ['trail', 'trail'], ['pfill', 'pfill'], ['glow', 'glow']];
+  ['fxPx', 'fxDen', 0, px2den, den2px], ['wob', 'wob'], ['wobSize', 'wobSize'], ['eqAmt', 'eqAmt'], ['ease', 'ease'], ['presence', 'presence', 1], ['pilAmt', 'pilAmt', 1], ['symAmt', 'symAmt', 1], ['busy', 'busy', 1], ['logoPx', 'logoDen', 0, px2den, den2px], ['typePx', 'typeDen', 0, px2den, den2px], ['typeWarp', 'typeWarp'], ['size', 'size'], ['chaos', 'chaos', 1], ['trail', 'trail'], ['pfill', 'pfill'], ['glow', 'glow']];
 for (const [id, key, rebuild, to] of RANGES) $(id).addEventListener('input', e => { const v = e.target.value / 100, x = to ? to(v) : v; if (auto[key] && auto[key].length) setKey(key, tau, x); else S[key] = x; if (rebuild) rebuildScore(key !== 'chaos'); syncUI(); });      // only Chaos changes the score itself
 function pushRanges() { for (const [id, key, , , back] of RANGES) $(id).value = Math.round((back ? back(S[key]) : S[key]) * 100); }
-for (const id of ['baseStyle', 'fxStyle', 'logoStyle']) {
+for (const id of ['baseStyle', 'fxStyle', 'logoStyle', 'typeStyle']) {
   for (const s of STYLES) { const o = document.createElement('option'); o.value = s; o.textContent = STYLE_NAMES[s]; $(id).append(o); }
   $(id).value = S[id];
   $(id).addEventListener('change', e => { S[id] = e.target.value; syncUI(); });
@@ -2163,7 +2190,7 @@ async function applyProject(pj) {
     if (soundFile) await loadSound(new File([soundFile.data], soundFile.name), true, pj.soundPath);
     if (!track) { soundPath = ''; rebuildScore(); }
     if (!missing) {
-      parts = pj.parts.filter(p => p.t < score.D).map(p => { const o = { t: p.t, P: Object.assign(snap(), { fxAmt: 0, lineMode: 0, inner: 'same', pilAmt: 0, symAmt: 0, busy: 0.7, trans: 'cut', transLen: 1 }, p.P) }; if (p.Q) o.Q = Object.assign({}, o.P, p.Q, { inner: 'own' }); if (p.name) o.name = String(p.name).slice(0, 24); return o; });      // a project from before Auto clips keeps its cut
+      parts = pj.parts.filter(p => p.t < score.D).map(p => { const o = { t: p.t, P: Object.assign(snap(), { typeStyle: 'dither', typeDen: 0.8, typeWarp: 0, fxAmt: 0, lineMode: 0, inner: 'same', pilAmt: 0, symAmt: 0, busy: 0.7, trans: 'cut', transLen: 1 }, p.P) }; if (p.Q) o.Q = Object.assign({}, o.P, p.Q, { inner: 'own' }); if (p.name) o.name = String(p.name).slice(0, 24); return o; });      // a project from before Auto clips keeps its cut
       if (!parts.length || parts[0].t !== 0) parts.unshift({ t: 0, P: snap() });
       userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d, e.type === 'type' ? { txt: String(e.txt || ''), mode: String(e.mode || 'slam'), size: Number(e.size) || 0.5, y: e.y === undefined ? 0.5 : Number(e.y) || 0, font: ['mono', 'own'].includes(e.font) ? e.font : 'sans', x: e.x === undefined ? 0.5 : Number(e.x) || 0, caps: e.caps !== false, trk: Number(e.trk) || 0, out: e.out === 'same' ? 'same' : 'cut', ol: !!e.ol, face: e.face | 0 } : e.type === 'sym' ? { sy: String(e.sy || 'x'), step: !!e.step, echo: Math.max(0, Math.min(8, e.echo | 0)), ex: Number(e.ex) || 0, ey: Number(e.ey) || 0, size: Number(e.size) || 0.6, x: e.x === undefined ? 0.5 : Number(e.x) || 0, y: e.y === undefined ? 0.5 : Number(e.y) || 0, each: !!e.each, dl: Number(e.dl) || 0, face: e.face | 0 } : e.type === 'pillar' ? { fx: PILLAR_FX.includes(e.fx) ? e.fx : 'chase', pm: ['light', 'frame'].includes(e.pm) ? e.pm : 'mask', on: ['logo', 'glitch'].includes(e.on) ? e.on : 'all', sp: Number(e.sp) || 1, wd: Number(e.wd) || 0.25, face: e.face | 0 } : { face: e.face | 0 }));
       for (const [k] of AKEYS) if (pj.auto && Array.isArray(pj.auto[k])) auto[k] = pj.auto[k].filter(q => q.t <= score.D).map(q => ({ t: Number(q.t) || 0, v: Number(q.v) || 0, c: q.c | 0 })).sort((a, b) => a.t - b.t);
@@ -2205,6 +2232,7 @@ if (window.nativeApp) {
   });
 }
 // Used by the app's own start-up check: one frame, the encoders, and a project round trip.
+window.__typeShot = (mode, age, warp) => { userEv = userEv.filter(e => e.k !== 13); S.typeWarp = warp || 0; tau = 1; trigger('type', null, { mode }); const e = userEv[userEv.length - 1]; e.txt = 'MALL CALL'; e.d = 3; e.size = 0.5; mergeEv(); S.playing = false; tau = 1 + age; paint(); return stage.toDataURL('image/png'); };
 window.__selfTest = async () => {
   const r = { native: !!window.nativeApp, muxer: !!window.Mp4Muxer, monoFont: !!(document.fonts && document.fonts.check('500 20px "DM Mono"')) };
   try { r.h264 = (await VideoEncoder.isConfigSupported({ codec: 'avc1.640034', width: 1920, height: 1080, bitrate: 8e6, framerate: 30 })).supported; } catch (e) { r.h264 = 'error: ' + e.message; }

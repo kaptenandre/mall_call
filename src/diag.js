@@ -15,7 +15,7 @@ function diagNow() {
     playing: S.playing, time: r(tau) + ' / ' + r(score.D), sound: track ? track.name + ' ' + r(track.ab.duration) + ' s' : 'none',
     piece: d.W + 'x' + d.H + ' @' + S.fps, preview: stage.width + 'x' + stage.height + ' at ' + Math.round(paintFps) + ' fps (asked ' + S.pq + ')',
     frameMs: r(PERF.all), budgetMs: r(1000 / PREVIEW_FPS()), worstMs: r(DIAG.worst),
-    whereMs: { layers: r(PERF.draw), base: r(PERF.layer[0]), glitch: r(PERF.layer[1]), logo: r(PERF.layer[2]), grade: r(PERF.grade), monitors: r(PERF.views), timeline: r(PERF.rest) },
+    whereMs: { layers: r(PERF.draw), base: r(PERF.layer[0]), glitch: r(PERF.layer[1]), logo: r(PERF.layer[2]), type: r(PERF.layer[3]), grade: r(PERF.grade), monitors: r(PERF.views), timeline: r(PERF.rest) },
     ring: { panels: S.panels, inside: S.panelsIn, faces: S.faces, gap: S.gap, panelPx: S.panelPx, view3d: S.view3d, webgl: typeof ringBad !== 'undefined' ? !ringBad : null },
     part: { n: sel + 1, of: parts.length, name: partName(sel), inner: P.inner, styles: [P.baseStyle, P.fxStyle, P.logoStyle], pixels: [r(P.baseDen), r(P.fxDen), r(P.logoDen)], dither: P.dither, mix: P.mix, busy: P.busy, glitch: P.glitch, lines: P.lines, lineMode: P.lineMode, logoMode: P.logoMode, logoEach: P.logoEach },
     grade: [S.gGain, S.gCon, S.gGam, S.gBlack], clips: { yours: userEv.length, auto: autoEv.length, kinds }, hits: score.hits, keys: Object.keys(auto).length,
