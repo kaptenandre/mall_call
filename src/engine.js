@@ -312,8 +312,9 @@ const TYPE_NEW = { txt: 'MALL CALL', mode: 'slam', size: 0.5, y: 0.5, font: 'san
 // A Pillar clip plays a pattern across the pillars, one value per pillar. fx: the pattern. pm: 'light' lights whole pillars,
 // 'mask' shows the picture only where the pattern is. sp: speed. wd: how much of the ring is on, 0 to 1.
 const PILLAR_FX = ['chase', 'spin', 'ping', 'wave', 'random', 'alt', 'pop', 'vu', 'build', 'drain', 'split'];
-const PIL_NEW = { fx: 'chase', pm: 'mask', sp: 1, wd: 0.25 };
-const evMore = e => e.k === 13 ? { txt: e.txt, mode: e.mode, size: e.size, y: e.y, font: e.font, x: e.x, caps: e.caps, trk: e.trk, out: e.out, face: e.face | 0 } : e.k === 17 ? { fx: e.fx, pm: e.pm, sp: e.sp, wd: e.wd, face: e.face | 0 } : e.face ? { face: e.face } : null;
+// on: what a mask hides: 'all' layers, only the 'logo' layer, or only the 'glitch' layer. pm 'frame' lights just the outline of each pillar.
+const PIL_NEW = { fx: 'chase', pm: 'mask', sp: 1, wd: 0.25, on: 'all' };
+const evMore = e => e.k === 13 ? { txt: e.txt, mode: e.mode, size: e.size, y: e.y, font: e.font, x: e.x, caps: e.caps, trk: e.trk, out: e.out, ol: !!e.ol, face: e.face | 0 } : e.k === 17 ? { fx: e.fx, pm: e.pm, sp: e.sp, wd: e.wd, on: e.on, face: e.face | 0 } : e.face ? { face: e.face } : null;
 const mkEv = (t, type, seed, d, more) => { const e = { t, type, k: EV[type], seed: seed | 0, d: d === undefined || d === null ? EVD[type] : d }; if (more && more.mode === 'band' && (d === undefined || d === null)) e.d = 8; if (more && more.face) e.face = more.face | 0; return e.k === 13 ? Object.assign(e, TYPE_NEW, more) : e.k === 17 ? Object.assign(e, PIL_NEW, more) : e; };
 
 // The shape of the piece, read off the score once: where it drops, the builds that lead into drops, the quiet stretches,
