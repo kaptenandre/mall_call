@@ -26,6 +26,7 @@ async function get(url, accept) {
 const builtSha = () => { try { return JSON.parse(fs.readFileSync(path.join(bundled, 'build.json'), 'utf8')).sha || ''; } catch (e) { return ''; } };
 async function load() {
   try { Object.assign(state, JSON.parse(await fsp.readFile(stateFile(), 'utf8'))); } catch (e) {}
+  if (!state.v) { state.v = 2; if (state.channel === 'main') state.channel = null; }      // the first version saved 'main' without anyone choosing it
   if (state.channel === null) state.channel = app.isPackaged ? 'latest' : 'off';    // run from source and you already have the latest
   // a copy fetched for an older build of the app is dropped when the app itself is rebuilt
   if (state.built !== builtSha()) { state.sha = ''; state.built = builtSha(); state.shell = false; }

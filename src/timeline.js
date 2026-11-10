@@ -10,6 +10,26 @@ const TYPE_MODES = [['slam', 'Slam, word by word'], ['typeon', 'Type on'], ['rol
 const layerOf = k => isBase(k) ? 0 : k < 10 ? 1 : k === 13 ? 3 : 2, CUTS = ['base', 'fx', 'logo'];
 const TLH = { ruler: 20, over: 84, parts: 20, ev: 24, auto: 46 };
 const tlv = { z: 1, x0: 0 };
+// Small line icons, drawn on a 16 unit grid. f: filled instead of stroked.
+const ICONS = {
+  play: ['M4.5 3l8.5 5-8.5 5z', 1], pause: ['M4 3h3v10H4zM9 3h3v10H9z', 1],
+  zoomIn: ['M11.5 7a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0zM10.3 10.3L14 14M5 7h4M7 5v4'], zoomOut: ['M11.5 7a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0zM10.3 10.3L14 14M5 7h4'],
+  fit: ['M2 8h12M2 8l3-3M2 8l3 3M14 8l-3-3M14 8l-3 3M2 3v10M14 3v10'], snap: ['M4 2.5v5.5a4 4 0 0 0 8 0V2.5M4 5.5h2.6M9.4 5.5H12M6.6 2.5v5.5a1.4 1.4 0 0 0 2.8 0V2.5'],
+  undo: ['M6 3L3 6l3 3M3 6h6.5a3.5 3.5 0 0 1 0 7H6'], redo: ['M10 3l3 3-3 3M13 6H6.5a3.5 3.5 0 0 0 0 7H10'],
+  ruler: ['M13.5 8a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0zM8 5v3l2 1.5'], over: ['M2 8h.01M4.5 6v4M7 3.5v9M9.5 5.5v5M12 7v2M14 8h.01'], parts: ['M2 4h5v8H2zM9 4h5v8H9z'],
+  ev0: ['M2 3h12v10H2zM2 8h12'], ev1: ['M2 4.5h7M6 8h8M2 11.5h4M9 11.5h5'], ev2: ['M13 8A5 5 0 1 1 3 8a5 5 0 0 1 10 0zM10 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0z'], ev3: ['M3 4V3h10v1M8 3v10M6 13h4'],
+  auto: ['M3 13c2-6 3-9 5-9s3 3 5 9']
+};
+function ic(name) {
+  const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg'), path = document.createElementNS(NS, 'path'), d = ICONS[name];
+  svg.setAttribute('viewBox', '0 0 16 16'); svg.setAttribute('width', '14'); svg.setAttribute('height', '14'); svg.setAttribute('aria-hidden', 'true'); svg.style.display = 'block';
+  path.setAttribute('d', d[0]);
+  if (d[1]) path.setAttribute('fill', 'currentColor'); else { path.setAttribute('fill', 'none'); path.setAttribute('stroke', 'currentColor'); path.setAttribute('stroke-width', '1.4'); path.setAttribute('stroke-linecap', 'round'); path.setAttribute('stroke-linejoin', 'round'); }
+  svg.append(path);
+  return svg;
+}
+// a button that shows an icon; what it does stays readable as its label and tooltip
+function setIcon(btn, name, label) { if (btn.dataset.ic === name) return; btn.dataset.ic = name; btn.replaceChildren(ic(name)); btn.setAttribute('aria-label', label); btn.title = label; }
 let tlSel = null, tlDrag = null, tlSnap = true, tlHeadSig = '', tlInspSig = '';
 
 // the slider behind a setting: its range as a 0..1 position, and the maps between position and value
@@ -121,7 +141,7 @@ function tlHeads(rows) {
   const btn = (text, title, fn, pressed) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = text; b.title = title; if (pressed !== undefined) b.setAttribute('aria-pressed', String(pressed)); b.addEventListener('click', fn); return b; };
   for (const r of rows) {
     const d = document.createElement('div'), lab = document.createElement('span'), tools = document.createElement('span');
-    d.style.height = r.h + 'px'; lab.textContent = r.name; d.append(lab, tools);
+    d.style.height = r.h + 'px'; lab.append(ic(r.kind === 'ev' ? 'ev' + r.L : r.kind === 'auto' ? 'auto' : r.kind), r.name); lab.style.cssText = 'display:flex;gap:6px;align-items:center'; d.append(lab, tools);
     if (r.kind === 'ev' && r.L < 3) {
       const name = CUTS[r.L];
       tools.append(btn('Auto', 'The automatic cut on this layer, on or off', () => { autoCut[name] = !autoCut[name]; tlSel = null; rebuildScore(); syncUI(); tlInsp(); }, autoCut[name]),
@@ -168,30 +188,22 @@ function drawTimeline() {
           q.fillStyle = '#2c2b36'; for (let j = 1; j < 4; j++) q.fillRect(Math.round(t2x((i + j / 4) * step)), r.y + r.h - 3, 1, 3);
         }
       } else if (r.kind === 'over') {
-        // the spectrum over time, bass at the bottom, then the level as a line and the hits as ticks
-        const sp = score.spec, rowsN = sp ? NB : 3, bh = (r.h - 8) / rowsN, three = [score.lo, score.mid, score.hi];
+        // a waveform in three colours, the way a DJ player draws it: bass blue and tallest, mids amber, highs white on top
+        const mid = r.y + r.h / 2 + 3, half = r.h / 2 - 7, bands = [[score.lo, 1, '#2f6bff'], [score.mid, 0.72, '#ff8a1e'], [score.hi, 0.42, '#ffffff']];
         for (let x = 0; x < W; x++) {
           const a = Math.max(0, Math.floor(x2t(x) / D * score.nh)), b = Math.max(a + 1, Math.floor(x2t(x + 1) / D * score.nh));
-          for (let k = 0; k < rowsN; k++) {
-            let v = 0;
-            for (let h = a; h < b && h < score.nh; h++) { const q = sp ? sp[h * NB + k] : three[k][h]; if (q > v) v = q; }
-            if (v < 0.06) continue;
-            q.globalAlpha = Math.min(1, v * v * 1.15); q.fillStyle = v > 0.82 ? '#ffffff' : S.tint;
-            q.fillRect(x, r.y + r.h - Math.ceil((k + 1) * bh), 1, Math.max(1, Math.ceil(bh) - (sp ? 0 : 2)));
+          let g = 0; for (let h = a; h < b && h < score.nh; h++) if (score.gain[h] > g) g = score.gain[h];
+          const loud = 0.35 + 0.65 * Math.min(1, g);          // quiet stretches stay small whatever the bands do
+          for (const [arr, k, col] of bands) {
+            let v = 0; for (let h = a; h < b && h < score.nh; h++) if (arr[h] > v) v = arr[h];
+            const hh = Math.round(Math.min(1, v) * k * loud * half);
+            if (hh > 0) { q.fillStyle = col; q.fillRect(x, mid - hh, 1, hh * 2); }
           }
         }
-        q.globalAlpha = 1;
-        q.beginPath();
-        for (let x = 0; x < W; x++) {
-          const a = Math.max(0, Math.floor(x2t(x) / D * score.nh)), b = Math.max(a + 1, Math.floor(x2t(x + 1) / D * score.nh));
-          let lv = 0; for (let h = a; h < b && h < score.nh; h++) lv = Math.max(lv, score.gain[h] * 0.75 + 0.25 * score.pulse[h]);
-          const y = r.y + r.h - 1 - Math.min(1, lv) * (r.h - 10); if (x) q.lineTo(x, y); else q.moveTo(x, y);
-        }
-        q.strokeStyle = '#eceaf4'; q.lineWidth = 1; q.globalAlpha = 0.55; q.stroke(); q.globalAlpha = 1;
+        q.fillStyle = '#25252f'; q.fillRect(0, mid, W, 1);
         q.fillStyle = '#eceaf4';
-        for (const h of score.hitList) { const x = t2x(h.t); if (x >= 0 && x <= W) q.fillRect(Math.round(x), r.y, 1, 3 + Math.round(5 * Math.min(1, h.v))); }
+        for (const h of score.hitList) { const x = t2x(h.t); if (x >= 0 && x <= W) q.fillRect(Math.round(x), r.y, 1, 3 + Math.round(4 * Math.min(1, h.v))); }
         for (const d of (score.struct ? score.struct.drops : [])) { const x = t2x(d.t); if (x >= 0 && x <= W) { q.fillRect(Math.round(x) - 3, r.y, 7, 3); q.fillText('DROP', Math.round(x) + 6, r.y + 6); } }
-        if (!sp) { q.fillStyle = '#5a5968'; ['BASS', 'MID', 'HIGH'].forEach((n, k) => q.fillText(n, 4, r.y + r.h - (k + 0.5) * bh)); }
       } else if (r.kind === 'parts') {
         parts.forEach((p, i) => {
           const x = Math.round(t2x(p.t)), x1 = Math.round(t2x(partEnd(i)));
@@ -379,6 +391,8 @@ function tlInsp() {
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); const dt = e.key === 'ArrowRight' ? step : -step; if (!tlNudge(dt)) seek((tau + dt) / score.D); }
     else if (e.key === 'Escape') { tlSel = null; tlInsp(); if (!S.playing) paint(); }
   });
+  setIcon($('tlOut'), 'zoomOut', 'Zoom out'); setIcon($('tlIn'), 'zoomIn', 'Zoom in'); setIcon($('tlFit'), 'fit', 'Show the whole piece');
+  setIcon($('tlSnap'), 'snap', 'Snap to hits, part edges and the playhead. Hold Cmd or Ctrl to move freely.'); setIcon($('tlUndo'), 'undo', 'Undo'); setIcon($('tlRedo'), 'redo', 'Redo');
   $('tlPlay').addEventListener('click', () => setPlaying(!S.playing));
   $('tlIn').addEventListener('click', () => { tlZoom(1.6, t2x(tau) >= 0 && t2x(tau) <= tlW() ? t2x(tau) : undefined); if (!S.playing) paint(); });
   $('tlOut').addEventListener('click', () => { tlZoom(1 / 1.6); if (!S.playing) paint(); });

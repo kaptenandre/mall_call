@@ -37,12 +37,13 @@ h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase
 .stage.ring canvas{height:150px;width:auto;max-width:none}
 .ring3d{display:block;width:100%;height:40vh;background:#000;border:1px solid var(--rule);border-bottom:0;cursor:grab;touch-action:none}
 .tlbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid var(--rule);border-top:0;background:var(--panel);padding:6px}
+.tlbar button{min-width:30px;min-height:28px;display:inline-flex;align-items:center;justify-content:center}
 .tlbar button,.tlinsp button,.tlhead button{appearance:none;border:1px solid var(--rule);background:#000;color:var(--ink);padding:6px 8px;font:500 10px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-radius:0}
 .tlbar button:hover,.tlinsp button:hover,.tlhead button:hover{border-color:var(--ink)}
 .tlbar button[aria-pressed="true"],.tlhead button[aria-pressed="true"]{background:var(--ink);color:#000;border-color:var(--ink)}
 .tlbar select,.tlinsp select,.tlinsp input{width:auto;padding:4px 6px;font-size:11px}
 .tlbar .tc{margin-left:auto;font:500 13px/1 var(--display);letter-spacing:.06em;font-variant-numeric:tabular-nums;padding:0 4px}
-.tlwrap{display:grid;grid-template-columns:136px minmax(0,1fr);border:1px solid var(--rule);border-top:0;background:#000}
+.tlwrap{display:grid;grid-template-columns:164px minmax(0,1fr);border:1px solid var(--rule);border-top:0;background:#000}
 .tlhead{border-right:1px solid var(--rule);background:var(--panel)}
 .tlhead div{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:0 4px 0 8px;font:500 10px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border-top:1px solid var(--rule);overflow:hidden;white-space:nowrap}
 .tlhead div:first-child{border-top:0}
@@ -127,7 +128,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 </head>
 <body>
 <header class="top">
-  <h1>Mall Call</h1>
+  <h1>Mall Call <span id="build" style="color:var(--dim);font-weight:400"></span></h1>
   <p>Three layers cut to your sound. A base layer for the rare big sweep or strobe, a glitch layer of lines, chases and debris, and the logo on top as a loader or popping through. Trigger any of it by hand.</p>
 </header>
 
@@ -337,6 +338,9 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 /*__TIMECODE__*/
 
 const $ = id => document.getElementById(id);
+// Raised by hand with every push, so anyone can see at a glance which version of the page is running.
+const BUILD = 13;
+$('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
 
@@ -1081,7 +1085,7 @@ function syncUI() {
     : S.logoMode === 1 ? 'The logo stays out and cuts in on some of the hits.' : 'The logo is up the whole time and cuts between poses on the hits.';
   $('loader').disabled = S.logoMode !== 0;
   $('presence').disabled = S.logoMode === 2;
-  $('play').textContent = $('tlPlay').textContent = S.playing ? 'Pause' : 'Play';
+  $('play').textContent = S.playing ? 'Pause' : 'Play'; setIcon($('tlPlay'), S.playing ? 'pause' : 'play', S.playing ? 'Pause' : 'Play');
   $('loop').disabled = !!track;
   $('soundOff').hidden = !track;
   $('seed').value = S.seed;
