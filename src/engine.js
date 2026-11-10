@@ -530,7 +530,7 @@ function stateAt(sc, tau, cfg, st) {
   // everything scheduled or triggered that is live right now
   st.bn = 0; st.lsN = 0; st.tyN = 0; st.pfN = 0; st.syN = 0; st.black = false;
   let gX = 0, cz = 0, czSeed = 0, xLo = 0, xMid = 0, xHi = 0, lg = null, lgAge = 1e9, clAge = 1e9, strike = 0;
-  const all = sc.all;
+  const all = sc.live || sc.all;                          // without the lanes that are switched off or not soloed
   for (let q = 0; q < all.length; q++) {
     const e = all[q];
     if (e.face && cfg.face !== undefined && e.face !== cfg.face + 1) continue;      // a clip for the other face of the ring

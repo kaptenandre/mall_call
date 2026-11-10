@@ -19,7 +19,8 @@ const ICONS = {
   undo: ['M6 3L3 6l3 3M3 6h6.5a3.5 3.5 0 0 1 0 7H6'], redo: ['M10 3l3 3-3 3M13 6H6.5a3.5 3.5 0 0 0 0 7H10'],
   ruler: ['M13.5 8a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0zM8 5v3l2 1.5'], over: ['M2 8h.01M4.5 6v4M7 3.5v9M9.5 5.5v5M12 7v2M14 8h.01'], parts: ['M2 4h5v8H2zM9 4h5v8H9z'],
   ev0: ['M2 3h12v10H2zM2 8h12'], ev1: ['M2 4.5h7M6 8h8M2 11.5h4M9 11.5h5'], ev2: ['M13 8A5 5 0 1 1 3 8a5 5 0 0 1 10 0zM10 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0z'], ev3: ['M3 4V3h10v1M8 3v10M6 13h4'], ev4: ['M3 3v10M6.3 6v7M9.7 3v10M13 8v5'], ev5: ['M3 3l10 10M13 3L3 13'],
-  auto: ['M3 13c2-6 3-9 5-9s3 3 5 9']
+  auto: ['M3 13c2-6 3-9 5-9s3 3 5 9'],
+  eye: ['M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8zM10 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0z'], eyeOff: ['M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8zM3 13L13 3'], lock: ['M4 7.5h8v6H4zM5.5 7.5V5a2.5 2.5 0 0 1 5 0v2.5'], unlock: ['M4 7.5h8v6H4zM5.5 7.5V5a2.5 2.5 0 0 1 4.6-1.3']
 };
 function ic(name) {
   const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg'), path = document.createElementNS(NS, 'path'), d = ICONS[name];
@@ -136,7 +137,7 @@ function clipRects(e, W) {
   return out;
 }
 function tlHeads(rows) {
-  const sig = rows.map(r => r.kind + (r.key || r.L || '')).join() + '|' + autoCut.base + autoCut.fx + autoCut.logo + autoCut.pil + autoCut.sym + '|' + Object.keys(auto).map(k => auto[k].length ? 1 : 0).join('');
+  const sig = rows.map(r => r.kind + (r.key || r.L || '')).join() + '|' + autoCut.base + autoCut.fx + autoCut.logo + autoCut.pil + autoCut.sym + '|' + Object.keys(auto).map(k => auto[k].length ? 1 : 0).join('') + '|' + JSON.stringify([S.laneOff, S.laneSolo, S.laneLock]);
   if (sig === tlHeadSig) return;
   tlHeadSig = sig;
   const box = $('tlHead'); box.textContent = '';
@@ -144,11 +145,19 @@ function tlHeads(rows) {
   for (const r of rows) {
     const d = document.createElement('div'), lab = document.createElement('span'), tools = document.createElement('span');
     d.style.height = r.h + 'px'; lab.append(ic(r.kind === 'ev' ? 'ev' + r.L : r.kind === 'auto' ? 'auto' : r.kind), r.name); lab.style.cssText = 'display:flex;gap:6px;align-items:center'; d.append(lab, tools);
+    if (r.kind === 'ev') {                                // solo, off and lock, on every lane
+      const L = r.L, flip = (arr, what) => () => { undoMark(); S[arr] = S[arr].slice(); S[arr][L] = !S[arr][L]; if (arr === 'laneLock' && tlSel && tlSel.kind === 'ev' && layerOf(tlSel.e.k) === L) tlSel = null; mergeEv(); syncUI(); tlInsp(); if (!S.playing && !busy) paint(); };
+      const mini = (node, title, fn, pressed) => { const b = btn('', title, fn, pressed); b.className = 'mini'; b.append(node); return b; };
+      tools.append(mini('S', 'Solo: play only this lane, and any others that are soloed', flip('laneSolo'), !!S.laneSolo[L]),
+        mini(ic(S.laneOff[L] ? 'eyeOff' : 'eye'), 'Switch this lane off or on. Its clips stay where they are but do not play', flip('laneOff'), !!S.laneOff[L]),
+        mini(ic(S.laneLock[L] ? 'lock' : 'unlock'), 'Lock this lane so its clips cannot be moved, changed or added to', flip('laneLock'), !!S.laneLock[L]));
+      tools.style.cssText = 'display:flex;gap:2px;width:150px;flex:none';      // the same width on every lane, so the buttons stand in columns
+      d.classList.toggle('off', laneHidden(L));
+    }
     if (r.kind === 'ev' && CUTS[r.L]) {
       const name = CUTS[r.L];
       tools.append(btn('Auto', 'The automatic cut on this layer, on or off', () => { autoCut[name] = !autoCut[name]; tlSel = null; rebuildScore(); syncUI(); tlInsp(); }, autoCut[name]),
         btn('Bake', 'Turn the automatic clips into your own so they can be edited', () => tlBake(r.L)));
-      tools.style.display = 'flex'; tools.style.gap = '2px';
     }
     if (r.kind === 'auto') tools.append(btn('×', 'Stop animating this setting', () => { delete auto[r.key]; tlSel = null; syncUI(); tlInsp(); }));
     box.append(d);
@@ -225,6 +234,7 @@ function drawTimeline() {
         for (const e of score.all) {
           if (layerOf(e.k) !== r.L) continue;
           const user = userEv.includes(e);
+          q.globalAlpha = laneHidden(r.L) ? 0.3 : 1;        // a lane that is not playing shows its clips faintly
           for (const [x, w] of clipRects(e, W)) {
             if (x > W || x + w < 0) continue;
             q.fillStyle = user ? S.tint : '#1b1b22'; q.fillRect(x, r.y + 3, w, r.h - 8);
@@ -232,6 +242,7 @@ function drawTimeline() {
             if (w > 34) { q.save(); q.beginPath(); q.rect(x, r.y, w - 3, r.h); q.clip(); q.fillStyle = user ? '#000' : '#8d8b9e'; q.fillText(e.k === 13 ? e.txt : e.k === 18 ? (e.step ? 'SYMBOLS' : symName(e.sy).toUpperCase()) + (e.echo ? ' ×' + (e.echo + 1) : '') : e.k === 17 ? e.fx.toUpperCase() + (e.pm === 'light' ? ' ●' : e.pm === 'frame' ? ' □' : '') : e.clean ? 'CLEAN' : e.type.toUpperCase(), Math.max(x, 0) + 4, r.y + r.h / 2 - 0.5); q.restore(); }
           }
         }
+        q.globalAlpha = 1;
       } else {
         const ks = auto[r.key], R = aRange(r.key), yOf = v => r.y + r.h - 5 - (clamp01((R.back(v) - R.lo) / (R.hi - R.lo))) * (r.h - 10);
         q.beginPath();
@@ -264,6 +275,7 @@ function tlHit(x, y) {
   const rows = tlRows(), W = tlW(), r = rows.find(q => y >= q.y && y < q.y + q.h);
   if (!r) return { kind: 'none' };
   if (r.kind === 'ev') {
+    if (S.laneLock[r.L]) return { kind: 'locked', row: r };
     const list = score.all.filter(e => layerOf(e.k) === r.L).sort((a, b) => userEv.includes(a) - userEv.includes(b));
     for (let i = list.length - 1; i >= 0; i--) {
       const e = list[i], user = userEv.includes(e);
@@ -435,6 +447,7 @@ function tlInsp() {
       if (i === sel && !face) Object.assign(S, parts[i].P);
       pushAll(); syncUI(); lookFlash(d.look + ' on ' + partName(i));
     } else if (d.type in EV) {
+      if (S.laneLock[layerOf(EV[d.type])]) { $('trigNote').textContent = 'That lane is locked. Unlock it on the timeline to add clips to it.'; return; }
       const c = mkEv(t, d.type, Math.floor(Math.random() * 1e6), null, d.more);
       userEv.push(c); tlSel = { kind: 'ev', e: c }; mergeEv(); syncUI(); tlInsp();
     }

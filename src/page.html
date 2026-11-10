@@ -79,8 +79,10 @@ h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase
 .tlbar button[aria-pressed="true"],.tlhead button[aria-pressed="true"]{background:var(--ink);color:#000;border-color:var(--ink)}
 .tlbar select,.tlinsp select,.tlinsp input{width:auto;padding:4px 6px;font-size:11px}
 .tlbar .tc{margin-left:auto;font:500 13px/1 var(--display);letter-spacing:.06em;font-variant-numeric:tabular-nums;padding:0 4px}
-.tlwrap{display:grid;grid-template-columns:164px minmax(0,1fr);border:1px solid var(--rule);border-top:0;background:#000}
+.tlwrap{display:grid;grid-template-columns:222px minmax(0,1fr);border:1px solid var(--rule);border-top:0;background:#000}
 .tlhead{border-right:1px solid var(--rule);background:var(--panel)}
+.tlhead button.mini{padding:2px 3px;min-width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center}
+.tlhead div.off>span:first-child{opacity:.4}
 .tlhead div{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:0 4px 0 8px;font:500 10px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border-top:1px solid var(--rule);overflow:hidden;white-space:nowrap}
 .tlhead div:first-child{border-top:0}
 .tlhead button{padding:3px 4px;font-size:9px}
@@ -542,14 +544,14 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 42;
+const BUILD = 43;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
 
 const STYLES = ['rods', 'streaks', 'ascii', 'ridge', 'dither'];
 const STYLE_NAMES = { rods: 'LED rods', streaks: 'Light streaks', ascii: 'ASCII', ridge: 'Ridge lines', dither: 'Dither' };
-const S = { gpu: true, cleanEnds: true, format: 'ring', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.4, size: 0.78, invert: false,
+const S = { laneOff: [false, false, false, false, false, false], laneSolo: [false, false, false, false, false, false], laneLock: [false, false, false, false, false, false], gpu: true, cleanEnds: true, format: 'ring', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.4, size: 0.78, invert: false,
   loop: 8, fps: 30, playing: true, seed: 1,
   baseAmt: 0.45, baseStyle: 'dither', baseDen: 0.304,
   logoEach: false, outline: false, symAmt: 0.3, pilAmt: 0.4, busy: 0.4, trans: 'cut', transLen: 1, glitch: 0.7, lines: 0.8, lineMode: 1, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxAmt: 0.4, fxStyle: 'rods', fxDen: 0.784,
@@ -1326,7 +1328,7 @@ class Renderer {
     pillarGains(st, PN, LO[0]); st.pgK = LO[0].gapN ? 1 / (1 + LO[0].gap) : 1;
     if (st.clean) { st.pm = null; st.pmLogo = null; }       // nothing hides a plain logo, pillar patterns included
     for (let L = 0; L < 4; L++) {
-      if ((L === 0 && !st.bn && !st.pl && !st.pf) || (L === 2 && !st.lv && !st.syN) || (L === 3 && !st.tyN)) continue;
+      if ((L === 1 && laneHidden(1)) || (L === 0 && !st.bn && !st.pl && !st.pf) || (L === 2 && !st.lv && !st.syN) || (L === 3 && !st.tyN)) continue;
       let o = LO[L];
       o.va = st.va; o.vb = st.vb; o.amb = L === 1 && !o.quiet ? 1 : 0;      // a glitch layer with everything at nought is black, not faintly lit
       if (L === 2 && st.dens !== 1) o.density = Math.min(1.2, (lerp(22, 96, o.density) * st.dens - 22) / 74);
@@ -1431,7 +1433,14 @@ const motion = (P, tw) => ({ glitch: P.glitch, eq: track ? P.eq : 0, chaos: P.ch
 // eased seconds: real time blended toward the organic clock by the part's Easing amount
 const warp = (tau, P) => tau + (phiAt(score, tau) - tau) * P.ease;
 const phase = tw => score.cyclic ? tw / score.D : tw / 8;
-function mergeEv() { score.all = autoEv.concat(userEv.filter(e => e.t < score.D)).sort((a, b) => a.t - b.t); tlCache = null; touch(); }
+// Lanes of the timeline can be switched off, soloed and locked (S.laneOff, S.laneSolo, S.laneLock, one flag per lane).
+// A lane that is off, or not soloed while another is, keeps its clips on the timeline but none of them plays, in the preview or in an export.
+const laneHidden = L => !!(S.laneOff && S.laneOff[L]) || !!(S.laneSolo && S.laneSolo.some(Boolean) && !S.laneSolo[L]);
+function mergeEv() {
+  score.all = autoEv.concat(userEv.filter(e => e.t < score.D)).sort((a, b) => a.t - b.t);
+  score.live = [0, 1, 2, 3, 4, 5].some(laneHidden) ? score.all.filter(e => !laneHidden(layerOf(e.k))) : null;
+  tlCache = null; touch();
+}
 // eventsOnly: the score itself (hits, curves, moves) is unchanged, only what is scheduled on it has to be redone
 function rebuildScore(eventsOnly) {
   savePart();
@@ -1701,6 +1710,7 @@ const KEYS = {};
 const DRAG_TYPE = 'application/x-mallcall';
 function dragOut(el, what) { el.draggable = true; el.addEventListener('dragstart', e => { e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(what)); e.dataTransfer.effectAllowed = 'copy'; }); }
 function trigger(type, btn, more) {
+  if (S.laneLock[layerOf(EV[type])]) { $('trigNote').textContent = 'That lane is locked. Unlock it on the timeline to add clips to it.'; return; }
   userEv.push(mkEv(tau, type, Math.floor(Math.random() * 1e6), null, more));
   mergeEv();
   const n = userEv.length;
@@ -2212,7 +2222,7 @@ $('save').addEventListener('click', async () => {
 });
 
 /* ---------- project files (Mac app) ---------- */
-const GLOBAL_KEYS = ['gpu', 'cleanEnds', 'format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap', 'gGain', 'gCon', 'gGam', 'gBlack', 'pq', 'pil', 'stats'];
+const GLOBAL_KEYS = ['laneOff', 'laneSolo', 'laneLock', 'gpu', 'cleanEnds', 'format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap', 'gGain', 'gCon', 'gGam', 'gBlack', 'pq', 'pil', 'stats'];
 let loadingProject = false, saveTimer = 0;
 function getProject() {
   savePart();
