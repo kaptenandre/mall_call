@@ -6,7 +6,7 @@
 
    Moved so far: the logo layer, drawn as Dither (ordered, lines, noise) or LED rods with square pixels.
    Everything else falls back by itself: gpuLogo returns false and the caller draws the old way. */
-const GPU = { cv: null, gl: null, prog: null, loc: {}, bad: false, maskN: -1, tex: null, used: 0 };
+const GPU = { force: false, name: '', cv: null, gl: null, prog: null, loc: {}, bad: false, maskN: -1, tex: null, used: 0 };
 const GPU_VS = '#version 300 es\nin vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
 const GPU_FS = `#version 300 es
 precision highp float; precision highp int;
@@ -106,6 +106,8 @@ function gpuInit() {
   try {
     const cv = document.createElement('canvas'), gl = cv.getContext('webgl2', { alpha: false, antialias: false, depth: false, stencil: false, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
     if (!gl) throw new Error('no WebGL 2');
+    // WebGL drawn by the processor is slower than the canvas version, so it is not worth having
+    { const x = gl.getExtension('WEBGL_debug_renderer_info'), name = x ? String(gl.getParameter(x.UNMASKED_RENDERER_WEBGL)) : ''; GPU.name = name; if (!GPU.force && /swiftshader|llvmpipe|software|basic render/i.test(name)) throw new Error('software graphics (' + name + ')'); }
     const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
     const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, GPU_VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, GPU_FS)); gl.bindAttribLocation(pr, 0, 'p'); gl.linkProgram(pr);
     if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
