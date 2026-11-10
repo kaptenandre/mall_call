@@ -4,9 +4,9 @@
    and draws the style, cell for cell the way the canvas version does. The canvas version stays as the reference, and is
    what runs for anything not moved yet and for every export.
 
-   Moved so far: the logo layer and the glitch layer, drawn as Dither (ordered, lines, noise) or LED rods with square pixels.
-   Everything else falls back by itself: gpuLogo returns false and the caller draws the old way. */
-const GPU = { force: false, name: '', cv: null, gl: null, progs: null, bad: false, maskN: -1, tex: null, used: 0 };
+   Moved so far: the logo, glitch, base and type layers and the symbols, drawn as Dither (ordered, lines, noise) or LED rods
+   with square pixels. Everything else falls back by itself: gpuLogo and the others return false and the caller draws the old way. */
+const GPU = { force: false, name: '', cv: null, gl: null, progs: null, bad: false, maskN: -1, tex: null, used: 0, mt: new Map(), mtNew: false, rows: null, rd: null, maxT: 2048 };
 const GPU_VS = '#version 300 es\nin vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
 const GPU_HEAD = `#version 300 es
 precision highp float; precision highp int;
@@ -150,6 +150,80 @@ float field(float u, float v) {
   return val;
 }
 `;
+// Words and symbols are lists of rows, each a mask with its own place. The list goes over as a table of numbers (uRows:
+// one line a row, eight cells of settings, then a cell for each letter or pillar) and the masks as up to twelve textures.
+const GPU_MT = 12, GPU_RW = 256, GPU_RH = 48;
+const GPU_ROWS = `
+uniform sampler2D uRows, uT0, uT1, uT2, uT3, uT4, uT5, uT6, uT7, uT8, uT9, uT10, uT11;
+uniform int uRn;
+#define R(k) texelFetch(uRows, ivec2(k, i), 0)
+#define TX(s) { vec2 w = vec2(textureSize(s, 0)); return textureLod(s, (p * (w - 1.) + .5) / w, 0.).rg; }
+// one mask read as sample() reads it: nothing outside it, the shape in red and its blur in green
+vec2 tx(int n, float u, float v) {
+  if (u < 0. || u > 1. || v < 0. || v > 1.) return vec2(0.);
+  vec2 p = vec2(u, v);
+  if (n == 0) TX(uT0) if (n == 1) TX(uT1) if (n == 2) TX(uT2) if (n == 3) TX(uT3) if (n == 4) TX(uT4) if (n == 5) TX(uT5)
+  if (n == 6) TX(uT6) if (n == 7) TX(uT7) if (n == 8) TX(uT8) if (n == 9) TX(uT9) if (n == 10) TX(uT10) if (n == 11) TX(uT11)
+  return vec2(0.);
+}
+`;
+// the type layer: every row of words with its own way of showing (typeField). A row's cells: place and size; tile, gain,
+// cut, cursor; roll, tear, phase, cursor width; mask, outline, wave or letters, letter count; letters shown, wave height,
+// turned or not; then the turn itself in two cells. A letter's cell: its right edge, its moment, its wrong frame, its wave step.
+const GPU_TYPE = `
+uniform vec2 uFW;
+float field(float u0, float v0) {
+  vec2 dq = disp(u0, v0);
+  float val = 0.;
+  for (int i = 0; i < ${GPU_RH}; i++) {
+    if (i >= uRn) break;
+    vec4 A = R(0), B = R(1), C = R(2), D = R(3), E = R(4);
+    float u = dq.x, v = dq.y;
+    if (E.z > .5) {                                       // back through the block's own turn and scale, in real pixels
+      vec4 F = R(5), G = R(6);
+      if (abs(G.x) < .03 || G.y < .03) continue;
+      float dx = (u - F.x) * uFW.x, dy = (v - F.y - G.z) * uFW.y, rx = dx * F.z + dy * F.w, ry = dy * F.z - dx * F.w;
+      u = F.x + rx / (uFW.x * G.x); v = F.y + ry / (uFW.y * G.y);
+    }
+    if (C.x != 0.) { v += C.x; v -= floor(v); u += C.y * nz(v * 9. + C.z, 21); }
+    float lv = (v - A.y) / A.w;
+    if (lv < 0. || lv > 1.) continue;
+    float lu = (u - A.x) / A.z;
+    if (B.x >= 0.) { lu += B.x; lu -= floor(lu); }
+    else if (lu < 0.) continue;
+    if (B.w >= 0. && lu >= B.w - 4e-6 && lu < B.w + C.w && lv > .12 && lv < .88) { val = 1.; continue; }      // a cell that sits exactly on the cursor's edge is in, as the sums say
+    if (lu > 1. || lu > B.z) continue;
+    if (D.z > .5) {                                       // which letter this is, then its wave step or its own moment
+      int n = int(D.w), c = 0;
+      for (int k = 0; k < ${GPU_RW - 8}; k++) { if (c >= n - 1 || texelFetch(uRows, ivec2(8 + c, i), 0).x > lu) break; c++; }
+      vec4 Lc = texelFetch(uRows, ivec2(8 + c, i), 0);
+      if (D.z < 1.5) lv = (lv - .5) * E.y + .5 + Lc.w;
+      else { if (Lc.y > E.x) continue; if (E.x - Lc.y < .07 && E.x < 1.) lv += Lc.z; }
+      if (lv < 0. || lv > 1.) continue;
+    }
+    vec2 s = tx(int(D.x), lu, lv);
+    float b = D.y > .5 ? (s.g > .22 && s.g < .7 ? B.y : 0.) : s.r * B.y;
+    val = max(val, b);
+  }
+  return val;
+}
+`;
+// symbols: shapes across the frame with their echoes, or one in every pillar (symField). A row's cells: place and size, then
+// mask and gain; for a row of pillars size, height, pillar count and gain, then one cell a pillar saying which mask it shows.
+const GPU_SYM = `
+float field(float u, float v) {
+  float val = 0.;
+  for (int i = 0; i < ${GPU_RH}; i++) {
+    if (i >= uRn) break;
+    vec4 A = R(0), B = R(1);
+    if (B.z > .5) {
+      float x = u * A.w, pi = clamp(floor(x), 0., A.w - 1.), mi = texelFetch(uRows, ivec2(8 + int(pi), i), 0).x;
+      if (mi >= 0.) val = max(val, tx(int(mi), (x - pi - .5) / A.x + .5, (v - A.y) / A.z + .5).r * B.y);
+    } else if (B.x >= 0.) val = max(val, tx(int(B.x), (u - A.x) / A.z, (v - A.y) / A.w).r * B.y);
+  }
+  return val;
+}
+`;
 const GPU_TAIL = `
 // each pillar is a window onto its own stretch of a picture as wide as the whole ring, air included
 float M(float u, float v) { if (uGapN > 0.) { float x = u * uGapN, i = floor(x); u = (i + uGoff + (x - i) * uGk) / uGapN; } return field(u, v); }
@@ -204,11 +278,11 @@ function gpuInit() {
     { const x = gl.getExtension('WEBGL_debug_renderer_info'), name = x ? String(gl.getParameter(x.UNMASKED_RENDERER_WEBGL)) : ''; GPU.name = name; if (!GPU.force && /swiftshader|llvmpipe|software|basic render/i.test(name)) throw new Error('software graphics (' + name + ')'); }
     const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
     const vs = sh(gl.VERTEX_SHADER, GPU_VS), mk = body => { const pr = gl.createProgram(); gl.attachShader(pr, vs); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, GPU_HEAD + body + GPU_TAIL)); gl.bindAttribLocation(pr, 0, 'p'); gl.linkProgram(pr); if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr)); return { pr, loc: {} }; };
-    const progs = { logo: mk(GPU_LOGO), fx: mk(GPU_FX), base: mk(GPU_BASE) };
+    const progs = { logo: mk(GPU_LOGO), fx: mk(GPU_FX), base: mk(GPU_BASE), type: mk(GPU_ROWS + GPU_TYPE), sym: mk(GPU_ROWS + GPU_SYM) };
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    cv.addEventListener('webglcontextlost', e => { e.preventDefault(); GPU.gl = null; GPU.progs = null; GPU.maskN = -1; });      // comes back by itself on the next frame
-    GPU.cv = cv; GPU.gl = gl; GPU.progs = progs; GPU.maskN = -1;
+    cv.addEventListener('webglcontextlost', e => { e.preventDefault(); GPU.gl = null; GPU.progs = null; GPU.maskN = -1; GPU.tex = null; GPU.mt.clear(); GPU.rows = null; });      // comes back by itself on the next frame
+    GPU.cv = cv; GPU.gl = gl; GPU.progs = progs; GPU.maskN = -1; GPU.maxT = gl.getParameter(gl.MAX_TEXTURE_SIZE);
     return true;
   } catch (e) { GPU.bad = true; GPU.why = String(e && e.message).slice(0, 300); console.warn('gpu: ' + GPU.why); return false; }      // not an error: the canvas version takes over
 }
@@ -338,5 +412,104 @@ function gpuBase(q, W, H, Wf, t, o, st, sn) {
   i1('uBnn', st.bn); gl.uniform4iv(at('uBI[0]'), I); gl.uniform4fv(at('uBA[0]'), A); gl.uniform4fv(at('uBB[0]'), B);
   i1('uNSl', 0); u.f2('uCrush', 0, 0); f1('uTA', 0); f1('uDA', 0);
   gpuDraw(u, q, W, H, t, o, sn, o.gapN || 0);
+  return true;
+}
+// A mask as a texture, kept for as long as the mask itself is: the shape in red and, when an outline needs it, the blur in green.
+function gpuMaskTex(m, blur) {
+  const gl = GPU.gl; let e = GPU.mt.get(m);
+  if (e && (e.blur || !blur)) return e.tex;
+  if (m.w > GPU.maxT || m.h > GPU.maxT) return null;
+  if (!e) { e = { tex: gl.createTexture(), blur: false }; GPU.mt.set(m, e); GPU.mtNew = true; }
+  const n = m.w * m.h, bl = blur ? typeBlur(m) : null, px = bl ? new Float32Array(n * 2) : new Uint8Array(n);
+  // the shape came from eight bits and goes back into eight; the blur has finer steps, and an outline is cut at set levels of it
+  if (bl) for (let i = 0; i < n; i++) { px[i * 2] = m.data[i]; px[i * 2 + 1] = bl[i]; }
+  else for (let i = 0; i < n; i++) px[i] = Math.round(Math.min(1, Math.max(0, m.data[i])) * 255);
+  gl.activeTexture(gl.TEXTURE14); gl.bindTexture(gl.TEXTURE_2D, e.tex); gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  if (bl) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, m.w, m.h, 0, gl.RG, gl.FLOAT, px);
+  else gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, m.w, m.h, 0, gl.RED, gl.UNSIGNED_BYTE, px);
+  for (const [a, b] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, a, b);
+  e.blur = !!blur;
+  return e.tex;
+}
+// Textures whose mask the word and symbol caches have let go of are freed. Looked at only after a new one was made.
+function gpuMaskSweep() {
+  GPU.mtNew = false;
+  const live = new Set(typeMasks.values()); for (const m of symMasks.values()) live.add(m);
+  for (const [m, e] of GPU.mt) if (!live.has(m)) { GPU.gl.deleteTexture(e.tex); GPU.mt.delete(m); }
+}
+// n rows of the table and their masks handed to the program in use
+function gpuRows(u, d, n, tex) {
+  const { gl, i1 } = u;
+  for (let k = 0; k < GPU_MT; k++) { gl.activeTexture(gl.TEXTURE1 + k); gl.bindTexture(gl.TEXTURE_2D, tex[k] || tex[0]); i1('uT' + k, 1 + k); }
+  gl.activeTexture(gl.TEXTURE13);
+  if (!GPU.rows) {
+    GPU.rows = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, GPU.rows); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, GPU_RW, GPU_RH, 0, gl.RGBA, gl.FLOAT, null);
+    for (const [a, b] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, a, b);
+  } else gl.bindTexture(gl.TEXTURE_2D, GPU.rows);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, GPU_RW, n, gl.RGBA, gl.FLOAT, d, 0);
+  gl.activeTexture(gl.TEXTURE0);
+  i1('uRows', 13); i1('uRn', n);
+}
+const gpuNoDisp = u => { u.i1('uNSl', 0); u.f2('uCrush', 0, 0); u.f1('uTA', 0); u.f1('uDA', 0); };
+// The type layer, from the same rows as typeField. More than GPU_RH rows, more than GPU_MT different lines of words at once,
+// or a wave or letters line too long for the table go back to the canvas version.
+function gpuType(q, W, H, Wf, t, o, st, sn) {
+  if (!gpuCan(sn, o, st)) return false;
+  const rows = typeRows(Wf, H, o, st), n = rows.length, RW = GPU_RW * 4;
+  if (n > GPU_RH) return false;
+  if (!n) return true;                                   // nothing to show: the layer stays black
+  const d = GPU.rd || (GPU.rd = new Float32Array(RW * GPU_RH)), ms = [], bl = [], tex = [];
+  for (let i = 0; i < n; i++) {
+    const it = rows[i], m = it.m, k = i * RW, lt = it.wv || it.sc ? m.adv.length - 1 : 0, tf = it.tf;
+    let mi = ms.indexOf(m);
+    if (mi < 0) { if (ms.length >= GPU_MT) return false; mi = ms.push(m) - 1; bl.push(false); }
+    if (it.ol) bl[mi] = true;
+    if (lt > GPU_RW - 8) return false;
+    d.fill(0, k, k + 32);
+    d[k] = it.left; d[k + 1] = it.top; d[k + 2] = it.wT; d[k + 3] = it.hT;
+    d[k + 4] = it.tile === null ? -1 : it.tile - Math.floor(it.tile); d[k + 5] = it.gain; d[k + 6] = it.cut; d[k + 7] = it.cur;      // only the fraction of a tile's travel counts
+    d[k + 8] = it.roll; d[k + 9] = it.tear; d[k + 10] = it.ph; d[k + 11] = 0.55 * m.h / m.w;
+    d[k + 12] = mi; d[k + 13] = it.ol ? 1 : 0; d[k + 14] = it.wv ? 1 : it.sc ? 2 : 0; d[k + 15] = lt;
+    d[k + 16] = it.sc ? it.sc.p : 0; d[k + 17] = it.wv ? 1 + it.wv.amp * 2 : 1; d[k + 18] = tf ? 1 : 0;
+    if (tf) { d[k + 20] = tf.cx; d[k + 21] = tf.cy; d[k + 22] = tf.c; d[k + 23] = tf.s; d[k + 24] = tf.sx; d[k + 25] = tf.sy; d[k + 26] = tf.dy; }
+    for (let c = 0; c < lt; c++) {
+      const j = k + 32 + c * 4;
+      d[j] = m.adv[c + 1]; d[j + 1] = it.sc ? hash(c, it.sc.sd, 260) : 0; d[j + 2] = it.sc ? (hash(c, it.sc.k, 261) - 0.5) * 0.5 : 0;
+      d[j + 3] = it.wv ? Math.round(Math.sin(TAU * (c * it.wv.f - it.wv.ph)) * 3) / 3 * it.wv.amp : 0;
+    }
+  }
+  for (let i = 0; i < ms.length; i++) { const x = gpuMaskTex(ms[i], bl[i]); if (!x) return false; tex.push(x); }
+  const u = gpuUse('type', W, H), warp = o.tyWarp || 0;
+  gpuRows(u, d, n, tex); u.f2('uFW', Wf, H);
+  if (warp > 0.01) gpuDisp(u, o, st, Wf, H, warp); else gpuNoDisp(u);
+  gpuDraw(u, q, W, H, t, o, sn, o.gapN || 0);
+  if (GPU.mtNew) gpuMaskSweep();
+  return true;
+}
+// Symbols, from the same list as symField: per false for the ones across the frame (Wf is then the width of the field behind
+// the pillars), true for one in every pillar. Drawn with whatever blend q is set to, so the caller lays them over the logo.
+// More shapes at once than GPU_MT are drawn in several goes. True when there is nothing left for the canvas version to do.
+function gpuSym(q, W, H, Wf, t, o, st, per, N, sn) {
+  if (!gpuCan(sn, o, st)) return false;
+  const items = symItems(Wf, H, st, per), RW = GPU_RW * 4;
+  if (!items.length) return true;
+  if (items.length > GPU_RH || (per && N > GPU_RW - 8)) return false;
+  const ms = [], at = m => { let i = ms.indexOf(m); if (i < 0) i = ms.push(m) - 1; return i; };
+  const pil = items.map(it => { if (!it.per) { it.mi = at(it.m); return null; } const a = []; for (let i = 0; i < N; i++) a.push(at(it.at(i))); return a; });
+  for (const m of ms) if (!gpuMaskTex(m, false)) return false;
+  const d = GPU.rd || (GPU.rd = new Float32Array(RW * GPU_RH));
+  for (let m0 = 0; m0 < ms.length; m0 += GPU_MT) {         // one go for each twelve shapes: a row or a pillar whose shape is in another go sits this one out
+    const ix = i => i >= m0 && i < m0 + GPU_MT ? i - m0 : -1, tex = ms.slice(m0, m0 + GPU_MT).map(m => gpuMaskTex(m, false));
+    items.forEach((it, i) => {
+      const k = i * RW, e = it.e;
+      d.fill(0, k, k + 32);
+      if (it.per) { d[k] = e.size; d[k + 1] = e.y; d[k + 2] = e.size * (Wf / N) / H; d[k + 3] = N; d[k + 5] = it.hit; d[k + 6] = 1; for (let p = 0; p < N; p++) d[k + 32 + p * 4] = ix(pil[i][p]); }
+      else { d[k] = it.left; d[k + 1] = it.top; d[k + 2] = it.w; d[k + 3] = it.h; d[k + 4] = ix(it.mi); d[k + 5] = it.gain; }
+    });
+    const u = gpuUse('sym', W, H);
+    gpuRows(u, d, items.length, tex); gpuNoDisp(u);
+    gpuDraw(u, q, W, H, t, o, sn, per ? 0 : o.gapN || 0);
+  }
+  if (GPU.mtNew) gpuMaskSweep();
   return true;
 }
