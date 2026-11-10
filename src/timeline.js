@@ -312,7 +312,7 @@ function tlInsp() {
     const input = (id, type, step, fn) => { const el = document.createElement('input'); el.type = type; el.id = id; if (step) el.step = step; el.addEventListener('change', () => { fn(el); tlChanged(); tlInsp(); }); return el; };
     const select = (id, opts, fn) => { const el = document.createElement('select'); el.id = id; for (const [v, n] of opts) { const o = document.createElement('option'); o.value = v; o.textContent = n; el.append(o); } el.addEventListener('change', () => { fn(el); tlChanged(); tlInsp(); }); return el; };
     const del = () => { const b = document.createElement('button'); b.type = 'button'; b.textContent = 'Delete'; b.addEventListener('click', tlDelete); box.append(b); };
-    if (!s) box.textContent = 'Double-click a lane to add a clip or a key. Drag to move, drag a clip by its right edge for length, Alt-drag to copy, Backspace to delete.';
+    if (!s) box.textContent = 'Double-click a lane to add a clip or a key. Drag to move, drag a clip by its right edge for length, Alt-drag to copy, Backspace to delete. Arrows: left and right jump a second (Shift: a frame), up and down go to the part before and after.';
     else if (s.kind === 'ev' && !userEv.includes(s.e)) { const p = document.createElement('span'); p.id = 'inAuto'; box.append(p); }
     else if (s.kind === 'ev') {
       if (s.e.k === 13) {
