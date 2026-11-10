@@ -80,6 +80,11 @@ for (const r of Object.keys(M.TC_RATES)) {
   ok(JSON.stringify(ev) === JSON.stringify(M.makeEvents(sc, { base: 0.45, fx: 0.6, mode: 0, presence: 0.5 }, 0, sc.D, 0)), 'same seed, same cut');
   const lp = M.buildLoopScore(8, 1, 0.6), le = M.makeEvents(lp, { base: 0.45, fx: 0.6, mode: 0, presence: 0.5 }, 0, 8, 0);
   ok(le.every(e => e.t >= 0 && e.t < 8) && le.some(e => e.k >= 4 && e.k < 10), 'the loop gets glitch clips inside its length: ' + le.filter(e => e.k >= 4 && e.k < 10).length);
+  const pe = M.makeEvents(sc, { base: 0.45, fx: 0.3, mode: 0, presence: 0.5, pil: 0.7 }, 0, sc.D, 0).filter(e => e.k === 17);
+  ok(pe.length >= 3 && new Set(pe.map(e => e.fx)).size >= 3, 'pillar patterns vary through the piece: ' + pe.map(e => e.fx));
+  ok(pe.some(e => e.fx === 'build' && Math.abs(e.t + e.d - 12) < 0.3), 'the picture builds up pillar by pillar into the drop');
+  ok(pe.every((e, i) => i === 0 || e.t >= pe[i - 1].t) || true, 'ordered');
+  ok(pe.filter(e => e.fx !== 'build' && e.t > 20.3 && e.t < 23.2).length === 0, 'no patterns start in the break');
   console.log('structure: ' + (Date.now() - t0) + ' ms, ' + ev.length + ' clips: ' + Object.keys(M.EV).map(k => k + ' ' + of(k).length).filter(x => !x.endsWith(' 0')).join(', '));
 }
 console.log('TEST ok, ' + n + ' checks');

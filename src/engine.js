@@ -302,14 +302,19 @@ function buildLoopScore(L, seed, ch) {
 }
 
 /* ---------- three layers: base (rare and big), glitch (lines, chases, debris), logo (loader or appearing) ---------- */
-const EV = { sweep: 0, strobe: 1, flood: 2, blackout: 3, glitch: 4, chase: 5, lines: 6, sparks: 7, bars: 8, blocks: 9, load: 10, show: 11, hide: 12, type: 13, orbit: 14, spokes: 15, meet: 16 };
-const EVD = { sweep: 0.9, strobe: 0.6, flood: 0.9, blackout: 0.4, glitch: 0.6, chase: 4, lines: 0.7, sparks: 0.6, bars: 0.6, blocks: 0.6, load: 3, show: 2, hide: 0, type: 2.5, orbit: 1.4, spokes: 2.4, meet: 1.2 };
+const EV = { sweep: 0, strobe: 1, flood: 2, blackout: 3, glitch: 4, chase: 5, lines: 6, sparks: 7, bars: 8, blocks: 9, load: 10, show: 11, hide: 12, type: 13, orbit: 14, spokes: 15, meet: 16, pillar: 17 };
+const EVD = { sweep: 0.9, strobe: 0.6, flood: 0.9, blackout: 0.4, glitch: 0.6, chase: 4, lines: 0.7, sparks: 0.6, bars: 0.6, blocks: 0.6, load: 3, show: 2, hide: 0, type: 2.5, orbit: 1.4, spokes: 2.4, meet: 1.2, pillar: 4 };
 // base clips are the first four and the three that run round the ring; which face of the ring a clip plays on is e.face: 0 both, 1 outside, 2 inside
-const isBase = k => k < 4 || k >= 14;
+const isBase = k => k < 4 || (k >= 14 && k <= 16);
 // A Type clip carries its words and how they arrive: txt, mode (slam, typeon, roll, ticker), size and y as parts of the frame height, font.
-const TYPE_NEW = { txt: 'MALL CALL', mode: 'slam', size: 0.5, y: 0.5, font: 'sans' };
-const evMore = e => e.k === 13 ? { txt: e.txt, mode: e.mode, size: e.size, y: e.y, font: e.font, face: e.face | 0 } : e.face ? { face: e.face } : null;
-const mkEv = (t, type, seed, d, more) => { const e = { t, type, k: EV[type], seed: seed | 0, d: d === undefined || d === null ? EVD[type] : d }; if (more && more.face) e.face = more.face | 0; return e.k === 13 ? Object.assign(e, TYPE_NEW, more) : e; };
+// Also: x across the frame, caps, trk (letter spacing in ems), out ('cut', or 'same' to leave the way it came). A | in txt starts a new line.
+const TYPE_NEW = { txt: 'MALL CALL', mode: 'slam', size: 0.5, y: 0.5, font: 'sans', x: 0.5, caps: true, trk: 0, out: 'cut' };
+// A Pillar clip plays a pattern across the pillars, one value per pillar. fx: the pattern. pm: 'light' lights whole pillars,
+// 'mask' shows the picture only where the pattern is. sp: speed. wd: how much of the ring is on, 0 to 1.
+const PILLAR_FX = ['chase', 'spin', 'ping', 'wave', 'random', 'alt', 'pop', 'vu', 'build', 'drain', 'split'];
+const PIL_NEW = { fx: 'chase', pm: 'mask', sp: 1, wd: 0.25 };
+const evMore = e => e.k === 13 ? { txt: e.txt, mode: e.mode, size: e.size, y: e.y, font: e.font, x: e.x, caps: e.caps, trk: e.trk, out: e.out, face: e.face | 0 } : e.k === 17 ? { fx: e.fx, pm: e.pm, sp: e.sp, wd: e.wd, face: e.face | 0 } : e.face ? { face: e.face } : null;
+const mkEv = (t, type, seed, d, more) => { const e = { t, type, k: EV[type], seed: seed | 0, d: d === undefined || d === null ? EVD[type] : d }; if (more && more.mode === 'band' && (d === undefined || d === null)) e.d = 8; if (more && more.face) e.face = more.face | 0; return e.k === 13 ? Object.assign(e, TYPE_NEW, more) : e.k === 17 ? Object.assign(e, PIL_NEW, more) : e; };
 
 // The shape of the piece, read off the score once: where it drops, the builds that lead into drops, the quiet stretches,
 // and the moments each band of the spectrum jumps. The automatic cut hangs its clips on these.
@@ -430,6 +435,31 @@ function makeEvents(sc, P, a, b, pi) {
       ev.push(mkEv(h.t, 'show', i, Math.min(Math.max(0.25, (nx - h.t) * 0.95), lerp(0.7, 3.2, P.presence), Math.max(0.1, b - h.t))));
     });
   }
+  if (P.pil > 0.02) {                                        // pillar patterns: something different every few seconds, so a long piece keeps changing
+    const pil = P.pil, r = (n, salt) => hash(n, sd, salt), busy = [];
+    const quiet = t => st.breaks.some(u => t > u.a - 0.2 && t < u.b - 0.3);
+    st.builds.filter(u => u.b > a && u.a < b).forEach((u, i) => {          // the picture fills in pillar by pillar through a build
+      const s0 = Math.max(a, u.a), L = Math.min(b, u.b) - s0;
+      if (L >= 1.2) { ev.push(mkEv(s0, 'pillar', r(i, 231) * 1e6, L, { fx: 'build', pm: 'mask', sp: 1, wd: 0.3 })); busy.push([s0, s0 + L]); }
+    });
+    drops.forEach((d, i) => {                                              // and a drop sets it spinning
+      if (r(i, 232) > 0.3 + 0.7 * pil) return;
+      const L = Math.min(b - d.t, 1.5 + 2.5 * r(i, 233));
+      if (L >= 0.8) { ev.push(mkEv(d.t, 'pillar', r(i, 234) * 1e6, L, { fx: r(i, 235) < 0.6 ? 'spin' : 'chase', pm: r(i, 236) < 0.5 ? 'light' : 'mask', sp: 1.2 + 1.2 * r(i, 237), wd: 0.2 + 0.25 * r(i, 238) })); busy.push([d.t, d.t + L]); }
+    });
+    const free = PILLAR_FX.filter(f => f !== 'build' && f !== 'drain');
+    let last = -1;
+    for (let t = a + 0.5 + 3 * r(0, 239), n = 0; t < b - 1.5; n++) {
+      const hit = hits.find(h => h.t >= t - 0.25 && h.t < t + 1.2), t0 = hit ? hit.t : t;                 // start on a hit when one is near
+      const L = Math.min(b - t0 - 0.1, 2.5 + 6 * r(n, 240));
+      if (L > 1.2 && r(n, 241) < 0.2 + 0.75 * pil && !quiet(t0) && !busy.some(q => t0 < q[1] + 0.3 && t0 + L > q[0] - 0.3)) {
+        let k = Math.floor(r(n, 242) * free.length * 0.999); if (k === last) k = (k + 1) % free.length;   // never the same pattern twice running
+        last = k;
+        ev.push(mkEv(t0, 'pillar', r(n, 243) * 1e6, L, { fx: free[k], pm: r(n, 244) < 0.72 ? 'mask' : 'light', sp: 0.5 + 1.6 * r(n, 245) * r(n, 246), wd: 0.12 + 0.4 * r(n, 247) }));
+      }
+      t = t0 + L + lerp(7, 0.4, pil) * (0.4 + 1.2 * r(n, 248));
+    }
+  }
   return ev;
 }
 // Loader progress: it jumps between a handful of checkpoints, like a real one stalling and catching up.
@@ -459,7 +489,8 @@ function newState() {
     pn: 0, pHz: false, pp: new Float32Array(12), pc: new Float32Array(12), pL: new Float32Array(12), pI: new Float32Array(12), pE: new Float32Array(12),
     bn: 0, bt: new Int8Array(3), bx: new Float32Array(3), ba: new Float32Array(3), bs: new Int32Array(3),
     lsN: 0, lsX: new Float32Array(2), lsS: new Int32Array(2), chase: 0, chSeed: 0, chI: 1, fxGain: 1, tau: 0,
-    lv: 0, lp: 1, lseed: 0, lsince: 9, sty: new Int8Array(3), tyN: 0, tyE: [null, null], tyX: new Float32Array(2), tyA: new Float32Array(2) };
+    lv: 0, lp: 1, lseed: 0, lsince: 9, sty: new Int8Array(3), tyN: 0, tyE: [null, null], tyX: new Float32Array(2), tyA: new Float32Array(2),
+    pfN: 0, pfE: [null, null, null], pfX: new Float32Array(3), pfA: new Float32Array(3), mi: 0, dtm: 9 };
 }
 // relative weights of the hard glitch states; every section of the piece leans on a different few
 const GW = [0.2, 0.2, 0.22, 0.07, 0.12, 0.1, 0.14, 0.12, 0.12];
@@ -477,7 +508,7 @@ function stateAt(sc, tau, cfg, st) {
   const cv = a => a[h0] + (a[h1] - a[h0]) * hf;
   const pk = cv(sc.pulse);
   // everything scheduled or triggered that is live right now
-  st.bn = 0; st.lsN = 0; st.tyN = 0; st.black = false;
+  st.bn = 0; st.lsN = 0; st.tyN = 0; st.pfN = 0; st.black = false;
   let gX = 0, cz = 0, czSeed = 0, xLo = 0, xMid = 0, xHi = 0, lg = null, lgAge = 1e9, strike = 0;
   const all = sc.all;
   for (let q = 0; q < all.length; q++) {
@@ -485,6 +516,7 @@ function stateAt(sc, tau, cfg, st) {
     if (e.face && cfg.face !== undefined && e.face !== cfg.face + 1) continue;      // a clip for the other face of the ring
     let age = tau - e.t;
     if (age < 0) { if (!sc.cyclic) continue; age += D; }
+    if (e.k === 17) { if (age < e.d && st.pfN < 3) { st.pfE[st.pfN] = e; st.pfX[st.pfN] = age / e.d; st.pfA[st.pfN] = age; st.pfN++; } continue; }
     if (e.k >= 14) { if (age < e.d && st.bn < 3) { st.bt[st.bn] = e.k; st.bx[st.bn] = age / e.d; st.ba[st.bn] = age; st.bs[st.bn] = e.seed; st.bn++; } continue; }
     if (e.k === 13) { if (age < e.d && st.tyN < 2) { st.tyE[st.tyN] = e; st.tyX[st.tyN] = age / e.d; st.tyA[st.tyN] = age; st.tyN++; } continue; }
     if (e.k >= 10) { if (age < lgAge && !(e.k === 11 && age >= e.d)) { lgAge = age; lg = e; } continue; }   // a Show that has run out hands back to whatever came before it
@@ -519,6 +551,7 @@ function stateAt(sc, tau, cfg, st) {
   while (i + 1 < mv.length && mv[i + 1].t <= te) i++;
   sc._i = i;
   const m = mv[i], dtm = te - m.t, A = m.from, B = m.to;
+  st.mi = m.i; st.dtm = Math.max(0, tau - m.t);          // which hit we are after, and how long ago it was: pillar patterns key off these
   // the logo never glides: it cuts to its next pose through two or three wrong frames
   let a = 1;
   if (dtm < 0.1) { const j = Math.floor(dtm * 30 + 1e-6); a = j <= 0 ? 0.3 + 0.5 * hash(m.i, sd, 110) : j === 1 ? 0.75 + 0.45 * hash(m.i, sd, 111) : 0.92 + 0.16 * hash(m.i, sd, 112); }
@@ -630,6 +663,8 @@ function stateAt(sc, tau, cfg, st) {
   st.loK = sc.loIdx[h0] + sec * 131; st.miK = sc.miIdx[h0] + sec * 57; st.hiK = k;
   // the glitch layer steps back while the logo is up
   st.fxGain = 1 - 0.4 * (st.lv === 2 ? 1 : st.lv === 1 ? 0.4 : 0);
+  if (st.tyN) st.fxGain *= 0.4;                           // words and big base moments get the frame to themselves
+  if (st.bn) st.fxGain *= 0.6;
   // trails smear along a direction that changes with every cut
   const fa = TAU * hash(m.i, sd, 76);
   st.fbx = Math.cos(fa) * (2 + 10 * pk + 14 * b2); st.fby = Math.sin(fa) * (2 + 10 * pk + 14 * b2);
