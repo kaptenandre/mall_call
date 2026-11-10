@@ -27,6 +27,9 @@ body{background:var(--room);color:var(--ink);font-family:var(--body);font-size:1
 .top{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 20px;padding:18px 20px 14px;border-bottom:1px solid var(--rule)}
 h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase;margin:0;text-wrap:balance}
 .top p{margin:0;color:var(--dim);max-width:65ch}
+.top{padding-right:250px}
+.smpte{position:fixed;top:8px;right:14px;z-index:20;background:#000;border:1px solid var(--rule);padding:7px 12px;font:500 24px/1 var(--display);letter-spacing:.06em;font-variant-numeric:tabular-nums;color:var(--ink)}
+@media (max-width:620px){.top{padding-right:16px}.smpte{font-size:16px;top:auto;bottom:8px}}
 .app{display:grid;grid-template-columns:minmax(0,1fr) 304px;gap:20px;padding:20px;align-items:start}
 .stagecol{position:sticky;top:12px;min-width:0}
 .stage{background:#000;border:1px solid var(--rule);display:flex;justify-content:center;align-items:center;min-height:180px;overflow-x:auto}
@@ -129,6 +132,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 </style>
 </head>
 <body>
+<div class="smpte" id="smpte" role="timer" aria-label="Timecode at the playhead" title="Timecode at the playhead. Set the rate and the start under Timecode.">00:00:00:00</div>
 <header class="top">
   <h1>Mall Call <span id="build" style="color:var(--dim);font-weight:400"></span></h1>
   <p>Three layers cut to your sound. A base layer for the rare big sweep or strobe, a glitch layer of lines, chases and debris, and the logo on top as a loader or popping through. Trigger any of it by hand.</p>
@@ -316,6 +320,17 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
       <button type="button" class="plain" id="play">Pause</button>
     </fieldset>
 
+    <fieldset id="libBox" hidden>
+      <legend>Project library</legend>
+      <label class="row" for="libName"><span>Project</span><input type="text" id="libName" placeholder="Name it" spellcheck="false" autocomplete="off"></label>
+      <label class="row" for="libNote"><span>Note</span><input type="text" id="libNote" placeholder="What changed" autocomplete="off"></label>
+      <button type="button" class="primary" id="libSave">Save a new version</button>
+      <label class="row" for="libPick"><span>Open</span><select id="libPick"></select></label>
+      <label class="row" for="libVer"><span>Version</span><select id="libVer"></select></label>
+      <div class="two"><button type="button" class="plain" id="libOpen">Open it</button><button type="button" class="plain" id="libFolder">Change folder</button></div>
+      <p class="note" id="libNoteP" aria-live="polite"></p>
+    </fieldset>
+
     <fieldset>
       <legend>Timecode</legend>
       <label class="row" for="tcRate"><span>Rate</span><select id="tcRate"><option value="24">24</option><option value="25">25</option><option value="29.97">29.97 drop</option><option value="30">30</option></select></label>
@@ -353,7 +368,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 18;
+const BUILD = 20;
 $('build').textContent = '· build ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -1817,12 +1832,20 @@ window.__selfTest = async () => {
     r.restored = r.restored && editState() === base;
     r.tc = tcAt(0) + ' ' + tcString(parseTc('01:00:00:00', TC_RATES['29.97']) + 1800, TC_RATES['29.97']);
     r.rows = tlRows().length; r.tlHeight = $('tl').height;
+    if (window.nativeApp && window.nativeApp.libSave) {     // two versions of a project into the library, then the first one back
+      $('libName').value = 'Smoke test'; $('look-chunky').click(); await libSave('first');
+      $('look-wire').click(); const two = await libSave('second');
+      const vs = await window.nativeApp.libVersions('Smoke test'), back = await window.nativeApp.libOpen({ name: 'Smoke test', n: 1 });
+      r.library = !!two && two.n === 2 && vs.length === 2 && vs[0].note === 'first' && !!back && (await applyProject(JSON.parse(back.json))) && parts[0].P.fxStyle === 'dither';
+      await applyProject(JSON.parse(before)); undoReset();
+    }
   } catch (e) { r.timeline = 'error: ' + e.message; }
   return r;
 };
 
 /*__OUTPUT__*/
 /*__RING__*/
+/*__LIBRARY__*/
 
 // Used by the app's export check (MALLCALL_EXPORT_TEST): a short piece through the real export, flat or as the ring in 3D.
 window.__exportTest = async (fmt, ringView) => {

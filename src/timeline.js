@@ -255,7 +255,7 @@ function drawTimeline() {
   const x = Math.round(t2x(tau));
   g.fillStyle = '#fff'; g.fillRect(x, 0, 1.5, H); g.fillRect(x - 3, 0, 7.5, 4);
   c.setAttribute('aria-valuenow', String(Math.round(tau / D * 100)));
-  $('tlTc').textContent = tcAt(tau);
+  { const tc = tcAt(tau); if ($('tlTc').textContent !== tc) { $('tlTc').textContent = tc; $('smpte').textContent = tc; } }
 }
 
 /* what is under the pointer */

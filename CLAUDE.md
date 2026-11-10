@@ -14,7 +14,7 @@ npm run dist     # package and ad-hoc sign dist/Mall Call-darwin-arm64/Mall Call
 
 Raise `BUILD` in `src/page.html` by one with every push. It shows in the page header ("build 12") and is how the user tells whether the app has updated.
 
-Run `npm run smoke` and `npm test` after every change. A clean smoke run has `"errors":[]`, `"roundTrip":true`, `"restored":true`, `"timeline":true`, `"type":true`, `"h264":true`.
+Run `npm run smoke` and `npm test` after every change. A clean smoke run has `"errors":[]`, `"roundTrip":true`, `"restored":true`, `"timeline":true`, `"type":true`, `"library":true`, `"h264":true`.
 
 On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts/build.js && xvfb-run -a npx electron . --smoke --no-sandbox`. `"aac":false` is expected there.
 
@@ -24,6 +24,7 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 - `src/timeline.js`: the timeline editor. Rows, clips, keys (`auto`, `PAt`, `setKey`), zoom, snapping, the inspector strip and undo. Inlined at `/*__TIMELINE__*/`.
 - `src/timecode.js`: SMPTE maths, MIDI timecode and LTC encode and decode, no DOM. Inlined at `/*__TIMECODE__*/`. Only the maths is used by the interface so far.
 - `src/ring.js`: the ring in 3D, plain WebGL with no library so it updates with the page. Inlined at `/*__RING__*/`.
+- `src/library.js`: the project library in the rail. Inlined at `/*__LIBRARY__*/`.
 - `src/output.js`: the clean output window and the timecode settings. Inlined at `/*__OUTPUT__*/`.
 - `scripts/test.js`: node checks for the two files with no DOM.
 - `src/page.html`: interface, the three layer fields (`baseField`, `fxField`, `logoField`), the five drawing styles (`DRAW.rods`, `streaks`, `ascii`, `ridge`, `dither`), `Renderer`, export, parts, trigger pad, project files. The engine is inlined at the `/*__SCORE__*/` marker.
@@ -59,6 +60,7 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 - **Keys** animate a setting over time (`auto[key] = [{ t, v, c }]`). `PAt(t)` gives the settings in force at a time: the part's, with animated ones read off their keys. Use `PAt`, never `parts[...].P`, when drawing. Settings that change the schedule (How often, How much, Chaos, Easing) and Logo size are not animatable.
 - Timecode: the piece has a rate and a start timecode (`S.tcRate`, `S.tcStart` in frames) so the ruler reads like the lighting desk.
 - Export renders every frame offline. MP4 goes through WebCodecs and `mp4-muxer` in the page. ProRes 422 HQ, ProRes 4444 and HAP go through ffmpeg in the Mac app (`ff-start`, `ff-frame`, `ff-end` in `main.js`): the page sends raw frames, ffmpeg adds the sound from the sound file's path and writes the start timecode into the .mov. On a ring, an export can film the flat frame (for mapping) or the 3D view as it stands (`S.exView`, `exSource`).
+- **The project library** is how projects get into the cloud with their assets and history. The app keeps a library folder (iCloud Drive's `Mall Call` folder when iCloud Drive exists, else Documents; the user can point it anywhere, such as Dropbox). Each project is a folder: `versions/0001.json`, `0002.json` and so on are whole projects with the logo and font inside, and `assets/` holds the sound, copied in once. Every save writes a new version and never overwrites one (`lib-save`, `lib-open`, `lib-versions` in `main.js`). There is no server and no account: syncing is left to the folder.
 - A font of the user's own for Type clips is dropped in as a file and kept in the project (`loadFont`, `fontFile`).
 
 ## Design rules. These came from the director and are not up for change without asking
@@ -96,6 +98,7 @@ Only the page updates this way. A change to `main.js`, `preload.js`, `update.js`
 - `npm run` checks for export: `MALLCALL_EXPORT_TEST=prores MALLCALL_FF_OUT=/tmp/x.mov` (or `hap`, `prores:3d`) before `electron .` runs a short real export and prints a line starting with EXPORT.
 - Following `latest` and the three-minute check are untested against GitHub.
 - Pillar patterns, part transitions, the At once control and the new Type modes have been seen as still frames in Chromium. None of them has been judged in motion.
+- The library is checked in smoke without a sound (two versions saved, the first reopened). Copying a sound file into a project, and the folder living in iCloud Drive or Dropbox, are untried.
 - LTC and MTC are tested as maths only (encode, decode, round trip). No audio or MIDI device is wired up.
 
 - On macOS (Apple silicon) the smoke check passes with H.264 and AAC, and the packaged app builds and launches. Nobody has looked closely at the window yet, so the interface itself is unchecked on the Mac.

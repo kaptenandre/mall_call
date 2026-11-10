@@ -219,6 +219,76 @@ ipcMain.handle('ff-end', async (event, abort) => {
   const code = await job.done;
   return code === 0 ? { ok: true, path: job.out } : { error: 'ffmpeg', log: job.log };
 });
+// The project library: a folder of projects, each a folder holding its sound and every saved version.
+// Put the library in iCloud Drive, Dropbox or any synced folder and the projects are in the cloud, with their history.
+//   <library>/<Project name>/versions/0001.json, 0002.json ...   whole projects; logo and font are inside the JSON
+//   <library>/<Project name>/assets/<sound file>                 the sound, copied in once
+const libFile = () => path.join(app.getPath('userData'), 'library.json');
+const safeName = n => String(n || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^\.+/, '').slice(0, 80);
+async function libRoot() {
+  try { const r = JSON.parse(await fsp.readFile(libFile(), 'utf8')).root; if (r) return r; } catch (e) {}
+  if (SMOKE) return path.join(app.getPath('userData'), 'library');
+  const icloud = path.join(app.getPath('home'), 'Library', 'Mobile Documents', 'com~apple~CloudDocs');
+  return path.join(fs.existsSync(icloud) ? icloud : app.getPath('documents'), NAME);
+}
+async function libVersions(dir) {
+  let files = [];
+  try { files = (await fsp.readdir(path.join(dir, 'versions'))).filter(f => /^\d{4}\.json$/.test(f)).sort(); } catch (e) {}
+  return files.map(f => Number(f.slice(0, 4)));
+}
+ipcMain.handle('lib-root', async () => libRoot());
+ipcMain.handle('lib-pick-root', async () => {
+  const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], defaultPath: await libRoot(), message: 'Choose the folder that holds your Mall Call projects' });
+  if (r.canceled || !r.filePaths[0]) return null;
+  await fsp.writeFile(libFile(), JSON.stringify({ root: r.filePaths[0] }), 'utf8');
+  return r.filePaths[0];
+});
+ipcMain.handle('lib-list', async () => {
+  const root = await libRoot(), out = [];
+  let names = [];
+  try { names = await fsp.readdir(root); } catch (e) {}
+  for (const n of names) { const v = await libVersions(path.join(root, n)); if (v.length) out.push({ name: n, versions: v.length, last: v[v.length - 1] }); }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+});
+ipcMain.handle('lib-versions', async (event, name) => {
+  const dir = path.join(await libRoot(), safeName(name)), out = [];
+  for (const n of await libVersions(dir)) {
+    try { const j = JSON.parse(await fsp.readFile(path.join(dir, 'versions', String(n).padStart(4, '0') + '.json'), 'utf8')); out.push({ n, at: j.savedAt || '', note: String(j.note || '') }); } catch (e) {}
+  }
+  return out;
+});
+ipcMain.handle('lib-save', async (event, o) => {
+  const name = safeName(o && o.name);
+  if (!name) return { error: 'name' };
+  const dir = path.join(await libRoot(), name);
+  await fsp.mkdir(path.join(dir, 'versions'), { recursive: true });
+  await fsp.mkdir(path.join(dir, 'assets'), { recursive: true });
+  const pj = JSON.parse(String(o.json));
+  pj.savedAt = new Date().toISOString(); pj.note = String(o.note || '').slice(0, 200); pj.soundAsset = null;
+  if (pj.soundPath) {                                     // the sound travels with the project
+    const src = String(pj.soundPath), dst = path.join(dir, 'assets', safeName(path.basename(src)) || 'sound');
+    try {
+      const a = await fsp.stat(src), b = await fsp.stat(dst).catch(() => null);
+      if (!b || b.size !== a.size) await fsp.copyFile(src, dst);
+      pj.soundAsset = path.basename(dst);
+    } catch (e) { return { error: 'sound' }; }
+  }
+  delete pj.soundPath;
+  const v = await libVersions(dir), n = (v.length ? v[v.length - 1] : 0) + 1;
+  await fsp.writeFile(path.join(dir, 'versions', String(n).padStart(4, '0') + '.json'), JSON.stringify(pj), 'utf8');
+  return { ok: true, n, name, dir };
+});
+ipcMain.handle('lib-open', async (event, o) => {
+  const name = safeName(o && o.name), dir = path.join(await libRoot(), name), v = await libVersions(dir);
+  const n = o && o.n ? Number(o.n) : v[v.length - 1];
+  if (!v.includes(n)) return null;
+  try {
+    const pj = JSON.parse(await fsp.readFile(path.join(dir, 'versions', String(n).padStart(4, '0') + '.json'), 'utf8'));
+    pj.soundPath = pj.soundAsset ? path.join(dir, 'assets', path.basename(String(pj.soundAsset))) : null;
+    projectPath = null; setTitle();
+    return { json: JSON.stringify(pj), n, name };
+  } catch (e) { return null; }
+});
 ipcMain.handle('autosave', async (event, json) => {
   await fsp.mkdir(path.dirname(autosaveFile()), { recursive: true });
   await fsp.writeFile(autosaveFile(), String(json), 'utf8');
