@@ -1,7 +1,7 @@
 // Checks for the parts with no DOM: automation curves and timecode. Run with: npm test
 const fs = require('fs'), path = require('path'), assert = require('assert');
 const src = ['src/engine.js', 'src/timecode.js'].map(f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8')).join('\n');
-const M = new Function(src + '\nreturn { autoVal, TC_RATES, tcToFrames, framesToTc, tcString, parseTc, mtcQuarter, mtcFull, MtcReader, ltcEncode, LtcDecoder, ltcRate, buildLoopScore, makeEvents };')();
+const M = new Function(src + '\nreturn { autoVal, TC_RATES, tcToFrames, framesToTc, tcString, parseTc, mtcQuarter, mtcFull, MtcReader, ltcEncode, LtcDecoder, ltcRate, buildLoopScore, buildTrackScore, analyze, makeStructure, makeEvents, EV };')();
 let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
 
 // automation
@@ -45,5 +45,41 @@ for (const r of Object.keys(M.TC_RATES)) {
   // the very last frame only ends when the next one starts, so the one before it is the last that can be read
   ok(fr === F0 + 2 * R.fps - 2 && Math.abs(dec.ref.at - (a.length + b.length - sr / R.real)) <= 2, 'LTC ' + r + ' last frame ' + fr + ' at ' + dec.ref.at);
   ok(M.ltcRate(dec.ref) === r, 'LTC rate ' + r + ' read as ' + M.ltcRate(dec.ref) + ' (' + dec.ref.fps.toFixed(3) + ')');
+}
+
+// the automatic cut reads the shape of a track: 30 s with a quiet intro, a build from 6 to 12 s, a drop at 12, a break from 20 to 24 with a breath before the drop at 24
+{
+  const sr = 22050, D = 30, pcm = new Float32Array(sr * D);
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647 * 2 - 1;
+  const loud = t => (t >= 12 && t < 20) || t >= 24;
+  let hp = 0;
+  for (let i = 0; i < pcm.length; i++) {
+    const t = i / sr, beat = t % 0.5, w = rnd();
+    const hiss = w - hp; hp = w;                                                      // crude high-pass: hats
+    let x = 0.02 * Math.sin(2 * Math.PI * 220 * t);
+    if (t >= 6 && t < 12) x += 0.25 * ((t - 6) / 6) * hiss * (t % 0.25 < 0.05 ? 1 : 0.15) + 0.15 * ((t - 6) / 6) * Math.sin(2 * Math.PI * (400 + 150 * (t - 6)) * t);
+    if (loud(t)) x += 0.8 * Math.sin(2 * Math.PI * 55 * beat) * Math.exp(-beat * 9) + 0.2 * hiss * ((t + 0.25) % 0.5 < 0.04 ? 1 : 0) + 0.15 * Math.sin(2 * Math.PI * 660 * t) * (t % 1 < 0.2 ? 1 : 0);
+    if (t >= 23.6 && t < 24) x = 0;
+    pcm[i] = x;
+  }
+  const t0 = Date.now(), sc = M.buildTrackScore(M.analyze(pcm, sr), 3, 0.6), st = M.makeStructure(sc);
+  const near = (list, t, tol) => list.some(d => Math.abs(d.t - t) < tol);
+  ok(near(st.drops, 12, 0.3) && near(st.drops, 24, 0.3) && st.drops.length <= 3, 'drops at 12 and 24, got ' + st.drops.map(d => d.t.toFixed(2)));
+  ok(st.builds.some(u => Math.abs(u.b - 12) < 0.3 && u.a > 4 && u.a < 10.5), 'a build into the first drop, got ' + JSON.stringify(st.builds));
+  ok(st.breaks.some(u => u.a > 19.5 && u.a < 21.5 && u.b > 23 && u.b < 24.5), 'the break, got ' + JSON.stringify(st.breaks));
+  ok(st.drops.find(d => Math.abs(d.t - 24) < 0.3).gap > 0, 'the breath before the second drop');
+  const ev = M.makeEvents(sc, { base: 0.45, fx: 0.6, mode: 0, presence: 0.5 }, 0, sc.D, 0), of = k => ev.filter(e => e.type === k);
+  ok(of('chase').some(e => e.t < 10.5 && Math.abs(e.t + e.d - 12) < 0.3), 'a chase runs through the build');
+  const vol = of('lines').filter(e => e.t >= 5 && e.t < 12).map(e => e.t);
+  ok(vol.length >= 3 && vol[2] - vol[1] < vol[1] - vol[0], 'lines come faster into the drop: ' + vol.map(t => t.toFixed(2)));
+  ok(ev.some(e => e.k < 3 && Math.abs(e.t - 12) < 0.3) && ev.some(e => e.k < 3 && Math.abs(e.t - 24) < 0.3), 'base lands on both drops');
+  ok(of('blackout').some(e => e.t < 24 && e.t + e.d > 23.7 && e.t + e.d < 24.3), 'blackout fills the breath');
+  ok(of('blocks').length + of('bars').length + of('sparks').length >= 6, 'band clips: ' + ['blocks', 'bars', 'sparks'].map(k => of(k).length));
+  ok(ev.filter(e => e.k >= 4 && e.k < 10 && e.t > 20.2 && e.t < 23.3).length === 0, 'the break is left alone');
+  ok(M.makeEvents(sc, { base: 0.45, fx: 0, mode: 0, presence: 0.5 }, 0, sc.D, 0).every(e => e.k < 4 || e.k >= 10), 'no glitch clips at zero');
+  ok(JSON.stringify(ev) === JSON.stringify(M.makeEvents(sc, { base: 0.45, fx: 0.6, mode: 0, presence: 0.5 }, 0, sc.D, 0)), 'same seed, same cut');
+  const lp = M.buildLoopScore(8, 1, 0.6), le = M.makeEvents(lp, { base: 0.45, fx: 0.6, mode: 0, presence: 0.5 }, 0, 8, 0);
+  ok(le.every(e => e.t >= 0 && e.t < 8) && le.some(e => e.k >= 4 && e.k < 10), 'the loop gets glitch clips inside its length: ' + le.filter(e => e.k >= 4 && e.k < 10).length);
+  console.log('structure: ' + (Date.now() - t0) + ' ms, ' + ev.length + ' clips: ' + Object.keys(M.EV).map(k => k + ' ' + of(k).length).filter(x => !x.endsWith(' 0')).join(', '));
 }
 console.log('TEST ok, ' + n + ' checks');

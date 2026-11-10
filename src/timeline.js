@@ -6,7 +6,7 @@ const AKEYS = [['glitch', 'Glitch'], ['lines', 'Lines'], ['chase', 'Chases'], ['
   ['eqAmt', 'EQ strength'], ['trail', 'Trails'], ['glow', 'Glow'], ['pfill', 'Pixel fill'], ['baseDen', 'Base pixels'], ['fxDen', 'Glitch pixels'], ['logoDen', 'Logo pixels']];
 const ANAME = Object.fromEntries(AKEYS), CURVES = ['Ease', 'Snap', 'Cut'];
 const LAYERS = ['Base', 'Glitch', 'Logo'], LAYER_NEW = ['sweep', 'glitch', 'show'];
-const layerOf = k => k < 4 ? 0 : k < 10 ? 1 : 2;
+const layerOf = k => k < 4 ? 0 : k < 10 ? 1 : 2, CUTS = ['base', 'fx', 'logo'];
 const TLH = { ruler: 20, over: 34, parts: 20, ev: 24, auto: 46 };
 const tlv = { z: 1, x0: 0 };
 let tlSel = null, tlDrag = null, tlSnap = true, tlHeadSig = '', tlInspSig = '';
@@ -113,7 +113,7 @@ function clipRects(e, W) {
   return out;
 }
 function tlHeads(rows) {
-  const sig = rows.map(r => r.kind + (r.key || r.L || '')).join() + '|' + autoCut.base + autoCut.logo + '|' + Object.keys(auto).map(k => auto[k].length ? 1 : 0).join('');
+  const sig = rows.map(r => r.kind + (r.key || r.L || '')).join() + '|' + autoCut.base + autoCut.fx + autoCut.logo + '|' + Object.keys(auto).map(k => auto[k].length ? 1 : 0).join('');
   if (sig === tlHeadSig) return;
   tlHeadSig = sig;
   const box = $('tlHead'); box.textContent = '';
@@ -121,8 +121,8 @@ function tlHeads(rows) {
   for (const r of rows) {
     const d = document.createElement('div'), lab = document.createElement('span'), tools = document.createElement('span');
     d.style.height = r.h + 'px'; lab.textContent = r.name; d.append(lab, tools);
-    if (r.kind === 'ev' && r.L !== 1) {
-      const name = r.L === 0 ? 'base' : 'logo';
+    if (r.kind === 'ev') {
+      const name = CUTS[r.L];
       tools.append(btn('Auto', 'The automatic cut on this layer, on or off', () => { autoCut[name] = !autoCut[name]; tlSel = null; rebuildScore(); syncUI(); tlInsp(); }, autoCut[name]),
         btn('Bake', 'Turn the automatic clips into your own so they can be edited', () => tlBake(r.L)));
       tools.style.display = 'flex'; tools.style.gap = '2px';
@@ -136,7 +136,7 @@ function tlHeads(rows) {
   for (const r of RANGES) $(r[0]).closest('.row').classList.toggle('anim', !!(auto[r[1]] && auto[r[1]].length));
 }
 function tlBake(L) {
-  const name = L === 0 ? 'base' : 'logo';
+  const name = CUTS[L];
   if (!autoCut[name]) return;
   for (const e of autoEv) if (layerOf(e.k) === L) userEv.push(mkEv(e.t, e.type, e.seed, Math.min(e.d, score.D)));
   autoCut[name] = false; tlSel = null;

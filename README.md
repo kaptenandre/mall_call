@@ -19,6 +19,8 @@ npm run smoke    # start-up check: loads hidden, tests encoders and project file
 npm run dist     # package dist/Mall Call-darwin-arm64/Mall Call.app
 ```
 
+The packaged app updates its own page from this repository at launch. Pick the branch to follow, or switch it off, in the Updates menu. Changes to the app shell (`main.js` and the files beside it) still need a new `npm run dist`.
+
 `npm run dist` signs the app ad hoc so it runs on this Mac. It is not notarised, so it is for your own machines, not for distribution.
 
 ## Where things live

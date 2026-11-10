@@ -3,6 +3,7 @@ const { app, BrowserWindow, Menu, dialog, ipcMain, shell, screen } = require('el
 const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
+const update = require('./update.js');
 
 const NAME = 'Mall Call';
 const SMOKE = process.argv.includes('--smoke');   // start-up check: load hidden, test, print one line, quit
@@ -46,8 +47,19 @@ function createWindow() {
   });
   win.on('closed', () => { win = null; if (outWin && !outWin.isDestroyed()) outWin.close(); });
   if (SMOKE) smoke();
-  win.loadFile(path.join(__dirname, 'app', 'index.html'));
+  win.loadFile(SMOKE ? path.join(__dirname, 'app', 'index.html') : update.pagePath());
   setTitle();
+}
+
+// Updates: look once at launch without holding the window up for long. A check from the menu loads what it finds at once;
+// one that finishes late waits for Reload With Update, so work in the window is never thrown away unasked.
+let updateWaiting = false;
+function loadPage() { updateWaiting = false; buildMenu(); if (win && !win.isDestroyed()) win.loadFile(update.pagePath()); }
+async function checkUpdates(reload) {
+  const got = await update.check();
+  if (got && reload) return loadPage();
+  if (got) updateWaiting = true;
+  buildMenu();
 }
 
 function buildMenu() {
@@ -82,6 +94,17 @@ function buildMenu() {
       { role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' },
       { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' },
       { role: 'togglefullscreen' }
+    ] },
+    { label: 'Updates', submenu: [
+      { label: update.status(), enabled: false },
+      { label: 'Check Now', click: () => checkUpdates(true) },
+      { label: 'Reload With Update', enabled: updateWaiting, click: () => loadPage() },
+      { type: 'separator' },
+      { label: 'Follow', enabled: false },
+      ...['off', ...new Set(['main', ...update.state().branches, update.state().channel].filter(b => b && b !== 'off'))].map(b => ({
+        label: b === 'off' ? 'Nothing (use the built-in version)' : b, type: 'radio', checked: update.state().channel === b,
+        click: async () => { await update.setChannel(b); if (b === 'off') { buildMenu(); loadPage(); } else checkUpdates(true); }
+      }))
     ] },
     { role: 'windowMenu' }
   ]));
@@ -174,5 +197,14 @@ function smoke() {
   setTimeout(() => { console.log('SMOKE ' + JSON.stringify({ failed: 'timed out', errors })); app.exit(1); }, 30000);
 }
 
-app.whenReady().then(() => { buildMenu(); createWindow(); });
+app.whenReady().then(async () => {
+  if (!SMOKE) {
+    await update.load();
+    const first = checkUpdates(false);
+    await Promise.race([first, new Promise(r => setTimeout(r, 2500))]);      // offline or slow: open with what we have
+    if (update.takeFresh()) updateWaiting = false;
+  }
+  buildMenu(); createWindow();
+  if (process.env.MALLCALL_UPDATE_PROBE) win.webContents.once('did-finish-load', () => setTimeout(() => { console.log('PROBE ' + JSON.stringify({ url: win.webContents.getURL(), status: update.status(), state: update.state() })); app.exit(0); }, 600));
+});
 app.on('window-all-closed', () => app.quit());

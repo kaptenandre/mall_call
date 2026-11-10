@@ -24,11 +24,13 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 - `src/output.js`: the clean output window and the timecode settings. Inlined at `/*__OUTPUT__*/`.
 - `scripts/test.js`: node checks for the two files with no DOM.
 - `src/page.html`: interface, the three layer fields (`baseField`, `fxField`, `logoField`), the five drawing styles (`DRAW.rods`, `streaks`, `ascii`, `ridge`, `dither`), `Renderer`, export, parts, trigger pad, project files. The engine is inlined at the `/*__SCORE__*/` marker.
+- `assemble.js`: puts the page together from `src/build.json` (the page and the files that replace its markers). Shared by the build and the updater.
+- `update.js`: the app updating its own page from GitHub. See Updates below.
 - `main.js`, `preload.js`: the Mac app. The page sees the bridge as `window.nativeApp` and behaves as a normal web page without it.
 - `scripts/build.js`: writes `app/index.html` (offline, bundled fonts and encoder) and `web/index.html` (CDN links).
 - `scripts/dist.js`: packaging, icon, signing.
 
-`src/page.html` is still large. New areas go in their own file under `src/`, added to the marker list in `scripts/build.js`. All files share the page's one script scope, so order matters only for code that runs at load.
+`src/page.html` is still large. New areas go in their own file under `src/`, added to `src/build.json`. All files share the page's one script scope, so order matters only for code that runs at load.
 
 ## How it works
 
@@ -37,7 +39,8 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 - **Events** (`EV`) are things that happen at a time: base sweeps and strobes, glitch bursts, chases, logo load, show and hide. The engine schedules some (`makeEvents`); the trigger pad adds more, pinned to the timeline and included in export.
 - **Parts** split the piece. Layer, look, pixel and colour settings are kept per part (`PART_KEYS`); `S` always holds the part under the playhead.
 - Each layer returns how lit a point is, 0 to 1. A style draws that field. The renderer adds the layers, then gain, trails, flash and glow.
-- **The timeline** is where the piece is programmed. Nothing is performed live: the show is pre-programmed and played back. Clips on the three layer lanes are events; the dim ones are the automatic cut (`autoEv`), the filled ones are the user's (`userEv`). `autoCut` switches the automatic cut off per layer, and Bake turns it into user clips.
+- **The timeline** is where the piece is programmed. Nothing is performed live: the show is pre-programmed and played back. Clips on the three layer lanes are events; the dim ones are the automatic cut (`autoEv`), the filled ones are the user's (`userEv`). `autoCut` (`base`, `fx`, `logo`) switches the automatic cut off per layer, and Bake turns it into user clips.
+- **The automatic cut** (`makeEvents`) hangs its clips on the shape of the track (`makeStructure`: drops, builds, breaks, and the moments bass, mids and highs jump). Base goes to drops first, with a blackout in the breath before one. The glitch lane gets a chase through a build, line volleys that come faster into the drop, and blocks, bars and sparks on their own bands. Breaks are left alone. How many: `baseAmt` and `fxAmt` (Auto clips), per part.
 - **Keys** animate a setting over time (`auto[key] = [{ t, v, c }]`). `PAt(t)` gives the settings in force at a time: the part's, with animated ones read off their keys. Use `PAt`, never `parts[...].P`, when drawing. Settings that change the schedule (How often, How much, Chaos, Easing) and Logo size are not animatable.
 - Timecode: the piece has a rate and a start timecode (`S.tcRate`, `S.tcStart` in frames) so the ruler reads like the lighting desk.
 - Export renders every frame offline with WebCodecs and muxes MP4 with `mp4-muxer`.
@@ -57,12 +60,20 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 
 ## How it is meant to run at the show
 
-Known, 2026-11: everything is pre-programmed, nothing is performed live, and the show has to follow SMPTE from the lighting desk. Proposed and not yet confirmed: Mall Call is the tool that makes and programs the content, and the plan is to export a file and let a playback tool (Resolume or TouchDesigner) chase SMPTE from the lighting desk and handle mapping, Syphon and the screen outputs. So the timeline and the export matter most. Timecode chase and Syphon inside this app are optional extras, not the main path. Confirm before building them.
+Decided by the user, 2026-11: everything is pre-programmed, nothing is performed live, and the show has to follow SMPTE from the lighting desk. Playback runs in another program (Resolume or TouchDesigner): export a file and let that program chase the desk and handle mapping, Syphon and the screen outputs. So the timeline and the export matter most. Playing straight out of this app (timecode chase, Syphon) would be a welcome extra, after the export is solid.
+
+## Updates
+
+The packaged app keeps its page up to date by itself. At launch `update.js` asks GitHub for the newest commit on the branch chosen in the Updates menu (`main` by default; off when run from source), fetches `src/build.json` and the files it names, assembles them with `assemble.js` and loads that copy from the app's data folder. Offline it uses the last copy it has, or the built-in page.
+
+Only the page updates this way. A change to `main.js`, `preload.js`, `update.js` or `assemble.js` needs `git pull` and `npm run dist` on the Mac; the Updates menu says so when it sees one. So keep new work in `src/` where possible, and when a page change needs a new bridge function, make the page work without it too.
 
 ## Not verified yet
 
 - The timeline editor has been driven with a mouse in Chromium on Linux only. Trackpad pinch and scroll, and Cmd+Z through the Edit menu, are untried on the Mac.
 - The output window works in Chromium. Full screen on a chosen screen (`output-place` in `main.js`) is untried on any machine.
+- The updater is tested against a local stand-in for GitHub on Linux (first fetch, already current, missing branch, offline) and the two real GitHub addresses answer. It has not run in the packaged Mac app.
+- The automatic cut's structure reading is tested on one synthetic track. It has not been judged by eye or ear on real music.
 - LTC and MTC are tested as maths only (encode, decode, round trip). No audio or MIDI device is wired up.
 
 - On macOS (Apple silicon) the smoke check passes with H.264 and AAC, and the packaged app builds and launches. Nobody has looked closely at the window yet, so the interface itself is unchecked on the Mac.

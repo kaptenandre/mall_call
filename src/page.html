@@ -192,9 +192,10 @@ button:focus-visible,select:focus-visible,input:focus-visible,.tl:focus-visible{
       <label class="row" for="bgLo"><span>Bass blocks</span><input type="range" id="bgLo" min="0" max="100" value="60"></label>
       <label class="row" for="bgMid"><span>Mid bars</span><input type="range" id="bgMid" min="0" max="100" value="50"></label>
       <label class="row" for="bgHi"><span>High sparks</span><input type="range" id="bgHi" min="0" max="100" value="60"></label>
+      <label class="row" for="fxAmt"><span>Auto clips</span><input type="range" id="fxAmt" min="0" max="100" value="40"></label>
       <label class="row" for="wob"><span>Wobble</span><input type="range" id="wob" min="0" max="100" value="50"></label>
       <label class="row" for="wobSize"><span>Wobble size</span><input type="range" id="wobSize" min="0" max="100" value="50"></label>
-      <p class="note">Lines carry the fast ease in and out. Blocks, bars and sparks each listen to their own part of the spectrum. Wobble is how far the picture tears and slips, from none to always moving; size runs from tight ripples to long waves.</p>
+      <p class="note">Lines carry the fast ease in and out. Blocks, bars and sparks each listen to their own part of the spectrum. Auto clips is how many clips the automatic cut puts on the glitch lane: chases through a build, lines racing into a drop, bursts where a band jumps. Wobble is how far the picture tears and slips, from none to always moving; size runs from tight ripples to long waves.</p>
       <label class="row" for="fxStyle"><span>Drawn as</span><select id="fxStyle"></select></label>
       <label class="row" for="fxPx"><span>Pixel size</span><input type="range" id="fxPx" min="0" max="100" value="18"></label>
     </fieldset>
@@ -328,12 +329,12 @@ const STYLE_NAMES = { rods: 'LED rods', streaks: 'Light streaks', ascii: 'ASCII'
 const S = { format: 'wide', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.55, size: 0.78, invert: false,
   loop: 8, fps: 30, playing: true, seed: 1,
   baseAmt: 0.45, baseStyle: 'dither', baseDen: 0.304,
-  glitch: 0.7, lines: 0.8, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxStyle: 'rods', fxDen: 0.784,
+  glitch: 0.7, lines: 0.8, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxAmt: 0.4, fxStyle: 'rods', fxDen: 0.784,
   logoMode: 0, loader: 0, presence: 0.5, eq: 1, logoStyle: 'dither', logoDen: 0.64,
   chaos: 0.6, trail: 0.2, mix: false, pshape: 0, pfill: 0.78, dither: 'bayer4', wob: 0.5, wobSize: 0.5, eqAmt: 0.6, ease: 0.85, range: 'all',
   tcRate: '25', tcStart: 0, tcShow: false, outFit: 'contain' };
 // The piece can be split into parts. Everything from the three layers down to the look is kept per part; S holds the part being edited.
-const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'glitch', 'lines', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxStyle', 'fxDen',
+const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'glitch', 'lines', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxAmt', 'fxStyle', 'fxDen',
   'logoMode', 'loader', 'presence', 'eq', 'logoStyle', 'logoDen', 'chaos', 'trail', 'mix', 'pshape', 'pfill', 'dither', 'wob', 'wobSize', 'eqAmt', 'ease'];
 const snap = () => { const o = {}; for (const k of PART_KEYS) o[k] = S[k]; return o; };
 let parts = [{ t: 0, P: snap() }], sel = 0, loopPart = false;
@@ -342,7 +343,7 @@ const partEnd = i => i + 1 < parts.length ? parts[i + 1].t : score.D;
 const savePart = () => { parts[sel].P = snap(); };
 // Animated settings: keys per setting, { glitch: [{ t, v, c }] }. autoCut: whether the engine schedules its own clips on a layer.
 let auto = {};
-const autoCut = { base: true, logo: true };
+const autoCut = { base: true, fx: true, logo: true };
 
 /* ---------- logo mask ---------- */
 let mask = null, logoSrc = null, maskN = 0;
@@ -829,7 +830,7 @@ function rebuildScore() {
   const chAt = t => parts[partIdx(t)].P.chaos;
   score = track ? buildTrackScore(track.an, S.seed, chAt) : buildLoopScore(S.loop, S.seed, chAt);
   autoEv = [];
-  parts.forEach((p, i) => { for (const e of makeEvents(score, { base: p.P.baseAmt, mode: p.P.logoMode, presence: p.P.presence }, p.t, partEnd(i), i)) if (e.k < 4 ? autoCut.base : autoCut.logo) autoEv.push(e); });
+  parts.forEach((p, i) => { for (const e of makeEvents(score, { base: p.P.baseAmt, fx: p.P.fxAmt, mode: p.P.logoMode, presence: p.P.presence }, p.t, partEnd(i), i)) if (e.k < 4 ? autoCut.base : e.k < 10 ? autoCut.fx : autoCut.logo) autoEv.push(e); });
   mergeEv();
   if (tau >= score.D) tau = 0;
 }
@@ -1085,7 +1086,7 @@ addEventListener('drop', e => {
 const clampInt = (el, lo, hi, d) => { const n = Math.round(Number(el.value)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
 const px2den = v => 1 - 1.2 * v, den2px = d => (1 - d) / 1.2;
 // id, state key, value from 0..1 slider position, and back; rebuild = the schedule depends on it
-const RANGES = [['baseAmt', 'baseAmt', 1], ['basePx', 'baseDen', 0, px2den, den2px], ['glitch', 'glitch'], ['lines', 'lines'], ['chase', 'chase'], ['bgLo', 'bgLo'], ['bgMid', 'bgMid'], ['bgHi', 'bgHi'],
+const RANGES = [['baseAmt', 'baseAmt', 1], ['basePx', 'baseDen', 0, px2den, den2px], ['glitch', 'glitch'], ['lines', 'lines'], ['chase', 'chase'], ['bgLo', 'bgLo'], ['bgMid', 'bgMid'], ['bgHi', 'bgHi'], ['fxAmt', 'fxAmt', 1],
   ['fxPx', 'fxDen', 0, px2den, den2px], ['wob', 'wob'], ['wobSize', 'wobSize'], ['eqAmt', 'eqAmt'], ['ease', 'ease'], ['presence', 'presence', 1], ['logoPx', 'logoDen', 0, px2den, den2px], ['size', 'size'], ['chaos', 'chaos', 1], ['trail', 'trail'], ['pfill', 'pfill'], ['glow', 'glow']];
 for (const [id, key, rebuild, to] of RANGES) $(id).addEventListener('input', e => { const v = e.target.value / 100, x = to ? to(v) : v; if (auto[key] && auto[key].length) setKey(key, tau, x); else S[key] = x; if (rebuild) rebuildScore(); syncUI(); });
 function pushRanges() { for (const [id, key, , , back] of RANGES) $(id).value = Math.round((back ? back(S[key]) : S[key]) * 100); }
@@ -1127,7 +1128,7 @@ $('shuffle').addEventListener('click', () => { S.seed = 1 + Math.floor(Math.rand
 $('randAll').addEventListener('click', () => {
   const r = Math.random, pick = a => a[Math.floor(r() * a.length)];
   S.seed = 1 + Math.floor(r() * 9999);
-  S.baseAmt = 0.2 + 0.7 * r(); S.glitch = 0.35 + 0.65 * r(); S.lines = 0.3 + 0.7 * r(); S.chase = r() * 0.9; S.bgLo = r(); S.bgMid = r(); S.bgHi = r();
+  S.baseAmt = 0.2 + 0.7 * r(); S.glitch = 0.35 + 0.65 * r(); S.lines = 0.3 + 0.7 * r(); S.chase = r() * 0.9; S.fxAmt = r() * 0.9; S.bgLo = r(); S.bgMid = r(); S.bgHi = r();
   S.chaos = 0.3 + 0.7 * r(); S.trail = r() * 0.6; S.presence = 0.25 + 0.6 * r(); S.loader = Math.floor(r() * 3); S.logoMode = r() < 0.6 ? 0 : 1;
   S.baseStyle = pick(STYLES); S.fxStyle = pick(STYLES); S.logoStyle = pick(STYLES); S.dither = pick(['bayer2', 'bayer4', 'bayer8', 'halftone', 'lines', 'noise', 'diffusion']); S.pshape = Math.floor(r() * 3);
   S.baseDen = 0.1 + 0.5 * r(); S.fxDen = 0.45 + 0.5 * r(); S.logoDen = 0.35 + 0.55 * r();
@@ -1305,7 +1306,7 @@ async function applyProject(pj) {
   try {
     audio.pause(); S.playing = false;
     for (const k of GLOBAL_KEYS) if (k in pj.S) S[k] = pj.S[k];
-    pushGlobals(); undoReset(); tlSel = null; auto = {}; autoCut.base = autoCut.logo = true;
+    pushGlobals(); undoReset(); tlSel = null; auto = {}; autoCut.base = autoCut.fx = autoCut.logo = true;
     if (!pj.soundPath && track) { audio.removeAttribute('src'); track = null; soundPath = ''; resetParts(); }
     if (pj.logo && pj.logo.dataUrl) { const blob = await (await fetch(pj.logo.dataUrl)).blob(); await loadLogo(new File([blob], pj.logo.name, { type: blob.type })); }
     let missing = '';
@@ -1315,11 +1316,11 @@ async function applyProject(pj) {
     }
     if (!track) { soundPath = ''; rebuildScore(); }
     if (!missing) {
-      parts = pj.parts.filter(p => p.t < score.D).map(p => ({ t: p.t, P: Object.assign(snap(), p.P) }));
+      parts = pj.parts.filter(p => p.t < score.D).map(p => ({ t: p.t, P: Object.assign(snap(), { fxAmt: 0 }, p.P) }));      // a project from before Auto clips keeps its cut
       if (!parts.length || parts[0].t !== 0) parts.unshift({ t: 0, P: snap() });
       userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d));
       for (const [k] of AKEYS) if (pj.auto && Array.isArray(pj.auto[k])) auto[k] = pj.auto[k].filter(q => q.t <= score.D).map(q => ({ t: Number(q.t) || 0, v: Number(q.v) || 0, c: q.c | 0 })).sort((a, b) => a.t - b.t);
-      if (pj.autoCut) { autoCut.base = pj.autoCut.base !== false; autoCut.logo = pj.autoCut.logo !== false; }
+      if (pj.autoCut) { autoCut.base = pj.autoCut.base !== false; autoCut.fx = pj.autoCut.fx !== false; autoCut.logo = pj.autoCut.logo !== false; }
     } else $('soundNote').textContent = 'The sound for this project was not found at ' + missing + '. Drop it in again and reopen the project.';
     sel = 0; tau = 0; Object.assign(S, parts[0].P);
     rebuildScore(); pushAll(); syncUI(); tlInsp();
@@ -1345,7 +1346,7 @@ if (window.nativeApp) {
       const r = await window.nativeApp.projectOpen();
       if (r && !(await applyProject(JSON.parse(r.json)))) say('That file is not a project from this app.');
     } else if (cmd === 'new-project') {
-      audio.pause(); audio.removeAttribute('src'); track = null; soundPath = ''; userEv = []; tau = 0; auto = {}; autoCut.base = autoCut.logo = true; tlSel = null; resetParts(); rebuildScore(); syncUI(); undoReset(); tlInsp();
+      audio.pause(); audio.removeAttribute('src'); track = null; soundPath = ''; userEv = []; tau = 0; auto = {}; autoCut.base = autoCut.fx = autoCut.logo = true; tlSel = null; resetParts(); rebuildScore(); syncUI(); undoReset(); tlInsp();
       $('soundNote').textContent = 'No sound yet. The piece runs as a seamless loop on a built-in half-second beat.';
     } else if (cmd === 'export') $('save').click();
     else if (cmd === 'play') setPlaying(!S.playing);

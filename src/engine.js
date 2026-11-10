@@ -306,23 +306,98 @@ const EV = { sweep: 0, strobe: 1, flood: 2, blackout: 3, glitch: 4, chase: 5, li
 const EVD = { sweep: 0.9, strobe: 0.6, flood: 0.9, blackout: 0.4, glitch: 0.6, chase: 4, lines: 0.7, sparks: 0.6, bars: 0.6, blocks: 0.6, load: 3, show: 2, hide: 0 };
 const mkEv = (t, type, seed, d) => ({ t, type, k: EV[type], seed: seed | 0, d: d === undefined ? EVD[type] : d });
 
+// The shape of the piece, read off the score once: where it drops, the builds that lead into drops, the quiet stretches,
+// and the moments each band of the spectrum jumps. The automatic cut hangs its clips on these.
+function makeStructure(sc) {
+  const { nh, hop, D } = sc, e = new Float32Array(nh);
+  for (let i = 0; i < nh; i++) e[i] = 0.65 * sc.gain[i] + 0.35 * sc.lo[i];
+  const fast = follow(e, hop, 0.12, 0.2, 0), pre = new Float64Array(nh + 1);
+  for (let i = 0; i < nh; i++) pre[i + 1] = pre[i] + fast[i];
+  const mean = (t0, t1) => { const i0 = Math.max(0, Math.min(nh - 1, Math.round(t0 / hop))), i1 = Math.max(i0 + 1, Math.min(nh, Math.round(t1 / hop))); return (pre[i1] - pre[i0]) / (i1 - i0); };
+  const spaced = (list, gap) => { const keep = []; for (const c of list.slice().sort((x, y) => y.v - x.v)) if (keep.every(k => Math.abs(k.t - c.t) > gap)) keep.push(c); return keep.sort((x, y) => x.t - y.t); };
+  // drops: a hit where the level after it stands well above the stretch before it
+  let drops = [];
+  for (const h of sc.hitList) {
+    if (h.t < 2 || h.t > D - 1) continue;
+    const before = mean(h.t - 2.5, h.t - 0.25), after = mean(h.t + 0.05, h.t + 1.5), gap = mean(h.t - 0.5, h.t - 0.05);
+    const v = (after - before) + 0.6 * (after - gap);
+    if (after - before > 0.14 && v > 0.22) drops.push({ t: h.t, v, gap: gap < 0.45 * after ? Math.min(0.5, 0.25 + 0.5 * (after - gap)) : 0 });
+  }
+  drops = spaced(drops, 6);
+  // builds: before a drop, how far back the mids and highs have been climbing
+  const mh = new Float32Array(nh);
+  for (let i = 0; i < nh; i++) mh[i] = 0.5 * (sc.mid[i] + sc.hi[i]);
+  const rise = follow(mh, hop, 0.8, 0.8, 0), builds = [];
+  for (const d of drops) {
+    let i = Math.round((d.t - 0.3) / hop), n = 0;
+    const lim = Math.max(0, i - Math.round(10 / hop)), st = Math.round(0.5 / hop);
+    while (i - st > lim && rise[i] > rise[i - st] + 0.004) { i -= st; n++; }
+    const a = i * hop;
+    if (d.t - a >= 1.5 && rise[Math.round((d.t - 0.3) / hop)] - rise[i] > 0.06) builds.push({ a, b: d.t });
+  }
+  // breaks: stretches that sit far under the piece's usual level
+  const usual = pct(fast, 0.7) || 1, breaks = [];
+  for (let i = 0, from = -1; i <= nh; i++) {
+    const low = i < nh && fast[i] < 0.4 * usual;
+    if (low && from < 0) from = i;
+    else if (!low && from >= 0) { if ((i - from) * hop >= 1.2) breaks.push({ a: from * hop, b: i * hop }); from = -1; }
+  }
+  // the moments each band jumps: bass, mids, highs
+  const peaks = [sc.lo, sc.mid, sc.hi].map(lv => {
+    const on = new Float32Array(nh);
+    for (let i = 3; i < nh; i++) on[i] = Math.max(0, lv[i] - lv[i - 3]);
+    const thr = Math.max(0.08, 0.5 * (pct(on, 0.985) || 0)), out = [];
+    for (let i = 4; i < nh - 2; i++) if (on[i] > thr && on[i] >= on[i - 1] && on[i] > on[i + 1]) out.push({ t: (i - 2) * hop, v: on[i] });
+    return spaced(out, 0.2);
+  });
+  return { drops, builds, breaks, peaks };
+}
+
 // What the engine schedules by itself for one part of the piece, from a to b seconds.
-// P: base (how often), mode (0 loader, 1 appear, 2 always), presence. pi is the part's number.
+// P: base (how often), fx (how many glitch clips), mode (0 loader, 1 appear, 2 always), presence. pi is the part's number.
 function makeEvents(sc, P, a, b, pi) {
   const ev = [], D = sc.D, sd = sc.seed + pi * 977, cyc = sc.cyclic, whole = a <= 0 && b >= D;
   const hits = sc.hitList.filter(h => h.t >= a && h.t < b);
   const far = (x, y) => { const d = Math.abs(x - y); return cyc && whole ? Math.min(d, D - d) : d; };
-  if (P.base > 0.02) {                                       // base: only the strongest hits, well apart
+  const st = sc.struct || (sc.struct = makeStructure(sc)), here = x => x.t >= a && x.t < b;
+  const drops = st.drops.filter(here);
+  if (P.base > 0.02) {                                       // base: the drops first, then only the strongest hits, well apart
     const gapMin = lerp(24, 4.5, P.base), chosen = [];
-    for (const h of hits.slice().sort((x, y) => y.v - x.v)) {
+    const cand = drops.map(d => ({ t: d.t, v: 10 + d.v, drop: d })).concat(hits.slice().sort((x, y) => y.v - x.v));
+    for (const h of cand) {
       if (!cyc && pi === 0 && h.t < 1.5) continue;
-      if (chosen.every(c => far(c.t, h.t) > gapMin) && (cyc && whole ? D >= gapMin * 0.6 || chosen.length === 0 : true)) chosen.push(h);
+      if (chosen.every(c => far(c.t, h.t) > (h.drop && c.drop ? 5 : gapMin)) && (cyc && whole ? D >= gapMin * 0.6 || chosen.length === 0 : true)) chosen.push(h);
     }
     chosen.forEach((h, i) => {
-      const type = ['sweep', 'strobe', 'sweep', 'flood', 'sweep', 'blackout', 'strobe'][(i + Math.floor(hash(sd, 2, 140) * 7)) % 7];
+      const type = h.drop ? ['flood', 'sweep', 'sweep', 'strobe'][Math.floor(hash(i, sd, 143) * 3.99)] : ['sweep', 'strobe', 'sweep', 'flood', 'sweep', 'blackout', 'strobe'][(i + Math.floor(hash(sd, 2, 140) * 7)) % 7];
       const d = type === 'sweep' ? 0.7 + 0.6 * hash(i, sd, 142) : type === 'strobe' ? 0.45 + 0.5 * hash(i, sd, 142) : type === 'flood' ? 0.9 : 0.3 + 0.3 * hash(i, sd, 142);
       ev.push(mkEv(h.t, type, hash(i, sd, 141) * 1e6, d));
+      if (h.drop && h.drop.gap && P.base > 0.3 && h.t - h.drop.gap > a) ev.push(mkEv(h.t - h.drop.gap, 'blackout', 0, h.drop.gap));   // the breath before a drop goes dark
     });
+  }
+  if (P.fx > 0.02) {                                         // glitch clips: builds, drops, and each band's own jumps
+    const fx = P.fx, pick = (list, gap, salt, keepP) => {
+      const out = [];
+      list.filter(here).sort((x, y) => y.v - x.v).forEach((c, i) => { if (hash(Math.round(c.t * 100), sd, salt) < keepP && out.every(o => far(o.t, c.t) > gap)) out.push(c); });
+      return out;
+    };
+    st.builds.filter(u => u.b > a && u.a < b).forEach((u, i) => {
+      const s0 = Math.max(a, u.a), L = Math.min(b, u.b) - s0;
+      if (L < 1) return;
+      ev.push(mkEv(s0, 'chase', hash(i, sd, 181) * 1e6, L));        // a build always gets its chase
+      const n = 2 + Math.floor(fx * 4.99);                   // line volleys that come faster as the drop nears
+      for (let j = 0; j < n; j++) { const x = j / n; ev.push(mkEv(s0 + L * (1 - (1 - x) * (1 - x)), 'lines', hash(i * 9 + j, sd, 182) * 1e6, Math.max(0.25, 0.7 * (1 - 0.6 * x)))); }
+    });
+    drops.forEach((d, i) => { if (hash(i, sd, 183) < 0.3 + 0.7 * fx) ev.push(mkEv(d.t, 'glitch', hash(i, sd, 184) * 1e6, 0.4 + 0.5 * hash(i, sd, 185))); });
+    const kinds = [['blocks', lerp(7, 1.1, fx), 186], ['bars', lerp(6, 0.9, fx), 187], ['sparks', lerp(5, 0.7, fx), 188]];
+    kinds.forEach(([type, gap, salt], band) => {
+      for (const c of pick(st.peaks[band], gap, salt, 0.25 + 0.6 * fx)) {
+        const lines = band === 1 && hash(Math.round(c.t * 100), sd, 189) < 0.4;      // the mids sometimes throw lines instead of bars
+        ev.push(mkEv(c.t, lines ? 'lines' : type, hash(Math.round(c.t * 100), sd, 190) * 1e6, lines ? 0.45 + 0.4 * hash(Math.round(c.t * 100), sd, 191) : 0.35 + 0.4 * hash(Math.round(c.t * 100), sd, 191)));
+      }
+    });
+    // the end of a quiet stretch tears before the sound comes back
+    st.breaks.filter(u => u.b > a + 0.4 && u.b < b).forEach((u, i) => { if (hash(i, sd, 192) < fx) ev.push(mkEv(u.b - 0.3, 'glitch', hash(i, sd, 193) * 1e6, 0.3)); });
   }
   const nextHit = (t, lo, hi) => { for (const h of hits) if (h.t >= t + lo && h.t <= t + hi) return h.t; return -1; };
   if (P.mode === 2) ev.push(mkEv(a, 'show', 1, whole ? D + 1 : b - a + 0.01));
