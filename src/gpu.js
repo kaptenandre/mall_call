@@ -229,7 +229,8 @@ const GPU_TAIL = `
 uniform int uShape;
 uniform vec2 uNb, uExt;
 // each pillar is a window onto its own stretch of a picture as wide as the whole ring, air included
-float M(float u, float v) { if (uGapN > 0.) { float x = u * uGapN, i = floor(x); u = (i + uGoff + (x - i) * uGk) / uGapN; } return field(u, v); }
+uniform float uFlip;
+float M(float u, float v) { if (uFlip > .5) u = 1. - u; if (uGapN > 0.) { float x = u * uGapN, i = floor(x); u = (i + uGoff + (x - i) * uGk) / uGapN; } return field(u, v); }
 bool inside(float x, float y, float cx, float cy, float w, float h) {
   float x0 = floor(cx - w / 2. + .5), y0 = floor(cy - h / 2. + .5);
   return x >= x0 && x < x0 + max(1., floor(w + .5)) && y >= y0 && y < y0 + max(1., floor(h + .5));
@@ -393,7 +394,7 @@ function gpuDisp(u, o, st, FW, H, amt) {
 // the style and the pillar windows, then the draw itself into the 2D context q
 function gpuDraw(u, q, W, H, t, o, sn, gapN) {
   const { gl, f1, f2, i1, at } = u, gk = 1 / (1 + (o.gap || 0)), mode = o.dither;
-  f2('uRes', W, H); f1('uGapN', gapN); f1('uGk', gk); f1('uGoff', (1 - gk) / 2);
+  f2('uRes', W, H); f1('uGapN', gapN); f1('uGk', gk); f1('uGoff', (1 - gk) / 2); f1('uFlip', o.flipU ? 1 : 0);
   const tint = gpuHex(o.tint), core = gpuHex(CORE);
   gl.uniform3f(at('uTint'), tint[0], tint[1], tint[2]); gl.uniform3f(at('uCore'), core[0], core[1], core[2]);
   f1('uT', t); f1('uC1', cyc(1, o)); f1('uC2', cyc(2, o)); f1('uC3', cyc(3, o)); f1('uDir', o.vb < 0.5 ? -1 : 1); f1('uAmb', o.amb); f1('uEase', o.ease);

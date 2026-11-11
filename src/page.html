@@ -441,7 +441,7 @@ body.rendering .rail fieldset { opacity: .55; }
         <label class="row" for="panels"><span>Panels in ring</span><input type="number" id="panels" min="4" max="240" value="30"></label>
         <label class="row" for="faces"><span>Faces</span><select id="faces"><option value="2">Outside and inside</option><option value="1">Outside only</option></select></label>
         <label class="row" for="panelsIn" id="panelsInRow"><span>Panels inside</span><input type="number" id="panelsIn" min="4" max="240" value="30"></label>
-        <label class="row" for="inner" id="innerRow"><span>Inside shows</span><select id="inner"><option value="same">The same</option><option value="mirror">The same, mirrored</option><option value="own">Its own look</option><option value="off">Nothing</option></select></label>
+        <label class="row" for="inner" id="innerRow"><span>Inside shows</span><select id="inner"><option value="same">The same</option><option value="mirror">The same, mirrored</option><option value="counter">The same, running the other way</option><option value="late">The same, a moment later</option><option value="own">Its own look</option><option value="off">Nothing</option></select></label>
         <div class="seg" id="faceSeg" role="radiogroup" aria-label="Which face the controls edit" style="grid-template-columns:1fr 1fr">
           <label><input type="radio" name="face" id="faceOut" value="0" checked><span>Edit outside</span></label>
           <label><input type="radio" name="face" id="faceIn" value="1"><span>Edit inside</span></label>
@@ -571,7 +571,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 'v0.52.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
+const BUILD = 'v0.53.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
 $('build').textContent = '· ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -1381,7 +1381,7 @@ class Renderer {
       const Wf = o.gapN ? W * (1 + o.gap) : W;             // with air between the pillars the picture is as wide as the whole ring, air included
       // and each pillar is a window onto its own stretch of that picture
       const gN = o.gapN, gk = 1 / (1 + (o.gap || 0)), goff = (1 - gk) / 2, win = u => { const x = u * gN, i = Math.floor(x); return (i + goff + (x - i) * gk) / gN; };
-      const wrap = a => gN ? { M: (u, v) => a.M(win(u), v), B: (u, v) => a.B(win(u), v) } : a;
+      const flip = !!o.flipU, wrap = a => gN ? { M: (u, v) => a.M(win(flip ? 1 - u : u), v), B: (u, v) => a.B(win(flip ? 1 - u : u), v) } : flip ? { M: (u, v) => a.M(1 - u, v), B: (u, v) => a.B(1 - u, v) } : a;
       if (L === 0) f = this.card() && gpuBase(q, W, H, Wf, t, o, st, st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style) ? null : wrap(baseField(Wf, H, st));
       else if (L === 1) f = this.card() && gpuFx(q, W, H, Wf, t, o, st, st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style) ? null : wrap(fxField(Wf, H, t, o, st));
       else if (L === 3) f = this.card() && gpuType(q, W, H, Wf, t, o, st, o.style) ? null : wrap(typeField(Wf, H, o, st));   // words, on their own
@@ -1529,9 +1529,12 @@ function sizeStage() {
   if (stage.width !== w || stage.height !== h) { stage.width = w; stage.height = h; }
 }
 // One face of the piece into a renderer. face is undefined when the format has a single face.
-function renderOne(R, st, P, tf, fps, fc) {
+// counter: this face runs the other way round the ring. Base and glitch are read right to left and the logos travel
+// backwards, while the logo itself and any words stay the right way round.
+function renderOne(R, st, P, tf, fps, fc, counter) {
   const tw = warp(tf, P), LO = layerOpts(fps, P), mo = motion(P, tw);
   LO[1].tw = tw; mo.face = fc;
+  if (counter) { LO[0].flipU = LO[1].flipU = true; LO[2].travel = -LO[2].travel; }
   if (S.format === 'ring' && S.gap > 0) for (const o of LO) { o.gap = S.gap; o.gapN = fc ? S.panelsIn : S.panels; }
   { const cols = S.format === 'ring' ? (fc ? S.panelsIn : S.panels) : S.format === 'wide' ? 16 : 1; for (const o of LO) o.cols = cols; }      // how many pillars a Pillar clip plays across
   stateAt(score, tf, mo, st);
@@ -1547,14 +1550,17 @@ function drawFaces(rig, tf, fps) {
   const P = PAt(tf, 0), mode = P.inner;
   // In the preview, when two different faces do not fit in a frame's time, they take turns: each is redrawn every other frame.
   // the inside needs its own drawing when it has its own look, a different number of pillars, or a clip for one face is live right now
-  const own = mode === 'own' || wi !== wo || userEv.some(e => e.face && tf >= e.t && tf < e.t + Math.max(e.d, 0.05)), turns = rig === mainRig && S.playing && own && PERF.all > 1000 / PREVIEW_FPS() && rig.b.cv.width === wi;
+  // Two ways for the faces to answer each other: the inside running the other way, or showing what the outside showed a moment ago,
+  // so that a move seems to pass from the outside of the ring to the inside.
+  const lag = mode === 'late' ? 0.24 : 0, tin = !lag ? tf : score.cyclic ? (tf - lag + score.D) % score.D : Math.max(0, tf - lag);
+  const own = mode === 'own' || mode === 'counter' || mode === 'late' || wi !== wo || userEv.some(e => e.face && tf >= e.t && tf < e.t + Math.max(e.d, 0.05)), turns = rig === mainRig && S.playing && own && PERF.all > 1000 / PREVIEW_FPS() && rig.b.cv.width === wi;
   rig.turn = turns ? !rig.turn : false;
   size(rig.a.cv, wo, hs); if (!turns || rig.turn) renderOne(rig.a, rig.stA, P, tf, fps, 0);
   g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.fillStyle = '#000'; g.fillRect(0, 0, rig.cv.width, rig.cv.height);
   g.drawImage(rig.a.cv, 0, 0);
   if (mode === 'off') return;
   let src = rig.a.cv;
-  if (own) { size(rig.b.cv, wi, hs); if (!turns || !rig.turn) renderOne(rig.b, rig.stB, mode === 'own' ? PAt(tf, 1) : P, tf, fps, 1); src = rig.b.cv; }   // only drawn twice when the faces really differ
+  if (own) { size(rig.b.cv, wi, hs); if (!turns || !rig.turn) renderOne(rig.b, rig.stB, mode === 'own' ? PAt(tf, 1) : lag ? PAt(tin, 0) : P, tin, fps, 1, mode === 'counter'); src = rig.b.cv; }   // only drawn twice when the faces really differ
   if (mode === 'mirror') { g.save(); g.translate(wi, hs); g.scale(-1, 1); g.drawImage(src, 0, 0, wi, hs); g.restore(); }
   else g.drawImage(src, 0, hs, wi, hs);
 }
