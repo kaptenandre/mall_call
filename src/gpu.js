@@ -4,8 +4,9 @@
    and draws the style, cell for cell the way the canvas version does. The canvas version stays as the reference, and is
    what runs for anything not moved yet and for every export.
 
-   Moved so far: the logo, glitch, base and type layers and the symbols, drawn as Dither (ordered, lines, noise) or LED rods
-   with square pixels. Everything else falls back by itself: gpuLogo and the others return false and the caller draws the old way. */
+   Moved so far: the base, glitch, logo and type layers and the symbols, drawn as Dither (ordered, halftone, lines, noise),
+   LED rods or Light streaks, with square, dot or diamond pixels.
+   Everything else falls back by itself: gpuLogo and the others return false and the caller draws the old way. */
 const GPU = { force: false, name: '', cv: null, gl: null, progs: null, bad: false, maskN: -1, tex: null, used: 0, mt: new Map(), mtNew: false, rows: null, rd: null, maxT: 2048 };
 const GPU_VS = '#version 300 es\nin vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
 const GPU_HEAD = `#version 300 es
@@ -225,47 +226,130 @@ float field(float u, float v) {
 }
 `;
 const GPU_TAIL = `
+uniform int uShape;
+uniform vec2 uNb, uExt;
 // each pillar is a window onto its own stretch of a picture as wide as the whole ring, air included
 float M(float u, float v) { if (uGapN > 0.) { float x = u * uGapN, i = floor(x); u = (i + uGoff + (x - i) * uGk) / uGapN; } return field(u, v); }
 bool inside(float x, float y, float cx, float cy, float w, float h) {
   float x0 = floor(cx - w / 2. + .5), y0 = floor(cy - h / 2. + .5);
   return x >= x0 && x < x0 + max(1., floor(w + .5)) && y >= y0 && y < y0 + max(1., floor(h + .5));
 }
+// how much of the pixel at x, y a cell's shape covers (litShape): a square on whole pixels, or a dot or a diamond with soft edges.
+// The soft edge is the area covered, taken in eight slices down the pixel with each slice's width worked out exactly.
+float cover(float x, float y, float cx, float cy, float w, float h) {
+  if (uShape == 0) return inside(x, y, cx, cy, w, h) ? 1. : 0.;
+  float hw = uShape == 1 ? max(.6, w / 2.) : .6 * w, hh = uShape == 1 ? max(.6, h / 2.) : .6 * h, a = 0.;
+  if (x + 1. <= cx - hw || x >= cx + hw || y + 1. <= cy - hh || y >= cy + hh) return 0.;
+  for (int k = 0; k < 8; k++) {
+    float dy = abs(y + (float(k) + .5) / 8. - cy) / hh;
+    if (dy >= 1.) continue;
+    float half_ = hw * (uShape == 1 ? sqrt(1. - dy * dy) : 1. - dy);
+    a += max(0., min(x + 1., cx + half_) - max(x, cx - half_));
+  }
+  return a / 8.;
+}
+// how much of the stretch from a to b the pixel starting at x holds
+float span(float x, float a, float b) { return max(0., min(x + 1., b) - max(x, a)); }
+// The cells that reach this pixel, at most four: how much each covers, its two brightness steps, and where its shape is
+float eC[4]; int eI[4], eJ[4], eN = 0; vec4 eG[4];
+void add(float cov, float I, float cx, float cy, float w, float h) {
+  if (cov <= 0. || I < .03 || eN >= 4) return;
+  eC[eN] = cov; eI[eN] = int(max(1., floor(min(1., I) * 32. + .5))); eJ[eN] = I > .55 ? int(floor(min(1., (I - .55) * 1.8) * 32. + .5)) : 0;
+  eG[eN] = vec4(cx, cy, uShape == 1 ? max(.6, w / 2.) : .6 * w, uShape == 1 ? max(.6, h / 2.) : .6 * h); eN++;
+}
+// brightness in 32 steps, as the canvas version gathers it: every step of the tint from dim to bright, then the hot ones on top.
+// mask says which of the cells lie over this spot.
+vec3 over(vec3 col, int mask) {
+  for (int pass = 0; pass < 2; pass++) {
+    int last = 0;
+    for (int k = 0; k < 4; k++) {
+      int best = 99;
+      for (int e = 0; e < eN; e++) { int s = pass == 0 ? eI[e] : eJ[e]; if ((mask >> e & 1) == 1 && s > last && s < best) best = s; }
+      if (best == 99) break;
+      col = mix(col, pass == 0 ? uTint : uCore, float(best) / 32.); last = best;
+    }
+  }
+  return col;
+}
 void main() {
-  float x = gl_FragCoord.x - .5, y = uRes.y - gl_FragCoord.y - .5, I = 0.;
+  float x = gl_FragCoord.x - .5, y = uRes.y - gl_FragCoord.y - .5;
   vec3 col = vec3(0.);
-  outC = vec4(0., 0., 0., 1.);
   if (uStyle == 0) {                                     // dither
-    float c = floor((x + .5 - uO.x) / uUnit), r = floor((y + .5 - uO.y) / uUnit);
-    if (c < 0. || c >= uCR.x || r < 0. || r >= uCR.y) return;
-    float cx = uO.x + c * uUnit + uUnit / 2., cy = uO.y + r * uUnit + uUnit / 2.;
-    if (!inside(x, y, cx, cy, uS, uS)) return;
-    float u = cx / uRes.x, v = cy / uRes.y, m = M(u, v);
-    float f1 = .5 + .5 * sin(TAU * (v * uFq - uDir * uT * uC2 + .18 * sin(TAU * (u * 1.5 + uT * uC1))));
-    float f2 = .5 + .5 * sin(TAU * (u + v * .6 + uT * uC1));
-    float val = m * (.4 + .6 * f1) + uAmb * (1. - m) * .17 * f2 * f2;
-    I = m > .5 ? .5 + .5 * f1 : .3 + .5 * m;
-    bool on;
-    if (uMode == 0) on = val > (uBay[int(mod(r, float(uBn))) * uBn + int(mod(c, float(uBn)))] + .5) / float(uBn * uBn);
-    else if (uMode == 1) on = val > mod(r, 4.) * .25 + .06 + .12 * mod(c, 2.);
-    else on = val > .04 + .96 * hash(int(c), int(r), 7);
-    if (!on) return;
-  } else {                                               // LED rods
-    float c = floor((x + .5) / uPx), r = floor((y + .5) / uPy);
-    float cx = (c + .5) * uPx, v = (r + .5) / uCR.y, u = cx / uRes.x;
-    if (uAmb > 0.) { float x0 = floor(cx - uLw / 2. + .5); if (x >= x0 && x < x0 + max(1., floor(uLw + .5))) { col = uTint * .08; outC = vec4(col, 1.); } }      // the faint rod itself
-    if (!inside(x, y, cx, v * uRes.y, uDw, uDh)) return;
+    float c0 = floor((x + .5 - uO.x) / uUnit), r0 = floor((y + .5 - uO.y) / uUnit);
+    for (float dr = -uNb.y; dr <= uNb.y; dr++) for (float dc = -uNb.x; dc <= uNb.x; dc++) {
+      float c = c0 + dc, r = r0 + dr;
+      if (c < 0. || c >= uCR.x || r < 0. || r >= uCR.y) continue;
+      float cx = uO.x + c * uUnit + uUnit / 2., cy = uO.y + r * uUnit + uUnit / 2.;
+      if (x + 1. <= cx - uExt.x || x >= cx + uExt.x || y + 1. <= cy - uExt.y || y >= cy + uExt.y) continue;
+      float cov = uMode == 3 ? 1. : cover(x, y, cx, cy, uS, uS);
+      if (cov <= 0.) continue;
+      float u = cx / uRes.x, v = cy / uRes.y, m = M(u, v);
+      float f1 = .5 + .5 * sin(TAU * (v * uFq - uDir * uT * uC2 + .18 * sin(TAU * (u * 1.5 + uT * uC1))));
+      float f2 = .5 + .5 * sin(TAU * (u + v * .6 + uT * uC1));
+      float val = m * (.4 + .6 * f1) + uAmb * (1. - m) * .17 * f2 * f2;
+      if (uMode == 3) {                                  // halftone: the cell grows with the value
+        if (val > .03) { float z = uS * 1.25 * sqrt(min(1., val)); add(cover(x, y, cx, cy, z, z), .45 + .55 * min(1., val), cx, cy, z, z); }
+        continue;
+      }
+      bool on;
+      if (uMode == 0) on = val > (uBay[int(mod(r, float(uBn))) * uBn + int(mod(c, float(uBn)))] + .5) / float(uBn * uBn);
+      else if (uMode == 1) on = val > mod(r, 4.) * .25 + .06 + .12 * mod(c, 2.);
+      else on = val > .04 + .96 * hash(int(c), int(r), 7);
+      if (on) add(cov, m > .5 ? .5 + .5 * f1 : .3 + .5 * m, cx, cy, uS, uS);
+    }
+  } else if (uStyle == 1) {                              // LED rods
+    float c = floor((x + .5) / uPx), r0 = floor((y + .5) / uPy);
+    float cx = (c + .5) * uPx, u = cx / uRes.x;
+    if (uAmb > 0.) { float x0 = floor(cx - uLw / 2. + .5); if (x >= x0 && x < x0 + max(1., floor(uLw + .5))) col = uTint * .08; }      // the faint rod itself
     int ci = int(c);
     float sp = (hash(ci, 1, 7) * 2. < 1. ? uC1 : uC2) * (hash(ci, 2, 7) < .5 ? -1. : 1.), ph = hash(ci, 3, 7);
     float ts = uT + .85 * uEase * sin(TAU * (uC3 * uT + hash(ci, 50, 7))) / (TAU * uC3);
-    float m = M(u, v);
-    float wave = pow(.5 + .5 * cos(TAU * (v * uFq - uDir * uT * uC2 + .12 * sin(TAU * (u * 1.5 + uT * uC1)))), 2.);
-    float d = wrapd(v - ph - sp * ts), pk = exp(-(d * d) / .003);
-    I = m * (.4 + .6 * wave) + pk * (.2 * uAmb + .6 * m);
+    for (float dr = -uNb.y; dr <= uNb.y; dr++) {
+      float r = r0 + dr, v = (r + .5) / uCR.y, cov = r < 0. || r >= uCR.y ? 0. : cover(x, y, cx, v * uRes.y, uDw, uDh);
+      if (cov <= 0.) continue;
+      float m = M(u, v);
+      float wave = pow(.5 + .5 * cos(TAU * (v * uFq - uDir * uT * uC2 + .12 * sin(TAU * (u * 1.5 + uT * uC1)))), 2.);
+      float d = wrapd(v - ph - sp * ts), pk = exp(-(d * d) / .003);
+      add(cov, m * (.4 + .6 * wave) + pk * (.2 * uAmb + .6 * m), cx, v * uRes.y, uDw, uDh);
+    }
+  } else {                                               // light streaks: which wire, then the dashes this pixel touches, one or two of them
+    float wi = floor((x + .5) / uPx), xc = (wi + .5) * uPx, u = xc / uRes.x, sh = uRes.y / uCR.y;
+    int i = int(wi);
+    if (uAmb > 0.) col = uTint * (.07 * span(x, xc - uLw / 2., xc + uLw / 2.));      // the faint wire itself
+    float dir = hash(i, 5, 7) < .5 ? -1. : 1., p[3], L[3];
+    for (int k = 0; k < 3; k++) {
+      float sw = uT + .85 * uEase * sin(TAU * (uC3 * uT + hash(i * 3 + k, 50, 7))) / (TAU * uC3);
+      p[k] = hash(i, 20 + k, 7) + dir * (hash(i, 10 + k, 7) * 2. < 1. ? uC1 : uC2) * sw; L[k] = .018 + .04 * hash(i, 30 + k, 7);
+    }
+    float breath = .72 + .28 * sin(TAU * (uT * uC1 + hash(i, 40, 7))), j0 = floor(y / sh);
+    for (float j = j0; j <= j0 + 3.; j++) {
+      if (j >= uCR.y || j * sh >= y + 1.) break;
+      float cy = span(y, j * sh, (j + .7) * sh);
+      if (cy <= 0.) continue;
+      float sm = (j + .35) / uCR.y, m = M(u, sm), P = 0.;
+      for (int k = 0; k < 3; k++) { float d = wrapd(sm - p[k]); P += exp(-(d * d) / (L[k] * L[k])); }
+      float I = P * (.22 * uAmb + .9 * m) + m * .55 * breath;
+      if (I < .03) continue;
+      // a stroked line's soft edge is the whole pixel lit by its share, once for the tint and once more for the hot middle
+      float a1 = min(1., I), hw = uLw * (.8 + 2.4 * a1) / 2., cov = min(cy, span(x, xc - hw, xc + hw));
+      col = mix(col, uTint, cov * a1);
+      if (I > .5) col = mix(col, uCore, cov * min(1., (I - .5) * 1.5));
+    }
   }
-  if (I < .03) return;
-  col = mix(col, uTint, max(1., floor(min(1., I) * 32. + .5)) / 32.);       // brightness in 32 steps, as the canvas version gathers it
-  if (I > .55) col = mix(col, uCore, floor(min(1., (I - .55) * 1.8) * 32. + .5) / 32.);
+  // A cell's soft edge is part of a pixel lit in full, not the whole pixel lit faintly. One cell: its share of the pixel. Several
+  // (touching dots, halftone cells grown into each other): 32 spots in the pixel, each asked which cells lie over it.
+  if (eN == 1) col = mix(col, over(col, 1), eC[0]);
+  else if (eN > 1) {
+    float w[16]; for (int m = 0; m < 16; m++) w[m] = 0.;
+    if (uShape == 0) w[(1 << eN) - 1] = 1.;
+    else for (int k = 0; k < 8; k++) for (int i = 0; i < 4; i++) {
+      float sx = x + (float(i) + (mod(float(k) * 5., 8.) + .5) / 8.) / 4., sy = y + (float(k) + .5) / 8.; int m = 0;
+      for (int e = 0; e < eN; e++) { vec2 d = abs(vec2(sx, sy) - eG[e].xy) / eG[e].zw; if (uShape == 1 ? dot(d, d) < 1. : d.x + d.y < 1.) m |= 1 << e; }
+      w[m] += 1. / 32.;
+    }
+    vec3 base = col; col *= w[0];
+    for (int m = 1; m < 16; m++) if (w[m] > 0.) col += w[m] * over(base, m);
+  }
   outC = vec4(col, 1.);
 }`;
 function gpuInit() {
@@ -287,9 +371,10 @@ function gpuInit() {
   } catch (e) { GPU.bad = true; GPU.why = String(e && e.message).slice(0, 300); console.warn('gpu: ' + GPU.why); return false; }      // not an error: the canvas version takes over
 }
 const gpuHex = h => { const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(h) || [0, 'ff', 'ff', 'ff']; return [parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255, parseInt(m[3], 16) / 255]; };
-// which dither a shader can draw: ordered 0, lines 1, noise 2. Halftone and diffusion stay in script.
-const gpuDither = mode => BAYER[mode] ? 0 : mode === 'lines' ? 1 : mode === 'noise' ? 2 : -1;
-const gpuCan = (sn, o, st) => SHAPE === 0 && (sn === 'rods' || (sn === 'dither' && gpuDither(o.dither) >= 0)) && st.nSl <= 8 && gpuInit();
+// which dither a shader can draw: ordered 0, lines 1, noise 2, halftone 3. Diffusion carries its error from cell to cell, so it stays in script.
+const gpuDither = mode => BAYER[mode] ? 0 : mode === 'lines' ? 1 : mode === 'noise' ? 2 : mode === 'halftone' ? 3 : -1;
+// Dither and LED rods in all three pixel shapes. Light streaks is written in the shader but not switched on yet.
+const gpuCan = (sn, o, st) => (sn === 'rods' || (sn === 'dither' && gpuDither(o.dither) >= 0)) && st.nSl <= 8 && gpuInit();
 // One layer's program made current and its canvas sized; returns the setters.
 function gpuUse(kind, W, H) {
   const { gl, cv } = GPU, P = GPU.progs[kind], L = P.loc, at = n => L[n] !== undefined ? L[n] : (L[n] = gl.getUniformLocation(P.pr, n));
@@ -312,13 +397,21 @@ function gpuDraw(u, q, W, H, t, o, sn, gapN) {
   const tint = gpuHex(o.tint), core = gpuHex(CORE);
   gl.uniform3f(at('uTint'), tint[0], tint[1], tint[2]); gl.uniform3f(at('uCore'), core[0], core[1], core[2]);
   f1('uT', t); f1('uC1', cyc(1, o)); f1('uC2', cyc(2, o)); f1('uC3', cyc(3, o)); f1('uDir', o.vb < 0.5 ? -1 : 1); f1('uAmb', o.amb); f1('uEase', o.ease);
-  if (sn === 'dither') {
+  // a dot or a diamond has soft edges and a halftone cell outgrows its place, so a pixel can belong to its neighbours too:
+  // uNb is how many cells to look at either side, uExt how far a cell can reach from its middle
+  i1('uShape', SHAPE);
+  if (sn === 'streaks') {
+    const unit = Math.min(W, H) / lerp(22, 90, o.density), n = Math.max(3, Math.round(W / (unit * 2.6)));
+    i1('uStyle', 2); f2('uCR', n, Math.max(16, Math.round(H / (unit * 0.55)))); f1('uPx', W / n); f1('uLw', Math.max(1, Math.min(W, H) / 600));
+  } else if (sn === 'dither') {
     const unit = Math.min(W, H) / lerp(20, 90, o.density), cols = Math.ceil(W / unit), rows = Math.ceil(H / unit), bm = BAYER[mode];
     i1('uStyle', 0); i1('uMode', gpuDither(mode)); f1('uUnit', unit); f2('uCR', cols, rows); f2('uO', (W - cols * unit) / 2, (H - rows * unit) / 2); f1('uS', Math.max(1, unit * o.pfill)); f1('uFq', 0.8 + 1.4 * o.va);
+    const z = Math.max(1, unit * o.pfill) * (mode === 'halftone' ? 1.25 : 1), near = SHAPE || mode === 'halftone' ? 1 : 0, ext = !near ? 1e9 : SHAPE === 0 ? z / 2 + 1 : SHAPE === 1 ? Math.max(0.6, z / 2) : z * 0.6;
+    f2('uNb', near, near); f2('uExt', ext, ext);
     if (bm) { const b = new Float32Array(64); b.set(bm); gl.uniform1fv(at('uBay[0]'), b); i1('uBn', Math.sqrt(bm.length)); } else i1('uBn', 2);
   } else {
     const unit = Math.min(W, H) / lerp(22, 96, o.density), rows = Math.max(6, Math.round(H / unit)), py = H / rows, cols = Math.max(3, Math.round(W / (unit * 2.4)));
-    i1('uStyle', 1); f2('uCR', cols, rows); f1('uPy', py); f1('uPx', W / cols); f1('uDw', py * 0.56 * o.pfill); f1('uDh', py * 0.82 * o.pfill); f1('uFq', 0.6 + 1.8 * o.va); f1('uLw', Math.max(1, Math.min(W, H) / 900));
+    i1('uStyle', 1); f2('uCR', cols, rows); f1('uPy', py); f1('uPx', W / cols); f1('uDw', py * 0.56 * o.pfill); f1('uDh', py * 0.82 * o.pfill); f1('uFq', 0.6 + 1.8 * o.va); f1('uLw', Math.max(1, Math.min(W, H) / 900)); f2('uNb', 0, SHAPE ? 1 : 0);
   }
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   q.drawImage(GPU.cv, 0, 0);
