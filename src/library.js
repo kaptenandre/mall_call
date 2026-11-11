@@ -2,6 +2,12 @@
    Projects kept as folders in one place, each with its sound and every version ever saved. The folder is meant to sit in
    iCloud Drive, Dropbox or anything else that syncs, which is what puts the projects in the cloud. See main.js. */
 const libSay = s => { $('libNoteP').textContent = s; };
+// Who is at this computer: typed once, kept on this computer, and written into every version saved from it, so a project
+// handed from one person to another shows who saved what.
+const libWho = () => { try { return (localStorage.getItem('mallcall-who') || '').trim().slice(0, 40); } catch (e) { return ''; } };
+// is the library folder one that syncs? Only the path can say.
+const libCloud = p => /Mobile Documents|iCloud/i.test(p) ? 'iCloud Drive' : /Dropbox/i.test(p) ? 'Dropbox' : /Google ?Drive|GoogleDrive/i.test(p) ? 'Google Drive' : /OneDrive/i.test(p) ? 'OneDrive' : '';
+const libWhere = p => { const c = libCloud(p); return 'Projects are kept in ' + p + '. ' + (c ? 'That is in ' + c + ', so every version is in the cloud, and anyone sharing that folder sees the same projects.' : 'That folder is only on this computer. To share projects, press Change folder and pick one inside Dropbox or iCloud Drive that the others share.'); };
 async function libRefresh(keep) {
   const list = await window.nativeApp.libList(), pick = $('libPick'), was = keep || pick.value;
   pick.textContent = '';
@@ -16,16 +22,16 @@ async function libVersionsFill() {
   if (!name) { versTable('', []); return; }
   const vs = (await window.nativeApp.libVersions(name)).reverse();
   versTable(name, vs);
-  for (const v of vs) { const o = document.createElement('option'); o.value = v.n; const d = v.at ? new Date(v.at) : null; o.textContent = 'v' + v.n + (d && !isNaN(d) ? ', ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '') + (v.note ? ': ' + v.note : ''); ver.append(o); }
+  for (const v of vs) { const o = document.createElement('option'); o.value = v.n; const d = v.at ? new Date(v.at) : null; o.textContent = 'v' + v.n + (v.by ? ', ' + v.by : '') + (d && !isNaN(d) ? ', ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '') + (v.note ? ': ' + v.note : ''); ver.append(o); }
 }
 // every save is a new version; nothing already saved is ever written over
 async function libSave(note) {
   const name = $('libName').value.trim();
   if (!name) { libSay('Give the project a name first.'); $('libName').focus(); return null; }
-  const r = await window.nativeApp.libSave({ name, json: JSON.stringify(getProject()), note: note === undefined ? $('libNote').value : note });
+  const r = await window.nativeApp.libSave({ name, json: JSON.stringify(Object.assign(getProject(), { by: libWho() })), note: note === undefined ? $('libNote').value : note });
   if (!r || !r.ok) { libSay(r && r.error === 'sound' ? 'The sound file could not be copied into the project. Drop it in again and save once more.' : 'That could not be saved. Check the name and the folder.'); return null; }
   $('libNote').value = '';
-  libSay('Saved ' + r.name + ' as version ' + r.n + ', with its logo, font and sound, in ' + r.dir + '.');
+  libSay('Saved ' + r.name + ' as version ' + r.n + (libWho() ? ', by ' + libWho() : '') + ', with its logo, font and sound, in ' + r.dir + '.' + (libWho() ? '' : ' Type your name above so others see who saved it.'));
   await libRefresh(r.name);
   return r;
 }
@@ -37,9 +43,12 @@ if (window.nativeApp && window.nativeApp.libSave) {
     const name = $('libPick').value, n = Number($('libVer').value);
     if (!name) return;
     const r = await window.nativeApp.libOpen({ name, n });
-    if (r && (await applyProject(JSON.parse(r.json)))) { $('libName').value = r.name; libSay('Opened ' + r.name + ', version ' + r.n + '. Saving makes a new version; this one stays as it is.'); }
+    const pj = r ? JSON.parse(r.json) : null, when = pj && pj.savedAt ? new Date(pj.savedAt) : null;
+    if (r && (await applyProject(pj))) { $('libName').value = r.name; libSay('Opened ' + r.name + ', version ' + r.n + (pj.by ? ', saved by ' + pj.by : '') + (when && !isNaN(when) ? ' on ' + when.toLocaleDateString() + ' at ' + when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '') + '. Saving makes a new version; this one stays as it is.'); }
     else libSay('That version could not be opened.');
   });
-  $('libFolder').addEventListener('click', async () => { const p = await window.nativeApp.libPickRoot(); if (p) { libSay('Projects are now kept in ' + p + '.'); libRefresh(); } });
-  window.nativeApp.libRoot().then(p => { libSay('Projects are kept in ' + p + '. Put that folder in iCloud Drive or Dropbox and they are in the cloud, every version of them. Each save adds a version.'); libRefresh(); }, () => {});
+  $('libFolder').addEventListener('click', async () => { const p = await window.nativeApp.libPickRoot(); if (p) { libSay(libWhere(p)); libRefresh(); } });
+  window.nativeApp.libRoot().then(p => { libSay(libWhere(p)); libRefresh(); }, () => {});
+  $('libWho').value = libWho();
+  $('libWho').addEventListener('change', e => { try { localStorage.setItem('mallcall-who', e.target.value.trim().slice(0, 40)); } catch (x) {} });
 }

@@ -79,12 +79,15 @@ function ringFrame() {
 }
 {
   const bar = $('views');
+  // a picture for each place to stand; the name is in the tip
+  const VIEW_ICONS = { 'Outside': 'vOutside', 'Eye level': 'vEye', 'Close': 'vClose', 'Inside': 'vInside', 'Centre': 'vCentre', 'Above': 'vAbove' };
+  const VIEW_SAYS = { 'Outside': 'outside and a little above', 'Eye level': 'outside at eye level', 'Close': 'close up', 'Inside': 'inside the ring', 'Centre': 'its centre', 'Above': 'straight above' };
   for (const [name, v] of RING_VIEWS) {
-    const b = document.createElement('button'); b.type = 'button'; b.textContent = name;
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'ico'; b.title = name + ': look at the ring from ' + VIEW_SAYS[name]; b.setAttribute('aria-label', name); b.append(ic(VIEW_ICONS[name]));
     b.addEventListener('click', () => { ringCam.pitch = v.pitch; ringCam.dist = v.dist; if (!ringTurn) ringCam.yaw = v.yaw; if (!S.playing && !busy) paint(); });
     bar.append(b);
   }
-  const t = document.createElement('button'); t.type = 'button'; t.textContent = 'Turn'; t.title = 'Walk slowly round the ring while it plays. A 3D film turns too.'; t.setAttribute('aria-pressed', 'false'); t.style.marginLeft = 'auto';
+  const t = document.createElement('button'); t.type = 'button'; t.className = 'ico'; t.setAttribute('aria-label', 'Turn'); t.append(ic('turn')); t.title = 'Walk slowly round the ring while it plays. A 3D film turns too.'; t.setAttribute('aria-pressed', 'false'); t.style.marginLeft = 'auto';
   t.addEventListener('click', () => { ringTurn = !ringTurn; t.setAttribute('aria-pressed', String(ringTurn)); });
   bar.append(t);
   { // how large the preview is drawn, and a press to change it
@@ -92,7 +95,7 @@ function ringFrame() {
     q.addEventListener('click', () => { const o = ['auto', '1', '0.5', '0.25'], sel = $('pq'); sel.value = o[(o.indexOf(String(S.pq)) + 1) % 4]; sel.dispatchEvent(new Event('change')); });
     bar.append(q);
   }
-  const st = document.createElement('button'); st.type = 'button'; st.id = 'statsBtn'; st.textContent = 'Stats'; st.title = 'Show how hard the computer is working: time per frame, where it goes, processor and memory'; st.setAttribute('aria-pressed', 'false');
+  const st = document.createElement('button'); st.type = 'button'; st.id = 'statsBtn'; st.className = 'ico'; st.setAttribute('aria-label', 'Stats'); st.append(ic('stats')); st.title = 'Show how hard the computer is working: time per frame, where it goes, processor and memory'; st.setAttribute('aria-pressed', 'false');
   st.addEventListener('click', () => { S.stats = !S.stats; statsShow(); touch(); });
   bar.append(st);
 }

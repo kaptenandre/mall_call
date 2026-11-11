@@ -1,12 +1,12 @@
 /* ---------- workspaces ----------
    Edit is the piece itself. Media is the pool of what the project holds: its logos, sound, own symbols and font.
    Versions is the project library as a page: every saved version of a project, to open again. */
-const WORK = [['edit', 'Edit', 'frame'], ['media', 'Media', 'image'], ['versions', 'Versions', 'folder']];
+const WORK = [['edit', 'Edit', 'frame'], ['media', 'Media', 'image'], ['versions', 'Versions', 'folder'], ['export', 'Export', 'export'], ['settings', 'Settings', 'gear']];
 let workNow = 'edit';
 function workShow(id) {
   workNow = id;
   document.querySelector('.app').hidden = id !== 'edit';
-  $('viewMedia').hidden = id !== 'media'; $('viewVersions').hidden = id !== 'versions';
+  $('viewMedia').hidden = id !== 'media'; $('viewVersions').hidden = id !== 'versions'; $('viewExport').hidden = id !== 'export'; $('viewSettings').hidden = id !== 'settings';
   for (const b of $('tabs').children) b.setAttribute('aria-selected', String(b.dataset.id === id));
   if (id === 'versions' && window.nativeApp && window.nativeApp.libList) libRefresh();
   workRefresh();
@@ -48,7 +48,7 @@ function versTable(name, list) {
   $('versHead').textContent = !name ? 'Save a version and it shows here.' : name + ': ' + list.length + (list.length === 1 ? ' version.' : ' versions.') + ' Opening one never changes it; saving always adds a new one.';
   for (const v of list) {
     const tr = document.createElement('tr'), d = v.at ? new Date(v.at) : null, cell = t => { const td = document.createElement('td'); td.textContent = t; tr.append(td); return td; };
-    cell('v' + v.n); cell(d && !isNaN(d) ? d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''); cell(v.note || '');
+    cell('v' + v.n); cell(v.by || ''); cell(d && !isNaN(d) ? d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''); cell(v.note || '');
     const b = document.createElement('button'); b.type = 'button'; b.textContent = 'Open'; b.addEventListener('click', async () => { $('libVer').value = String(v.n); $('libOpen').click(); workShow('edit'); });
     cell('').append(b); rows.append(tr);
   }
@@ -62,6 +62,11 @@ function versTable(name, list) {
   $('poolSoundOff').addEventListener('click', () => $('soundOff').click());
   $('poolFontPick').addEventListener('click', () => $('ffile').click());
   $('poolFontOff').addEventListener('click', () => { if (fontFace) document.fonts.delete(fontFace); fontFace = null; fontFile = null; delete TYPE_FONTS.own; typeMasks.clear(); for (const e of userEv) if (e.font === 'own') e.font = 'sans'; tlInspSig = ''; tlInsp(); syncUI(); });
+  // Export has a page of its own, and Settings gathers what is set once and left: the ring, playback, timecode, sound devices and the output window.
+  // The boxes are moved, not copied, so everything that drives them goes on working.
+  $('exportBox').append($('fsExport')); $('setA').append($('fsAudio'), $('fsTc')); $('setB').append($('fsPlay'), $('fsOut')); $('setC').append($('fsRing'));
+  $('fsLook').append($('innerRow'), $('faceSeg'));         // what the inside shows, and which face is being edited, are part of the look and stay at hand
+  for (const id of ['fsExport', 'fsAudio', 'fsTc', 'fsPlay', 'fsOut', 'fsRing']) $(id).classList.remove('shut');      // a page of its own has room for them open
   // the library box lives on the Versions page
   const lib = $('libBox');
   if (window.nativeApp && window.nativeApp.libSave) {
