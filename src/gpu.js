@@ -373,8 +373,8 @@ function gpuInit() {
 const gpuHex = h => { const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(h) || [0, 'ff', 'ff', 'ff']; return [parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255, parseInt(m[3], 16) / 255]; };
 // which dither a shader can draw: ordered 0, lines 1, noise 2, halftone 3. Diffusion carries its error from cell to cell, so it stays in script.
 const gpuDither = mode => BAYER[mode] ? 0 : mode === 'lines' ? 1 : mode === 'noise' ? 2 : mode === 'halftone' ? 3 : -1;
-// Dither and LED rods in all three pixel shapes. Light streaks is written in the shader but not switched on yet.
-const gpuCan = (sn, o, st) => (sn === 'rods' || (sn === 'dither' && gpuDither(o.dither) >= 0)) && st.nSl <= 8 && gpuInit();
+// Dither, LED rods and Light streaks (without the fan, which only the old wide format had) in all three pixel shapes
+const gpuCan = (sn, o, st) => (sn === 'rods' || (sn === 'dither' && gpuDither(o.dither) >= 0) || (sn === 'streaks' && !o.fan)) && st.nSl <= 8 && gpuInit();
 // One layer's program made current and its canvas sized; returns the setters.
 function gpuUse(kind, W, H) {
   const { gl, cv } = GPU, P = GPU.progs[kind], L = P.loc, at = n => L[n] !== undefined ? L[n] : (L[n] = gl.getUniformLocation(P.pr, n));
