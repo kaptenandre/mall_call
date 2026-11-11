@@ -77,3 +77,38 @@ Object.assign(ICONS, {
   if (typeof ResizeObserver === 'function') new ResizeObserver(cols).observe(rail); else addEventListener('resize', cols);
   cols();
 }
+
+/* ---------- pictures on the palette ----------
+   Every clip button shows what it does as a small drawing; its name is in the tip and its key stays beside it.
+   The user asked for pictures in place of text wherever a picture says it. */
+{
+  Object.assign(ICONS, {
+    pSweep: ['M3 3v10M6 8h7M10.5 5.5L13 8l-2.5 2.5'], pStrobe: ['M9 2L4 9h4l-1 5 5-7H8z'], pFlood: ['M2.5 3.5h11v9h-11zM2.5 6.5h11M2.5 9.5h11'], pBlack: ['M2.5 3.5h11v9h-11zM2.5 12.5l11-9'],
+    pSpokes: ['M8 2v12M2.8 5l10.4 6M2.8 11l10.4-6'], pMeet: ['M2 8h4.5M4.5 6l2 2-2 2M14 8H9.5M11.5 6l-2 2 2 2'],
+    pGlitch: ['M2 4.5h7v3H5v3h9'], pChase: ['M2 8h1.5M5.5 8h1.5M9 8h1.5M12 6l2 2-2 2'], pLines: ['M2 4h12M2 8h12M2 12h12'], pSparks: ['M4 4h.01M11 3h.01M8 7h.01M13 9h.01M3 11h.01M9 12.5h.01M6 9h.01'],
+    pBars: ['M2 4h9M5 8h9M2 12h6'], pBlocks: ['M2.5 2.5h4v4h-4zM9.5 5.5h4v4h-4zM4.5 9.5h4v4h-4z'],
+    pLoader: ['M2.5 6h11v4h-11zM8.5 6v4M4.5 8h2'], pTicker: ['M2 5h12M2 11h12M5 8h6M9 6.5L11 8 9 9.5'], pStack: ['M3 3.5h10M3 6.5h10M3 9.5h10M3 12.5h10'], pStretch: ['M2 8h12M4.5 5.5L2 8l2.5 2.5M11.5 5.5L14 8l-2.5 2.5'],
+    pFlip: ['M8 2v12M5.5 4.5L2.5 8l3 3.5zM10.5 4.5l3 3.5-3 3.5'],
+    pPilChase: ['M3 4v8M6 4v8M9 4v8M11 6l2.5 2-2.5 2'], pPop: ['M3 9v4M6.5 3v10M10 9v4M13 5v8'], pBuild: ['M3 11v2M6.3 8.5v4.5M9.7 6v7M13 3v10'], pAlt: ['M3 3v10M6.3 7v2M9.7 3v10M13 7v2'],
+    pWave: ['M2 8c2-5 4-5 6 0s4 5 6 0'], pFrames: ['M3 3h4v10H3zM9 3h4v10H9z'], pEcho: ['M3 3v10M6.3 4.5v7M9.7 6v4M13 7.2v1.6'], pSymPil: ['M3 3v10M13 3v10M6 6l4 4M10 6l-4 4']
+  });
+  const PICS = {
+    'Base': { Sweep: 'pSweep', Strobe: 'pStrobe', Flood: 'pFlood', Blackout: 'pBlack', Orbit: 'turn', Spokes: 'pSpokes', Meet: 'pMeet' },
+    'Glitch': { Glitch: 'pGlitch', Chase: 'pChase', Lines: 'pLines', Sparks: 'pSparks', Bars: 'pBars', Blocks: 'pBlocks' },
+    'Logo': { Loader: 'pLoader', Show: 'eye', Hide: 'eyeOff', Clean: 'ev2' },
+    'Type': { Words: 'ev3', Ticker: 'pTicker', Stack: 'pStack', Stretch: 'pStretch', Bump: 'vAbove', Spin: 'turn', Flip: 'pFlip', Drop: 'export' },
+    'Pillars': { Chase: 'pPilChase', Spin: 'turn', Pop: 'pPop', Build: 'pBuild', VU: 'stats', Alt: 'pAlt', Wave: 'pWave', Frames: 'pFrames', Echo: 'pEcho' },
+    'Symbols': { Symbols: 'ev5', 'In pillars': 'pSymPil' }
+  };
+  const SAYS = { Base: 'base', Glitch: 'glitch', Logo: 'logo', Type: 'type', Pillars: 'pillar', Symbols: 'symbol' };
+  for (const row of document.querySelectorAll('#pad .padrow')) {
+    const name = row.firstElementChild.textContent.trim(), map = PICS[name];
+    if (!map) continue;
+    for (const b of row.querySelectorAll('button')) {
+      const label = b.firstChild && b.firstChild.nodeType === 3 ? b.firstChild.textContent.trim() : '', pic = map[label];
+      if (!pic || !ICONS[pic]) continue;
+      b.firstChild.remove(); b.prepend(ic(pic)); b.classList.add('pic');
+      b.title = label + ': a ' + SAYS[name] + ' clip. Press to put it at the playhead, or drag it onto the timeline.'; b.setAttribute('aria-label', label);
+    }
+  }
+}

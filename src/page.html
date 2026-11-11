@@ -162,6 +162,8 @@ fieldset.layer{border-left:2px solid var(--signal)}
 .rail .seg span{font-size:10px;padding:7px 4px}
 #viewExport .stack{max-width:520px}
 .views button.ico{padding:5px 7px}
+.padbtns button.pic{padding:5px 5px 5px 7px;gap:6px}
+.padbtns{gap:3px}
 .rowv{display:flex;flex-direction:column;gap:6px}
 .rowv>span:first-child{color:var(--dim)}
 input[type=range]{width:100%;accent-color:var(--signal);margin:0}
@@ -569,7 +571,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 'v0.51.1';                 // see Versions in CLAUDE.md: before the first show . feature . fix
+const BUILD = 'v0.52.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
 $('build').textContent = '· ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
