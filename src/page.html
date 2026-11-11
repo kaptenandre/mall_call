@@ -26,6 +26,10 @@ html,body{margin:0}
 body{background:var(--room);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
 .top{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 20px;padding:18px 20px 14px;border-bottom:1px solid var(--rule)}
 h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase;margin:0;text-wrap:balance}
+/* the studio behind it, under the name */
+.brand{display:flex;flex-direction:column;gap:3px;align-self:center}
+.brand .by{font:400 9px/1 var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.brand .by b{font-weight:500;color:var(--ink);letter-spacing:.1em;text-transform:none}
 .top p{margin:0;color:var(--dim);max-width:65ch}
 .tabs{display:flex;gap:4px}
 .savebtn{appearance:none;border:1px solid var(--ink);background:#000;color:var(--ink);padding:7px 12px;font:500 11px/1 var(--display);letter-spacing:.1em;text-transform:uppercase;cursor:pointer;border-radius:0;display:inline-flex;gap:8px;align-items:center}
@@ -256,7 +260,7 @@ body.rendering .rail fieldset { opacity: .55; }
 <body>
 <div class="smpte" role="timer" aria-label="Sound level and timecode at the playhead" title="Sound level, left over right, and the timecode at the playhead. Set the rate and the start under Timecode."><span class="mini" id="mini" title="Preview frames a second and milliseconds a frame; processor use and memory"></span><canvas id="vu" width="132" height="24" aria-hidden="true"></canvas><span id="smpte">00:00:00:00</span></div>
 <header class="top">
-  <h1>Mall Call <span id="build" style="color:var(--dim);font-weight:400"></span></h1>
+  <div class="brand"><h1>Mall Call <span id="build" style="color:var(--dim);font-weight:400"></span></h1><span class="by">Powered by <b>poser.global</b></span></div>
   <nav class="tabs" id="tabs" aria-label="Workspaces"></nav>
   <button type="button" class="savebtn" id="saveNow" title="Save a new version of this project. Nothing is ever written over.">Save</button>
   <span class="savemsg" id="saveMsg" aria-live="polite"></span>
@@ -571,7 +575,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 'v0.53.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
+const BUILD = 'v0.54.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
 $('build').textContent = '· ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
