@@ -19,7 +19,7 @@ const ICONS = {
   undo: ['M6 3L3 6l3 3M3 6h6.5a3.5 3.5 0 0 1 0 7H6'], redo: ['M10 3l3 3-3 3M13 6H6.5a3.5 3.5 0 0 0 0 7H10'],
   ruler: ['M13.5 8a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0zM8 5v3l2 1.5'], over: ['M2 8h.01M4.5 6v4M7 3.5v9M9.5 5.5v5M12 7v2M14 8h.01'], parts: ['M2 4h5v8H2zM9 4h5v8H9z'],
   ev0: ['M2 3h12v10H2zM2 8h12'], ev1: ['M2 4.5h7M6 8h8M2 11.5h4M9 11.5h5'], ev2: ['M13 8A5 5 0 1 1 3 8a5 5 0 0 1 10 0zM10 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0z'], ev3: ['M3 4V3h10v1M8 3v10M6 13h4'], ev4: ['M3 3v10M6.3 6v7M9.7 3v10M13 8v5'], ev5: ['M3 3l10 10M13 3L3 13'],
-  auto: ['M3 13c2-6 3-9 5-9s3 3 5 9'],
+  auto: ['M3 13c2-6 3-9 5-9s3 3 5 9'], flag: ['M4 14V2.5M4 3h8l-2 2.5 2 2.5H4'],
   gear: ['M8 5.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4'], export: ['M8 2v8M5 7l3 3 3-3M3 13h10'],
   // the views of the ring: where the eye stands
   vOutside: ['M3 7a5 2.5 0 1 0 10 0a5 2.5 0 1 0-10 0M8 13.5h.01'], vEye: ['M2 6h12v4H2zM5 6v4M8 6v4M11 6v4'], vClose: ['M4 2.5v11M8 2.5v11M12 2.5v11'],
@@ -37,6 +37,9 @@ function ic(name) {
 }
 // a button that shows an icon; what it does stays readable as its label and tooltip
 function setIcon(btn, name, label) { if (btn.dataset.ic === name) return; btn.dataset.ic = name; btn.replaceChildren(ic(name)); btn.setAttribute('aria-label', label); btn.title = label; }
+// tlMulti: the clips picked together (Shift-click, or Shift-drag a box); tlClip: what was last copied
+let tlMulti = new Set(), tlClip = [];
+const tlGroup = () => { if (!tlSel || tlSel.kind !== 'ev' || !userEv.includes(tlSel.e)) return []; const g = [...tlMulti].filter(e => userEv.includes(e)); return g.includes(tlSel.e) && g.length > 1 ? g : [tlSel.e]; };
 let tlSel = null, tlDrag = null, tlSnap = true, tlHeadSig = '', tlInspSig = '', tlDropT = null;      // tlDropT: where something dragged from the palette would land
 
 // the slider behind a setting: its range as a 0..1 position, and the maps between position and value
@@ -265,9 +268,20 @@ function drawTimeline() {
   g.strokeStyle = '#eceaf4'; g.lineWidth = 1; g.strokeRect(Math.round(px0) + 0.5, pr.y + 1.5, Math.round(px1 - px0) - 1, pr.h - 3);
   if (tlSel) {
     g.strokeStyle = '#fff'; g.lineWidth = 2;
-    if (tlSel.kind === 'ev') { const r = rows[3 + layerOf(tlSel.e.k)]; for (const [x, w] of clipRects(tlSel.e, W)) g.strokeRect(x, r.y + 3, w, r.h - 8); }
+    if (tlSel.kind === 'ev') { for (const e of new Set([tlSel.e, ...tlGroup()])) { const r = rows[3 + layerOf(e.k)]; for (const [x, w] of clipRects(e, W)) g.strokeRect(x, r.y + 3, w, r.h - 8); } }
+    else if (tlSel.kind === 'marker') { /* drawn with the markers below */ }
     else { const r = rows.find(q => q.key === tlSel.key); if (r) { const R = aRange(r.key), y = r.y + r.h - 5 - clamp01((R.back(tlSel.k.v) - R.lo) / (R.hi - R.lo)) * (r.h - 10); g.strokeRect(t2x(tlSel.k.t) - 5, y - 5, 10, 10); } }
   }
+  // the stretch that loops, on the ruler; markers with their names; and the box being dragged round clips
+  if (S.loopB > S.loopA) { const a = t2x(S.loopA), b = t2x(S.loopB); g.fillStyle = S.tint; g.globalAlpha = 0.22; g.fillRect(a, 0, b - a, rows[0].h); g.globalAlpha = 1; g.fillRect(a, 0, b - a, 2); g.fillRect(a, 0, 1.5, rows[0].h); g.fillRect(b - 1.5, 0, 1.5, rows[0].h); }
+  g.font = '500 9px "DM Mono", ui-monospace, monospace'; g.textBaseline = 'middle';
+  for (const m of S.markers || []) {
+    const mx = Math.round(t2x(m.t)); if (mx < -80 || mx > W) continue;
+    const on = tlSel && tlSel.kind === 'marker' && tlSel.m === m, tw = 8 + 6 * String(m.name || '').length;
+    g.fillStyle = on ? '#fff' : '#ffb020'; g.globalAlpha = 0.28; g.fillRect(mx, rows[0].h, 1, H - rows[0].h); g.globalAlpha = 1;
+    g.fillRect(mx, 0, 1.5, rows[0].h); g.fillRect(mx, rows[0].h - 12, tw, 11); g.fillStyle = '#000'; g.fillText(String(m.name || '').toUpperCase(), mx + 4, rows[0].h - 6);
+  }
+  if (tlDrag && tlDrag.mode === 'box' && tlDrag.moved) { const d = tlDrag; g.strokeStyle = '#fff'; g.lineWidth = 1; g.setLineDash([3, 3]); g.strokeRect(Math.min(d.x, d.x1) + 0.5, Math.min(d.y, d.y1) + 0.5, Math.abs(d.x1 - d.x), Math.abs(d.y1 - d.y)); g.setLineDash([]); }
   if (tlDropT !== null) { const dx = Math.round(t2x(tlDropT)); g.fillStyle = S.tint; for (let y = 0; y < H; y += 6) g.fillRect(dx, y, 2, 3); g.fillRect(dx - 4, 0, 10, 3); }
   const x = Math.round(t2x(tau));
   g.fillStyle = '#fff'; g.fillRect(x, 0, 1.5, H); g.fillRect(x - 3, 0, 7.5, 4);
@@ -279,6 +293,7 @@ function drawTimeline() {
 function tlHit(x, y) {
   const rows = tlRows(), W = tlW(), r = rows.find(q => y >= q.y && y < q.y + q.h);
   if (!r) return { kind: 'none' };
+  if (r.kind === 'ruler') { for (const m of S.markers || []) { const mx = t2x(m.t); if (x >= mx - 4 && x <= mx + 8 + 6 * String(m.name || '').length) return { kind: 'marker', row: r, m }; } }
   if (r.kind === 'ev') {
     if (S.laneLock[r.L]) return { kind: 'locked', row: r };
     const list = score.all.filter(e => layerOf(e.k) === r.L).sort((a, b) => userEv.includes(a) - userEv.includes(b));
@@ -305,14 +320,16 @@ function splitAt(t) {
 }
 function tlDelete() {
   if (!tlSel) return false;
-  if (tlSel.kind === 'ev') { if (!userEv.includes(tlSel.e)) return false; userEv = userEv.filter(e => e !== tlSel.e); tlSel = null; mergeEv(); }
+  if (tlSel.kind === 'ev') { const g = tlGroup(); if (!g.length) return false; userEv = userEv.filter(e => !g.includes(e)); tlSel = null; tlMulti.clear(); mergeEv(); }
+  else if (tlSel.kind === 'marker') { S.markers = S.markers.filter(m => m !== tlSel.m); tlSel = null; }
   else { auto[tlSel.key] = auto[tlSel.key].filter(k => k !== tlSel.k); tlSel = null; }
   syncUI(); tlInsp();
   return true;
 }
 function tlNudge(dt) {
   if (!tlSel) return false;
-  if (tlSel.kind === 'ev') { if (!userEv.includes(tlSel.e)) return false; tlSel.e.t = Math.min(score.D - 0.01, Math.max(0, tlSel.e.t + dt)); mergeEv(); }
+  if (tlSel.kind === 'ev') { const g = tlGroup(); if (!g.length) return false; const lo = Math.min(...g.map(e => e.t)), hi = Math.max(...g.map(e => e.t)), d = Math.max(-lo, Math.min(score.D - 0.01 - hi, dt)); for (const e of g) e.t += d; mergeEv(); }
+  else if (tlSel.kind === 'marker') tlSel.m.t = Math.min(score.D, Math.max(0, tlSel.m.t + dt));
   else { tlSel.k.t = Math.min(score.D, Math.max(0, tlSel.k.t + dt)); auto[tlSel.key].sort((a, b) => a.t - b.t); }
   tlChanged(); tlInsp();
   return true;
@@ -321,7 +338,8 @@ function tlNudge(dt) {
 /* the strip under the timeline: what is selected, as numbers */
 function tlInsp() {
   const box = $('tlInsp'), s = tlSel;
-  const sig = !s ? 'none' : s.kind === 'ev' ? 'ev' + userEv.includes(s.e) + layerOf(s.e.k) : 'key' + s.key;
+  const many = tlGroup().length;
+  const sig = !s ? 'none' : s.kind === 'marker' ? 'marker' : many > 1 ? 'many' + many : s.kind === 'ev' ? 'ev' + userEv.includes(s.e) + layerOf(s.e.k) : 'key' + s.key;
   const num = (id, v) => { const el = $(id); if (el && document.activeElement !== el) el.value = v; };
   if (sig !== tlInspSig) {
     tlInspSig = sig; box.textContent = '';
@@ -329,7 +347,14 @@ function tlInsp() {
     const input = (id, type, step, fn) => { const el = document.createElement('input'); el.type = type; el.id = id; if (step) el.step = step; el.addEventListener('change', () => { fn(el); tlChanged(); tlInsp(); }); return el; };
     const select = (id, opts, fn) => { const el = document.createElement('select'); el.id = id; for (const [v, n] of opts) { const o = document.createElement('option'); o.value = v; o.textContent = n; el.append(o); } el.addEventListener('change', () => { fn(el); tlChanged(); tlInsp(); }); return el; };
     const del = () => { const b = document.createElement('button'); b.type = 'button'; b.textContent = 'Delete'; b.addEventListener('click', tlDelete); box.append(b); };
-    if (!s) box.textContent = 'Double-click a lane to add a clip or a key. Drag to move, drag a clip by its right edge for length, Alt-drag to copy, Backspace to delete. Arrows: left and right jump a second (Shift: a frame), up and down go to the part before and after.';
+    if (!s) box.textContent = 'Double-click a lane to add a clip or a key. Drag to move, drag a clip by its right edge for length, Alt-drag to copy, Backspace to delete. Shift-click or Shift-drag a box to pick several. On the ruler, Shift-drag sets a stretch to loop and Shift-click clears it. Arrows: left and right jump a second (Shift: a frame), up and down go to the part before and after.';
+    else if (s.kind === 'marker') {
+      const nm = field('Marker', input('inMName', 'text', '', el => { tlSel.m.name = el.value.slice(0, 24); })); nm.maxLength = 24; nm.addEventListener('input', () => { tlSel.m.name = nm.value.slice(0, 24); tlChanged(); });
+      field('Time', input('inStart', 'number', '0.01', el => { tlSel.m.t = Math.min(score.D, Math.max(0, Number(el.value) || 0)); }));
+      const tc = document.createElement('span'); tc.id = 'inTc'; box.append(tc);
+      del();
+    }
+    else if (many > 1) { const p = document.createElement('span'); p.textContent = many + ' clips picked. Drag one to move them all, Alt-drag to copy them, arrows to nudge, Cmd+C and Cmd+V to copy and paste at the playhead, Backspace to delete.'; box.append(p); del(); }
     else if (s.kind === 'ev' && !userEv.includes(s.e)) { const p = document.createElement('span'); p.id = 'inAuto'; box.append(p); }
     else if (s.kind === 'ev') {
       if (s.e.k === 13) {
@@ -381,6 +406,8 @@ function tlInsp() {
     }
   }
   if (!s) return;
+  if (s.kind === 'marker') { num('inMName', s.m.name); num('inStart', s.m.t.toFixed(2)); $('inTc').textContent = tcAt(s.m.t); return; }
+  if (many > 1) return;
   if (s.kind === 'ev') {
     if ($('inAuto')) $('inAuto').textContent = 'Automatic ' + s.e.type + ' at ' + s.e.t.toFixed(2) + ' s, ' + tcAt(s.e.t) + '. Press Bake on the lane to edit the automatic clips, or Auto to switch them off.';
     else { num('inType', s.e.type); num('inTxt', s.e.txt); num('inMode', s.e.mode); num('inSize', Math.round(s.e.size * 100)); num('inY', Math.round(s.e.y * 100)); num('inFont', s.e.font); num('inX', Math.round((s.e.x === undefined ? 0.5 : s.e.x) * 100)); num('inTrk', Math.round((s.e.trk || 0) * 100)); num('inOut', s.e.out || 'cut'); if ($('inCaps')) $('inCaps').checked = s.e.caps !== false; if (s.e.k === 18) { num('inSy', s.e.sy); $('inStep').checked = !!s.e.step; num('inEcho', s.e.echo | 0); num('inEx', Math.round((s.e.ex || 0) * 100)); num('inEy', Math.round(-(s.e.ey || 0) * 100)); $('inEach').checked = !!s.e.each; num('inDl', Math.round((s.e.dl || 0) * 100)); $('inSy').disabled = !!s.e.step; }
@@ -395,10 +422,23 @@ function tlInsp() {
     if (busy || e.button) return;
     const [x, y] = pos(e), h = tlHit(x, y);
     tl.setPointerCapture(e.pointerId);
-    if (h.kind === 'clip' || h.kind === 'edge') { tlSel = { kind: 'ev', e: h.e }; tlDrag = h.user ? { mode: h.kind === 'edge' ? 'len' : 'move', x, grab: x2t(x) - h.e.t, dup: e.altKey, moved: false } : null; }
+    if ((h.kind === 'clip' || h.kind === 'edge') && e.shiftKey && h.user) {      // Shift-click: into the group, or out of it
+      if (tlSel && tlSel.kind === 'ev' && userEv.includes(tlSel.e)) tlMulti.add(tlSel.e);
+      if (tlMulti.has(h.e) && tlMulti.size > 1) { tlMulti.delete(h.e); const rest = [...tlMulti]; tlSel = { kind: 'ev', e: rest[rest.length - 1] }; } else { tlMulti.add(h.e); tlSel = { kind: 'ev', e: h.e }; }
+      tlDrag = null;
+    }
+    else if (h.kind === 'clip' || h.kind === 'edge') {
+      const many = h.user && h.kind === 'clip' && tlMulti.has(h.e) && [...tlMulti].filter(q => userEv.includes(q)).length > 1;      // a press on one of several picked clips moves them all
+      if (!many) { tlMulti.clear(); if (h.user) tlMulti.add(h.e); }
+      tlSel = { kind: 'ev', e: h.e };
+      tlDrag = h.user ? { mode: h.kind === 'edge' ? 'len' : 'move', x, grab: x2t(x) - h.e.t, dup: e.altKey, moved: false, group: many ? [...tlMulti].filter(q => userEv.includes(q)).map(q => ({ e: q, t: q.t })) : null } : null;
+    }
+    else if (h.kind === 'marker') { tlMulti.clear(); tlSel = { kind: 'marker', m: h.m }; tlDrag = { mode: 'marker', x, moved: false }; }
+    else if (e.shiftKey && h.row && h.row.kind === 'ruler') { tlDrag = { mode: 'loop', x, a: x2t(x), moved: false }; }
+    else if (e.shiftKey && h.row && h.row.kind === 'ev') { tlMulti.clear(); tlSel = null; tlDrag = { mode: 'box', x, y, x1: x, y1: y, moved: false }; }
     else if (h.kind === 'key') { tlSel = { kind: 'key', key: h.key, k: h.k }; tlDrag = { mode: 'key', x, y, row: h.row, moved: false }; }
     else if (h.kind === 'split') { tlSel = null; tlDrag = { mode: 'split', i: h.i, x, moved: false }; }
-    else { tlSel = null; tlDrag = { mode: 'scrub', moved: false }; seek(x2t(x) / score.D); }
+    else { tlMulti.clear(); tlSel = null; tlDrag = { mode: 'scrub', moved: false }; seek(x2t(x) / score.D); }
     tlInsp(); if (!S.playing) paint();
   });
   tl.addEventListener('pointermove', e => {
@@ -408,17 +448,59 @@ function tlInsp() {
     if (!d.moved) {
       if (Math.abs(x - d.x) < 3 && (d.y === undefined || Math.abs(y - d.y) < 3)) return;
       d.moved = true;
-      if (d.dup) { const o = tlSel.e, c = mkEv(o.t, o.type, o.seed, o.d, evMore(o)); userEv.push(c); tlSel = { kind: 'ev', e: c }; }
+      if (d.dup && d.group) {                             // Alt-drag with several picked: copies of all of them come along
+        const made = d.group.map(q => { const c = mkEv(q.e.t, q.e.type, q.e.seed, q.e.d, evMore(q.e)); userEv.push(c); return { e: c, t: c.t, from: q.e }; }), lead = made.find(q => q.from === tlSel.e);
+        tlMulti = new Set(made.map(q => q.e)); tlSel = { kind: 'ev', e: lead.e }; d.group = made;
+      }
+      else if (d.dup) { const o = tlSel.e, c = mkEv(o.t, o.type, o.seed, o.d, evMore(o)); userEv.push(c); tlSel = { kind: 'ev', e: c }; tlMulti = new Set([c]); }
     }
     const D = score.D;
-    if (d.mode === 'move') { tlSel.e.t = Math.min(D - 0.01, Math.max(0, tlSnapT(x2t(x) - d.grab, e))); mergeEv(); }
+    if (d.mode === 'move' && d.group) {                   // the one under the pointer snaps; the rest keep their distance to it
+      const lead = d.group.find(q => q.e === tlSel.e), lo = Math.min(...d.group.map(q => q.t)), hi = Math.max(...d.group.map(q => q.t));
+      const dt = Math.max(-lo, Math.min(D - 0.01 - hi, Math.min(D - 0.01, Math.max(0, tlSnapT(x2t(x) - d.grab, e))) - lead.t));
+      for (const q of d.group) q.e.t = q.t + dt;
+      mergeEv();
+    }
+    else if (d.mode === 'move') { tlSel.e.t = Math.min(D - 0.01, Math.max(0, tlSnapT(x2t(x) - d.grab, e))); mergeEv(); }
+    else if (d.mode === 'marker') tlSel.m.t = Math.min(D, Math.max(0, tlSnapT(x2t(x), e)));
+    else if (d.mode === 'loop') { const b = Math.min(D, Math.max(0, tlSnapT(x2t(x), e))); S.loopA = Math.min(d.a, b); S.loopB = Math.max(d.a, b); }
+    else if (d.mode === 'box') { d.x1 = x; d.y1 = y; }
     else if (d.mode === 'len') { tlSel.e.d = Math.max(0.05, tlSnapT(x2t(x), e) - tlSel.e.t); mergeEv(); }
     else if (d.mode === 'key') { tlSel.k.t = Math.min(D, Math.max(0, tlSnapT(x2t(x), e))); tlSel.k.v = rowVal(d.row, y); auto[tlSel.key].sort((a, b) => a.t - b.t); }
     else if (d.mode === 'split') { parts[d.i].t = Math.min(partEnd(d.i) - 0.5, Math.max(parts[d.i - 1].t + 0.5, tlSnapT(x2t(x), e, d.i))); partsSig = ''; }
     tlChanged(); tlInsp();
   });
-  const up = () => { const d = tlDrag; tlDrag = null; if (d && d.mode === 'split' && d.moved) { savePart(); sel = partIdx(tau); loadPart(); rebuildScore(); pushAll(); syncUI(); } };
+  const up = () => {
+    const d = tlDrag;
+    if (d && d.mode === 'box' && d.moved) {                 // every clip of the user's that the box touches, on lanes that are not locked
+      const rows = tlRows(), W = tlW(), xa = Math.min(d.x, d.x1), xb = Math.max(d.x, d.x1), ya = Math.min(d.y, d.y1), yb = Math.max(d.y, d.y1), got = [];
+      for (const r of rows) if (r.kind === 'ev' && !S.laneLock[r.L] && r.y < yb && r.y + r.h > ya) for (const ev of userEv) if (layerOf(ev.k) === r.L && clipRects(ev, W).some(([cx, w]) => cx < xb && cx + w > xa)) got.push(ev);
+      tlMulti = new Set(got); tlSel = got.length ? { kind: 'ev', e: got[0] } : null; tlDrag = null; tlInsp(); tlChanged(); return;
+    }
+    if (d && d.mode === 'loop') { if (!d.moved || S.loopB - S.loopA < 0.1) { S.loopA = S.loopB = -1; } tlDrag = null; tlChanged(); return; }      // Shift-click on the ruler clears the loop
+    upRest(d);
+  };
+  const upRest = d => { tlDrag = null; if (d && d.mode === 'split' && d.moved) { savePart(); sel = partIdx(tau); loadPart(); rebuildScore(); pushAll(); syncUI(); } };
   tl.addEventListener('pointerup', up);
+  // Copy, cut and paste for clips. They ride on the page's own copy and paste, so Cmd+C and the Edit menu both work;
+  // while a field is being typed in they are left to the field.
+  const typing = () => { const a = document.activeElement, t = a && a.tagName; return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT'; };
+  const tlCopy = () => { const g = tlGroup(); if (!g.length) return false; const t0 = Math.min(...g.map(q => q.t)); tlClip = g.map(q => ({ dt: q.t - t0, type: q.type, seed: q.seed, d: q.d, more: evMore(q) })); return true; };
+  document.addEventListener('copy', e => { if (typing() || busy) return; if (tlCopy()) { e.preventDefault(); $('trigNote').textContent = tlClip.length + (tlClip.length === 1 ? ' clip' : ' clips') + ' copied. Paste puts them at the playhead.'; } });
+  document.addEventListener('cut', e => { if (typing() || busy) return; if (tlCopy()) { e.preventDefault(); undoMark(); tlDelete(); } });
+  document.addEventListener('paste', e => {
+    if (typing() || busy || !tlClip.length) return;
+    e.preventDefault(); undoMark();
+    const made = tlClip.filter(c => !S.laneLock[layerOf(EV[c.type])] && tau + c.dt < score.D - 0.01).map(c => mkEv(tau + c.dt, c.type, c.seed, c.d, c.more));
+    userEv.push(...made); tlMulti = new Set(made); tlSel = made.length ? { kind: 'ev', e: made[0] } : null;
+    mergeEv(); syncUI(); tlInsp(); if (!S.playing) paint();
+  });
+  $('tlMark').addEventListener('click', () => {
+    undoMark();
+    const m = { t: tau, name: 'Marker ' + ((S.markers || []).length + 1) };
+    S.markers = [...(S.markers || []), m]; tlMulti.clear(); tlSel = { kind: 'marker', m };
+    tlChanged(); tlInsp(); const f = $('inMName'); if (f) { f.focus(); f.select(); }
+  });
   tl.addEventListener('pointercancel', up);
   tl.addEventListener('dblclick', e => {
     if (busy) return;
@@ -470,7 +552,7 @@ function tlInsp() {
     else if (e.key === 'Escape') { tlSel = null; tlInsp(); if (!S.playing) paint(); }
   });
   setIcon($('tlOut'), 'zoomOut', 'Zoom out'); setIcon($('tlIn'), 'zoomIn', 'Zoom in'); setIcon($('tlFit'), 'fit', 'Show the whole piece');
-  setIcon($('tlSnap'), 'snap', 'Snap to hits, part edges and the playhead. Hold Cmd or Ctrl to move freely.'); setIcon($('tlUndo'), 'undo', 'Undo'); setIcon($('tlRedo'), 'redo', 'Redo');
+  setIcon($('tlSnap'), 'snap', 'Snap to hits, part edges and the playhead. Hold Cmd or Ctrl to move freely.'); setIcon($('tlUndo'), 'undo', 'Undo'); setIcon($('tlMark'), 'flag', 'Put a named marker at the playhead. Drag it on the ruler to move it; Alt with the left and right arrows jumps between markers.'); setIcon($('tlRedo'), 'redo', 'Redo');
   $('tlPlay').addEventListener('click', () => setPlaying(!S.playing));
   $('tlIn').addEventListener('click', () => { tlZoom(1.6, t2x(tau) >= 0 && t2x(tau) <= tlW() ? t2x(tau) : undefined); if (!S.playing) paint(); });
   $('tlOut').addEventListener('click', () => { tlZoom(1 / 1.6); if (!S.playing) paint(); });
