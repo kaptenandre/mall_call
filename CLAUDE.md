@@ -12,7 +12,13 @@ npm test         # node checks for automation curves and timecode maths. Prints 
 npm run dist     # package and ad-hoc sign dist/Mall Call-darwin-arm64/Mall Call.app
 ```
 
-Raise `BUILD` in `src/page.html` by one with every push. It shows in the page header ("build 12") and is how the user tells whether the app has updated.
+Raise the version in `BUILD` in `src/page.html` with every push. It shows in the page header and is how the user tells whether the app has updated. It has three numbers, `v0.47.0` (the user asked for a logical system in place of a running build number, 2026-11-11):
+
+- The first is 0 until the piece has run at a real show, then 1.
+- The middle rises by one when a push adds or changes something the user asked for, and the last goes back to 0.
+- The last rises by one for a push that only fixes or tidies.
+
+Builds 1 to 45 used a running number; v0.47.0 follows build 45.
 
 Run `npm run smoke` and `npm test` after every change. A clean smoke run has `"errors":[]`, `"roundTrip":true`, `"restored":true`, `"timeline":true`, `"type":true`, `"ltcLoop":true`, `"grade":true`, `"review":true`, `"library":true`, `"h264":true`.
 
@@ -157,7 +163,8 @@ Asked for and not done yet, newest first:
    - It falls back by itself (`gpuLogo` and the others return false) for ASCII, Ridge lines and diffusion dither, and when WebGL 2 is missing. Only the preview uses it (`Renderer.gpu`); every export still runs the canvas version. The switch is `S.gpu`, a checkbox in Playback.
    - Done in build 45 (by a subagent, checked here on 49 states and by eye on zoomed crops): dot and diamond pixels, halftone dither and Light streaks in `GPU_TAIL`. Square pixels are unchanged and still match to the pixel. Dots and diamonds differ at their soft edges, because the shader works out the true area and the canvas antialiases in coarse steps: total light within 1% for diamonds, 2 to 4% brighter for dots (about 10% when dots are under 3 px). Streaks within 0.1 to 3%. Not tried with these shapes: a gap between pillars, crush and slices, and layers in different styles in one frame. Dots and diamonds cost an eight-step loop per pixel, so their speed on a real card is unknown.
    - Still in script: error-diffusion dither (sequential by nature), ASCII (wants a glyph atlas drawn once per font size, sampled per cell) and Ridge lines (each line hides those behind; about five field reads a pixel, so it may stay in script).
-   - Next, in order of what it buys: compositing, grade and glow in GL so nothing is read back, then exports.
+   - Done in v0.47.0: a face is put together on the card. `gpuFrameBegin` opens a frame; `gpuDraw` then draws each layer into a texture of its own (`GPU.acc.lay`), symbols over the logo with MAX blending; `gpuLayerEnd` hides the pillars a pattern hides (scissored quads) and adds the layer to the sum (`GPU.acc.sum`); `gpuFrameEnd` copies the sum onto the face once, with `lighter`. Adding does not care about order, so layers the canvas version drew are simply added too. `gpuLayerToCanvas` hands a half-drawn layer back when the canvas version has more to draw in it. One copy from the card a face, in place of one a layer. Compared on 59 states, among them pillar masks on single layers and frames split between card and canvas: the same picture as before.
+   - Next: trails, flash, glow and the grade are still canvas work on the copied-back face, and the stage, the pillar monitor, the 3D view's texture and the output window all read a 2D canvas. Taking the last copy away means making the stage itself a WebGL canvas, which touches all of those. Do not start that before a number from the user's Mac says the card helps. After that, exports (square pixels match to the pixel, so a card export is possible there).
    - WebGL drawn by the processor (SwiftShader, llvmpipe) is refused, because it is slower than the canvas version; `GPU.force` (set by `__frameAt`) overrides that for comparisons. The diagnostics record says whether the card is in use and which one.
    - Not known: what it gains on the Mac. Here WebGL is software and reading it back costs more than it saves, so the numbers mean nothing. `PERF.layer[2]` reads 0 when the logo is on the card.
 2. The user wrote "få med poser.global också" while asking for the layout work. It is not clear what that means; ask.

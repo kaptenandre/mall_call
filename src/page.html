@@ -544,8 +544,8 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 45;
-$('build').textContent = '· build ' + BUILD;
+const BUILD = 'v0.47.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
+$('build').textContent = '· ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
 
@@ -1339,6 +1339,7 @@ class Renderer {
     const PN = LO[0].gapN || LO[0].cols;
     pillarGains(st, PN, LO[0]); st.pgK = LO[0].gapN ? 1 / (1 + LO[0].gap) : 1;
     if (st.clean) { st.pm = null; st.pmLogo = null; }       // nothing hides a plain logo, pillar patterns included
+    const card = this.gpu && S.gpu !== false && gpuFrameBegin(W, H);      // the layers the card draws are put together there and come back in one copy
     for (let L = 0; L < 4; L++) {
       if ((L === 1 && laneHidden(1)) || (L === 0 && !st.bn && !st.pl && !st.pf) || (L === 2 && !st.lv && !st.syN) || (L === 3 && !st.tyN)) continue;
       let o = LO[L];
@@ -1382,15 +1383,19 @@ class Renderer {
       const tl0 = performance.now();
       if (f) {
         let d = q;
+        if (over) gpuLayerToCanvas(q);
         if (over) { const c = this.tmp || (this.tmp = document.createElement('canvas')); if (c.width !== W || c.height !== H) { c.width = W; c.height = H; } d = this.tq || (this.tq = c.getContext('2d', { alpha: false })); d.globalCompositeOperation = 'source-over'; d.globalAlpha = 1; d.fillStyle = '#000'; d.fillRect(0, 0, W, H); }
         litBegin(); DRAW[L < 3 && st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style](d, W, H, t, o, f.M, f.B); litEnd(d);
         if (over) { q.globalCompositeOperation = 'lighten'; q.globalAlpha = 1; q.drawImage(this.tmp, 0, 0); q.globalCompositeOperation = 'source-over'; }      // the cells line up, so the brighter of the two is what one drawing would give
       }
       PERF.layer[L] += (performance.now() - tl0 - PERF.layer[L]) * 0.15;
       const lm = L === 1 ? st.pmFx : L >= 2 ? st.pmLogo : null;          // a pattern that hides only this layer, pillar by pillar
-      if (lm) { q.globalCompositeOperation = 'source-over'; q.fillStyle = '#000'; const pw = W / PN; for (let i = 0; i < PN; i++) { const a = 1 - lm[i]; if (a > 0.01) { q.globalAlpha = Math.min(1, a); q.fillRect(Math.round(i * pw), 0, Math.round((i + 1) * pw) - Math.round(i * pw), H); } } q.globalAlpha = 1; }
-      g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1; g.drawImage(lc, 0, 0);
+      if (!(card && gpuLayerEnd(lm, PN))) {
+        if (lm) { q.globalCompositeOperation = 'source-over'; q.fillStyle = '#000'; const pw = W / PN; for (let i = 0; i < PN; i++) { const a = 1 - lm[i]; if (a > 0.01) { q.globalAlpha = Math.min(1, a); q.fillRect(Math.round(i * pw), 0, Math.round((i + 1) * pw) - Math.round(i * pw), H); } } q.globalAlpha = 1; }
+        g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1; g.drawImage(lc, 0, 0);
+      }
     }
+    if (card) gpuFrameEnd(g);
     g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
     if (st.pm) { g.fillStyle = '#000'; const pw = W / PN; for (let i = 0; i < PN; i++) { const a = 1 - st.pm[i]; if (a > 0.01) { g.globalAlpha = Math.min(1, a); g.fillRect(Math.round(i * pw), 0, Math.round((i + 1) * pw) - Math.round(i * pw), H); } } g.globalAlpha = 1; }   // the picture shows only on the pillars the pattern has on
     if (st.gain < 0.995) { g.globalAlpha = 1 - st.gain; g.fillStyle = '#000'; g.fillRect(0, 0, W, H); g.globalAlpha = 1; }
@@ -2327,6 +2332,7 @@ if (window.nativeApp) {
 // Used by the app's own start-up check: one frame, the encoders, and a project round trip.
 window.__typeShot = (mode, age, warp) => { userEv = userEv.filter(e => e.k !== 13); S.typeWarp = warp || 0; tau = 1; trigger('type', null, { mode }); const e = userEv[userEv.length - 1]; e.txt = 'MALL CALL'; e.d = 3; e.size = 0.5; mergeEv(); S.playing = false; tau = 1 + age; paint(); return stage.toDataURL('image/png'); };
 window.__cleanShot = on => { userEv = userEv.filter(e => !e.clean); if (on) { tau = 2; trigger('show', null, { clean: true }); } S.playing = false; tau = 3; paint(); return stage.toDataURL('image/png'); };
+window.__clip = (t, type, more, d) => { userEv.push(mkEv(t, type, 12345, d || null, more)); mergeEv(); return userEv.length; };      // a clip of the user's, for checks
 window.__frameAt = (t, gpu, set) => { if (gpu && !GPU.gl) { GPU.force = true; GPU.bad = false; } if (set) { Object.assign(S, set); savePart(); rebuildScore(true); } S.gpu = gpu; S.playing = false; tau = t; const n = GPU.used; paint(); return [stage.toDataURL('image/png'), GPU.used - n]; };      // one frame either way, for comparing the two
 window.__selfTest = async () => {
   const r = { native: !!window.nativeApp, muxer: !!window.Mp4Muxer, monoFont: !!(document.fonts && document.fonts.check('500 20px "DM Mono"')) };

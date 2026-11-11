@@ -7,7 +7,7 @@
    Moved so far: the base, glitch, logo and type layers and the symbols, drawn as Dither (ordered, halftone, lines, noise),
    LED rods or Light streaks, with square, dot or diamond pixels.
    Everything else falls back by itself: gpuLogo and the others return false and the caller draws the old way. */
-const GPU = { force: false, name: '', cv: null, gl: null, progs: null, bad: false, maskN: -1, tex: null, used: 0, mt: new Map(), mtNew: false, rows: null, rd: null, maxT: 2048 };
+const GPU = { acc: { on: false, open: false, has: false, w: 0, h: 0, lay: null, sum: null, copy: null, flat: null, broken: false }, force: false, name: '', cv: null, gl: null, progs: null, bad: false, maskN: -1, tex: null, used: 0, mt: new Map(), mtNew: false, rows: null, rd: null, maxT: 2048 };
 const GPU_VS = '#version 300 es\nin vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
 const GPU_HEAD = `#version 300 es
 precision highp float; precision highp int;
@@ -365,7 +365,7 @@ function gpuInit() {
     const progs = { logo: mk(GPU_LOGO), fx: mk(GPU_FX), base: mk(GPU_BASE), type: mk(GPU_ROWS + GPU_TYPE), sym: mk(GPU_ROWS + GPU_SYM) };
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    cv.addEventListener('webglcontextlost', e => { e.preventDefault(); GPU.gl = null; GPU.progs = null; GPU.maskN = -1; GPU.tex = null; GPU.mt.clear(); GPU.rows = null; });      // comes back by itself on the next frame
+    cv.addEventListener('webglcontextlost', e => { e.preventDefault(); GPU.gl = null; GPU.progs = null; GPU.maskN = -1; Object.assign(GPU.acc, { on: false, w: 0, h: 0, lay: null, sum: null, copy: null, flat: null }); GPU.tex = null; GPU.mt.clear(); GPU.rows = null; });      // comes back by itself on the next frame
     GPU.cv = cv; GPU.gl = gl; GPU.progs = progs; GPU.maskN = -1; GPU.maxT = gl.getParameter(gl.MAX_TEXTURE_SIZE);
     return true;
   } catch (e) { GPU.bad = true; GPU.why = String(e && e.message).slice(0, 300); console.warn('gpu: ' + GPU.why); return false; }      // not an error: the canvas version takes over
@@ -413,9 +413,83 @@ function gpuDraw(u, q, W, H, t, o, sn, gapN) {
     const unit = Math.min(W, H) / lerp(22, 96, o.density), rows = Math.max(6, Math.round(H / unit)), py = H / rows, cols = Math.max(3, Math.round(W / (unit * 2.4)));
     i1('uStyle', 1); f2('uCR', cols, rows); f1('uPy', py); f1('uPx', W / cols); f1('uDw', py * 0.56 * o.pfill); f1('uDh', py * 0.82 * o.pfill); f1('uFq', 0.6 + 1.8 * o.va); f1('uLw', Math.max(1, Math.min(W, H) / 900)); f2('uNb', 0, SHAPE ? 1 : 0);
   }
-  gl.drawArrays(gl.TRIANGLES, 0, 3);
-  q.drawImage(GPU.cv, 0, 0);
+  const A = GPU.acc;
+  if (A.on) {                                             // a frame is being put together on the card: this goes into the layer's own picture there
+    gl.bindFramebuffer(gl.FRAMEBUFFER, A.lay.fb);
+    if (!A.open) { gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); A.open = true; }
+    else if (q.globalCompositeOperation === 'lighten') { gl.enable(gl.BLEND); gl.blendEquation(gl.MAX); gl.blendFunc(gl.ONE, gl.ONE); }      // symbols over the logo: the brighter of the two
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.disable(gl.BLEND); gl.blendEquation(gl.FUNC_ADD); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  } else { gl.drawArrays(gl.TRIANGLES, 0, 3); q.drawImage(GPU.cv, 0, 0); }
   GPU.used++;
+}
+/* Putting a face together on the card. Layers are added to each other, and adding does not care about order, so the layers
+   the card drew are summed there (A.sum) and come back to the canvas in one copy at the end of the frame, on top of whatever
+   layers the canvas version drew. That is one copy a face in place of one a layer. */
+const GPU_COPY = '#version 300 es\nprecision highp float;uniform sampler2D s;out vec4 o;void main(){o=texelFetch(s,ivec2(gl_FragCoord.xy),0);}';
+const GPU_FLAT = '#version 300 es\nprecision highp float;uniform vec4 c;out vec4 o;void main(){o=c;}';
+function gpuFrameBegin(W, H) {
+  const A = GPU.acc; A.on = false;
+  if (!gpuInit()) return false;
+  const { gl, cv } = GPU;
+  try {
+    if (!A.copy) {
+      const sh = (type, src) => { const x = gl.createShader(type); gl.shaderSource(x, src); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; };
+      const mk = fs => { const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, GPU_VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs)); gl.bindAttribLocation(pr, 0, 'p'); gl.linkProgram(pr); if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr)); return pr; };
+      A.copy = mk(GPU_COPY); A.flat = mk(GPU_FLAT); A.copyS = gl.getUniformLocation(A.copy, 's'); A.flatC = gl.getUniformLocation(A.flat, 'c');
+    }
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    if (A.w !== W || A.h !== H) {
+      const target = old => { if (old) { gl.deleteTexture(old.tex); gl.deleteFramebuffer(old.fb); } const tex = gl.createTexture(), fb = gl.createFramebuffer(); gl.activeTexture(gl.TEXTURE15); gl.bindTexture(gl.TEXTURE_2D, tex); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, W, H); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0); if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('framebuffer'); return { tex, fb }; };
+      A.lay = target(A.lay); A.sum = target(A.sum); A.w = W; A.h = H;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.activeTexture(gl.TEXTURE0);
+    }
+  } catch (e) { A.broken = true; console.warn('gpu: ' + (e && e.message)); }
+  if (A.broken) return false;
+  A.on = true; A.open = false; A.has = false;
+  return true;
+}
+// a picture on the card over the whole of the current target
+function gpuBlit(tex) {
+  const { gl } = GPU, A = GPU.acc;
+  gl.useProgram(A.copy); gl.activeTexture(gl.TEXTURE15); gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(A.copyS, 15); gl.activeTexture(gl.TEXTURE0);
+  gl.viewport(0, 0, A.w, A.h); gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+// The layer is done. If the card holds it: hide the pillars a pattern hides (lm, one value a pillar) and add it to the sum.
+// Returns false when the layer is not on the card, and the caller finishes it the old way.
+function gpuLayerEnd(lm, PN) {
+  const { gl } = GPU, A = GPU.acc;
+  if (!A.on || !A.open) return false;
+  A.open = false;
+  if (lm) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, A.lay.fb); gl.useProgram(A.flat); gl.viewport(0, 0, A.w, A.h);
+    gl.enable(gl.BLEND); gl.blendEquation(gl.FUNC_ADD); gl.blendFunc(gl.ZERO, gl.ONE_MINUS_SRC_ALPHA); gl.enable(gl.SCISSOR_TEST);
+    const pw = A.w / PN;
+    for (let i = 0; i < PN; i++) { const a = 1 - lm[i]; if (a > 0.01) { const x = Math.round(i * pw); gl.scissor(x, 0, Math.round((i + 1) * pw) - x, A.h); gl.uniform4f(A.flatC, 0, 0, 0, Math.min(1, a)); gl.drawArrays(gl.TRIANGLES, 0, 3); } }
+    gl.disable(gl.SCISSOR_TEST);
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, A.sum.fb);
+  if (!A.has) { gl.disable(gl.BLEND); A.has = true; } else { gl.enable(gl.BLEND); gl.blendEquation(gl.FUNC_ADD); gl.blendFunc(gl.ONE, gl.ONE); }
+  gpuBlit(A.lay.tex);
+  gl.disable(gl.BLEND); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return true;
+}
+// The canvas version has more to draw in this layer (symbols the card could not): hand it what the card has so far.
+function gpuLayerToCanvas(q) {
+  const { gl } = GPU, A = GPU.acc;
+  if (!A.on || !A.open) return;
+  A.open = false;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.disable(gl.BLEND); gpuBlit(A.lay.tex);
+  q.globalCompositeOperation = 'source-over'; q.globalAlpha = 1; q.drawImage(GPU.cv, 0, 0);
+}
+// The end of the frame: everything the card drew, onto the face in one copy.
+function gpuFrameEnd(g) {
+  const { gl } = GPU, A = GPU.acc;
+  if (!A.on) return;
+  A.on = false;
+  if (!A.has) return;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.disable(gl.BLEND); gpuBlit(A.sum.tex);
+  g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1; g.drawImage(GPU.cv, 0, 0); g.globalCompositeOperation = 'source-over';
 }
 // The logo layer into the 2D context q. W and H are the layer's size, Wf the width of the field behind the pillars.
 // st is the state to draw from (the plain one when a clean Show is up). Returns false when this frame needs the canvas version.
