@@ -575,7 +575,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 'v0.54.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
+const BUILD = 'v0.54.1';                 // see Versions in CLAUDE.md: before the first show . feature . fix
 $('build').textContent = '· ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -2120,7 +2120,25 @@ const renderKey = () => JSON.stringify([Object.assign({}, S, { playing: 0 }), fo
 // Resolves to the save capability, null when this view cannot save, or undefined when the page runs outside Claude.
 function getDownloads() {
   if (window.nativeApp) return Promise.resolve({ save: async ({ filename, data }) => {      // the Mac app writes straight to disk through a save dialog
-    if (!(await window.nativeApp.saveFile(filename, await data.arrayBuffer()))) throw { code: 'declined' };
+    const na = window.nativeApp;
+    if (na.saveBegin) {                                   // piece by piece: a whole film in one message is more than the bridge will carry
+      const b = await na.saveBegin(filename);
+      if (!b || b.declined) throw { code: 'declined' };
+      if (!b.ok) throw new Error(b.error || 'the file could not be opened');
+      const step = 8 * 1024 * 1024;
+      try {
+        for (let off = 0; off < data.size; off += step) {
+          const r = await na.saveChunk(await data.slice(off, off + step).arrayBuffer());
+          if (!r || !r.ok) throw new Error(r && r.error || 'writing stopped');
+          say('Writing the file, ' + Math.round(Math.min(data.size, off + step) / 1048576) + ' of ' + Math.round(data.size / 1048576) + ' MB.');
+        }
+      } catch (e) { await na.saveEnd(true); throw e; }
+      const end = await na.saveEnd(false);
+      if (!end || !end.ok) throw new Error(end && end.error || 'the file could not be closed');
+      return { status: 'saved', path: end.path };
+    }
+    if (data.size > 200 * 1048576) throw new Error('this file is ' + Math.round(data.size / 1048576) + ' MB, too large for this copy of the app to save in one piece. Rebuild the app (git pull, npm run dist), or export ProRes or HAP');
+    if (!(await na.saveFile(filename, await data.arrayBuffer()))) throw { code: 'declined' };
     return { status: 'saved' };
   } });
   if (!(window.claude && typeof window.claude.use === 'function')) return Promise.resolve(undefined);
@@ -2259,7 +2277,7 @@ async function offer(file, downloads) {
       const code = e && e.code;
       say(code === 'declined' ? 'Not saved. The render is kept, so pressing the button again asks straight away.'
         : code === 'rate_limited' ? 'A save prompt is already open. Answer it, then press the button again.'
-        : 'The file could not be saved from this view.');
+        : 'The file could not be saved' + (e && e.message ? ': ' + e.message + '.' : ' from this view.') + ' The render is kept, so pressing the button again tries the save without rendering again.');
     }
   } else {
     const a = document.createElement('a'); a.href = URL.createObjectURL(file.blob); a.download = file.name;
@@ -2511,6 +2529,7 @@ window.__exportTest = async (fmt, ringView) => {
   $('save').click();
   await new Promise(res => setTimeout(res, 300));
   while (busy) await new Promise(res => setTimeout(res, 100));
+  for (let i = 0; i < 300 && !/^(Saved|Not saved|The file could not|Download started|Render stopped|ffmpeg|The 3D)/.test($('saveNote').textContent); i++) await new Promise(res => setTimeout(res, 100));      // the save itself comes after the render
   return { note: $('saveNote').textContent, size: dims() };
 };
 

@@ -3,6 +3,9 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('nativeApp', {
   saveFile: (name, data) => ipcRenderer.invoke('save-file', name, data),
+  saveBegin: name => ipcRenderer.invoke('save-begin', name),
+  saveChunk: data => ipcRenderer.invoke('save-chunk', data),
+  saveEnd: abort => ipcRenderer.invoke('save-end', abort),
   pickFile: kind => ipcRenderer.invoke('pick-file', kind),
   readFile: filePath => ipcRenderer.invoke('read-file', filePath),
   pathFor: file => { try { return webUtils.getPathForFile(file) || ''; } catch (e) { return ''; } },

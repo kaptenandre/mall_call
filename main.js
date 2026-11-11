@@ -131,6 +131,29 @@ ipcMain.handle('save-file', async (event, name, data) => {
   lastDir = path.dirname(r.filePath);
   return true;
 });
+// A large file is written piece by piece: a whole film in one message is more than the bridge will carry.
+let saveJob = null;
+const saveDrop = async () => { const j = saveJob; saveJob = null; if (j) { try { await j.fd.close(); } catch (e) {} await fsp.unlink(j.path).catch(() => {}); } };
+ipcMain.handle('save-begin', async (event, name) => {
+  await saveDrop();
+  let out = process.env.MALLCALL_FF_OUT || null;
+  if (!out) {
+    const r = await dialog.showSaveDialog(win, { defaultPath: path.join(lastDir || app.getPath('movies'), String(name)) });
+    if (r.canceled || !r.filePath) return { declined: true };
+    out = r.filePath; lastDir = path.dirname(out);
+  }
+  try { saveJob = { fd: await fsp.open(out, 'w'), path: out, n: 0 }; return { ok: true }; } catch (e) { return { error: String(e && e.message) }; }
+});
+ipcMain.handle('save-chunk', async (event, data) => {
+  if (!saveJob) return { error: 'no file open' };
+  try { const b = Buffer.from(data); await saveJob.fd.write(b); saveJob.n += b.length; return { ok: true }; } catch (e) { const m = String(e && e.message); await saveDrop(); return { error: m }; }
+});
+ipcMain.handle('save-end', async (event, abort) => {
+  if (!saveJob) return { error: 'no file open' };
+  if (abort) { await saveDrop(); return { ok: true }; }
+  const j = saveJob; saveJob = null;
+  try { await j.fd.close(); return { ok: true, path: j.path, bytes: j.n }; } catch (e) { return { error: String(e && e.message) }; }
+});
 ipcMain.handle('pick-file', async (event, kind) => {
   const filters = kind === 'logo'
     ? [{ name: 'Logo', extensions: ['svg', 'png', 'jpg', 'jpeg', 'webp'] }]
