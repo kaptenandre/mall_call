@@ -105,6 +105,9 @@ h1{font:500 14px/1.2 var(--display);letter-spacing:.1em;text-transform:uppercase
 .partbar{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin-bottom:12px}
 .partbar .note{flex:1 1 100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0}
 .tlinsp:not(:has(*)){display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:24px}
+/* one line, always the same height, so picking a clip never pushes the timeline about; a long row of fields scrolls sideways */
+.tlinsp{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;height:40px;min-height:40px;white-space:nowrap;scrollbar-width:thin}
+.tlinsp>*{flex:none}
 .partbar .tr{display:flex;gap:6px;align-items:center;color:var(--dim);font-size:12.5px}
 .partbar .tr select{width:auto}.partbar .tr input{width:64px}
 .partbar button[aria-pressed="true"]{background:var(--signal);color:#000;border-color:var(--signal)}
@@ -283,6 +286,7 @@ body.rendering .rail fieldset { opacity: .55; }
       <select id="tlAdd" aria-label="Animate a setting"></select>
       <button type="button" id="tlUndo" title="Undo">Undo</button>
       <button type="button" id="tlRedo" title="Redo">Redo</button>
+      <button type="button" id="tlMark">Marker</button>
       <span class="tc" id="tlTc">00:00:00:00</span>
     </div>
     <div class="tlwrap"><div class="tlhead" id="tlHead"></div><canvas class="tl" id="tl" tabindex="0" role="slider" aria-label="Timeline" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></canvas></div>
@@ -565,14 +569,14 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 'v0.50.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
+const BUILD = 'v0.51.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
 $('build').textContent = '· ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
 
 const STYLES = ['rods', 'streaks', 'ascii', 'ridge', 'dither'];
 const STYLE_NAMES = { rods: 'LED rods', streaks: 'Light streaks', ascii: 'ASCII', ridge: 'Ridge lines', dither: 'Dither' };
-const S = { exGpu: true, laneOff: [false, false, false, false, false, false], laneSolo: [false, false, false, false, false, false], laneLock: [false, false, false, false, false, false], gpu: true, cleanEnds: true, format: 'ring', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.4, size: 0.78, invert: false,
+const S = { markers: [], loopA: -1, loopB: -1, exGpu: true, laneOff: [false, false, false, false, false, false], laneSolo: [false, false, false, false, false, false], laneLock: [false, false, false, false, false, false], gpu: true, cleanEnds: true, format: 'ring', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.4, size: 0.78, invert: false,
   loop: 8, fps: 30, playing: true, seed: 1,
   baseAmt: 0.45, baseStyle: 'dither', baseDen: 0.304,
   logoEach: false, outline: false, symAmt: 0.3, pilAmt: 0.4, busy: 0.4, trans: 'cut', transLen: 1, glitch: 0.7, lines: 0.8, lineMode: 1, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxAmt: 0.4, fxStyle: 'rods', fxDen: 0.784,
@@ -1669,7 +1673,8 @@ function frame(now) {
     if (S.playing && lead === null) {
       tau += dt;
       if (track && !audio.paused && Math.abs(audio.currentTime - tau) > 0.09) tau = audio.currentTime;
-      if (loopPart && (tau >= partEnd(sel) || tau < parts[sel].t)) { tau = parts[sel].t; if (track) { try { audio.currentTime = tau; } catch (e) {} } }
+      if (S.loopB > S.loopA && (tau >= S.loopB || tau < S.loopA)) { tau = S.loopA; if (track) { try { audio.currentTime = tau; } catch (e) {} } }      // the stretch marked on the ruler goes round
+      else if (loopPart && (tau >= partEnd(sel) || tau < parts[sel].t)) { tau = parts[sel].t; if (track) { try { audio.currentTime = tau; } catch (e) {} } }
       if (tau >= score.D) tau = track ? 0 : tau % score.D;
       followPart();
     }
@@ -1827,6 +1832,13 @@ addEventListener('keydown', e => {
   const tag = e.target && e.target.tagName;
   if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'z' && !window.nativeApp && !(tag === 'INPUT' && (e.target.type === 'text' || e.target.type === 'number'))) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
   // arrows walk the playhead from anywhere: left and right a second (Shift: one frame), up and down to the part before and after
+  // Alt with left and right goes to the marker before and after
+  if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && e.altKey && !e.metaKey && !e.ctrlKey && tag !== 'INPUT' && tag !== 'SELECT' && tag !== 'TEXTAREA') {
+    e.preventDefault();
+    const ts = (S.markers || []).map(m => m.t).sort((a, b) => a - b), to = e.key === 'ArrowRight' ? ts.find(t => t > tau + 0.02) : ts.reverse().find(t => t < tau - 0.02);
+    if (to !== undefined) seek(to / score.D);
+    return;
+  }
   if (/^Arrow/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey && tag !== 'INPUT' && tag !== 'SELECT' && tag !== 'TEXTAREA' && e.target.id !== 'tl') {
     e.preventDefault();
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') seek(Math.min(score.D - 1 / S.fps, Math.max(0, tau + (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 1 / S.fps : 1))) / score.D);
@@ -2275,7 +2287,7 @@ $('save').addEventListener('click', async () => {
 });
 
 /* ---------- project files (Mac app) ---------- */
-const GLOBAL_KEYS = ['exGpu', 'laneOff', 'laneSolo', 'laneLock', 'gpu', 'cleanEnds', 'format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap', 'gGain', 'gCon', 'gGam', 'gBlack', 'pq', 'pil', 'stats'];
+const GLOBAL_KEYS = ['markers', 'loopA', 'loopB', 'exGpu', 'laneOff', 'laneSolo', 'laneLock', 'gpu', 'cleanEnds', 'format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap', 'gGain', 'gCon', 'gGam', 'gBlack', 'pq', 'pil', 'stats'];
 let loadingProject = false, saveTimer = 0;
 function getProject() {
   savePart();
@@ -2302,6 +2314,9 @@ async function applyProject(pj) {
   try {
     audio.pause(); S.playing = false;
     for (const k of GLOBAL_KEYS) if (k in pj.S) S[k] = pj.S[k];
+    if (!Array.isArray(pj.S.markers)) S.markers = [];       // a project from before markers has none, not the last project's
+    S.markers = S.markers.filter(m => m && isFinite(m.t)).map(m => ({ t: Number(m.t), name: String(m.name || '').slice(0, 24) }));
+    if (!(pj.S.loopB > pj.S.loopA)) { S.loopA = S.loopB = -1; }
     S.format = 'ring';                                    // the piece is always the ring now; older projects made for a flat screen open on it
     pushGlobals(); undoReset(); tlSel = null; auto = {}; autoCut.base = autoCut.fx = autoCut.logo = autoCut.pil = autoCut.sym = true;
     if (!pj.soundPath && track) { audio.removeAttribute('src'); track = null; soundPath = ''; resetParts(); }
@@ -2347,7 +2362,7 @@ if (window.nativeApp) {
       const r = await window.nativeApp.projectOpen();
       if (r && !(await applyProject(JSON.parse(r.json)))) say('That file is not a project from this app.');
     } else if (cmd === 'new-project') {
-      audio.pause(); audio.removeAttribute('src'); track = null; soundPath = ''; userEv = []; tau = 0; auto = {}; autoCut.base = autoCut.fx = autoCut.logo = autoCut.pil = autoCut.sym = true; tlSel = null; resetParts(); rebuildScore(); syncUI(); undoReset(); tlInsp();
+      audio.pause(); audio.removeAttribute('src'); track = null; soundPath = ''; userEv = []; tau = 0; auto = {}; S.markers = []; S.loopA = S.loopB = -1; autoCut.base = autoCut.fx = autoCut.logo = autoCut.pil = autoCut.sym = true; tlSel = null; resetParts(); rebuildScore(); syncUI(); undoReset(); tlInsp();
       $('soundNote').textContent = 'No sound yet. The piece runs as a seamless loop on a built-in half-second beat.';
     } else if (cmd === 'export') $('save').click();
     else if (cmd === 'play') setPlaying(!S.playing);
@@ -2363,6 +2378,7 @@ window.__typeShot = (mode, age, warp) => { userEv = userEv.filter(e => e.k !== 1
 window.__cleanShot = on => { userEv = userEv.filter(e => !e.clean); if (on) { tau = 2; trigger('show', null, { clean: true }); } S.playing = false; tau = 3; paint(); return stage.toDataURL('image/png'); };
 // one frame the way an export draws it (its own rig, the grade on), with the card or without
 window.__exFrame = (t, gpu) => { if (gpu && !GPU.gl) { GPU.force = true; GPU.bad = false; } const d = dims(), cv = document.createElement('canvas'); cv.width = d.W; cv.height = d.H; const was = S.exGpu; S.exGpu = gpu; const n = GPU.used; const two = S.format === 'ring' && S.faces === 2, fps = S.fps; let out = null; for (const tf of [t - 2 / fps, t - 1 / fps, t]) { if (!out) out = two ? exCard(mkRig(cv)) : exCard(new Renderer(cv)); if (two) drawFaces(out, tf, fps); else renderOne(out, newState(), PAt(tf, 0), tf, fps); } gradeFrame(cv); S.exGpu = was; return [cv.toDataURL('image/png'), GPU.used - n]; };
+window.__tl = () => ({ clips: userEv.map(e => [e.type, +e.t.toFixed(2)]), picked: tlGroup().length, sel: tlSel ? tlSel.kind : null, markers: S.markers, loop: [S.loopA, S.loopB], tau: +tau.toFixed(2) });      // the timeline's state, for checks
 window.__clip = (t, type, more, d) => { userEv.push(mkEv(t, type, 12345, d || null, more)); mergeEv(); return userEv.length; };      // a clip of the user's, for checks
 window.__frameAt = (t, gpu, set) => { if (gpu && !GPU.gl) { GPU.force = true; GPU.bad = false; } if (set) { Object.assign(S, set); savePart(); rebuildScore(true); } S.gpu = gpu; S.playing = false; tau = t; const n = GPU.used; paint(); return [stage.toDataURL('image/png'), GPU.used - n]; };      // one frame either way, for comparing the two
 window.__selfTest = async () => {
