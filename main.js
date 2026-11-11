@@ -302,7 +302,7 @@ ipcMain.handle('lib-list', async () => {
 ipcMain.handle('lib-versions', async (event, name) => {
   const dir = path.join(await libRoot(), safeName(name)), out = [];
   for (const n of await libVersions(dir)) {
-    try { const j = JSON.parse(await fsp.readFile(path.join(dir, 'versions', String(n).padStart(4, '0') + '.json'), 'utf8')); out.push({ n, at: j.savedAt || '', note: String(j.note || '') }); } catch (e) {}
+    try { const j = JSON.parse(await fsp.readFile(path.join(dir, 'versions', String(n).padStart(4, '0') + '.json'), 'utf8')); out.push({ n, at: j.savedAt || '', note: String(j.note || ''), by: String(j.by || '').slice(0, 40) }); } catch (e) {}
   }
   return out;
 });

@@ -148,6 +148,17 @@ fieldset.layer{border-left:2px solid var(--signal)}
 .row{display:grid;grid-template-columns:104px minmax(0,1fr);align-items:center;gap:10px}
 .row>span:first-child{color:var(--dim)}
 .stack{display:flex;flex-direction:column;gap:12px}
+/* the settings rail is read all day: smaller type and tighter boxes, so more of it is in view at once */
+.rail{font-size:12px}
+.rail fieldset{padding:10px 12px;gap:8px}
+.rail legend{font-size:10px}
+.rail .note{font-size:11px}
+.rail .row{grid-template-columns:88px minmax(0,1fr);gap:8px}
+.rail select,.rail input[type=text],.rail input[type=number]{font-size:12px;padding:5px 7px}
+.rail .check{font-size:12px}
+.rail .seg span{font-size:10px;padding:7px 4px}
+#viewExport .stack{max-width:520px}
+.views button.ico{padding:5px 7px}
 .rowv{display:flex;flex-direction:column;gap:6px}
 .rowv>span:first-child{color:var(--dim)}
 input[type=range]{width:100%;accent-color:var(--signal);margin:0}
@@ -416,7 +427,7 @@ body.rendering .rail fieldset { opacity: .55; }
       <p class="note">Dither type applies to any layer drawn as Dither. Pixel size is set per layer.</p>
     </fieldset>
 
-    <fieldset>
+    <fieldset id="fsRing">
       <legend>Ring</legend>
       <label class="row" for="shape" id="shapeRow" hidden><span>Panel shape</span><select id="shape"><option value="2">1 × 2</option><option value="3" selected>1 × 3</option><option value="4">1 × 4</option></select></label>
       <p class="note" id="fmtNote"></p>
@@ -437,7 +448,7 @@ body.rendering .rail fieldset { opacity: .55; }
       </div>
     </fieldset>
 
-    <fieldset>
+    <fieldset id="fsLook">
       <legend>Look</legend>
       <div class="row"><span>Tint</span>
         <div class="tints" role="radiogroup" aria-label="Tint">
@@ -454,7 +465,7 @@ body.rendering .rail fieldset { opacity: .55; }
       <label class="row" for="glow"><span>Glow</span><input type="range" id="glow" min="0" max="100" value="55"></label>
     </fieldset>
 
-    <fieldset>
+    <fieldset id="fsPlay">
       <legend>Playback</legend>
       <label class="row" for="loop"><span>Loop length</span><select id="loop"><option value="4">4 s</option><option value="8" selected>8 s</option><option value="16">16 s</option></select></label>
       <label class="row" for="fps"><span>Frame rate</span><select id="fps"><option value="25">25 fps</option><option value="30" selected>30 fps</option><option value="50">50 fps</option><option value="60">60 fps</option></select></label>
@@ -465,6 +476,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
     <fieldset id="libBox" hidden>
       <legend>Project library</legend>
+      <label class="row" for="libWho"><span>Your name</span><input type="text" id="libWho" placeholder="Who is saving" maxlength="40" spellcheck="false" autocomplete="off"></label>
       <label class="row" for="libName"><span>Project</span><input type="text" id="libName" placeholder="Name it" spellcheck="false" autocomplete="off"></label>
       <label class="row" for="libNote"><span>Note</span><input type="text" id="libNote" placeholder="What changed" autocomplete="off"></label>
       <button type="button" class="primary" id="libSave">Save a new version</button>
@@ -474,7 +486,7 @@ body.rendering .rail fieldset { opacity: .55; }
       <p class="note" id="libNoteP" aria-live="polite"></p>
     </fieldset>
 
-    <fieldset>
+    <fieldset id="fsTc">
       <legend>Timecode</legend>
       <label class="row" for="tcRate"><span>Rate</span><select id="tcRate"><option value="24">24</option><option value="25">25</option><option value="29.97">29.97 drop</option><option value="30">30</option></select></label>
       <label class="row" for="tcStart"><span>Starts at</span><input type="text" id="tcStart" value="00:00:00:00" spellcheck="false" autocomplete="off"></label>
@@ -482,8 +494,8 @@ body.rendering .rail fieldset { opacity: .55; }
       <p class="note">The timecode the first frame of the piece sits on. Set it to the cue time on the lighting desk and the ruler reads the same numbers as the desk.</p>
     </fieldset>
 
-    <fieldset>
-      <legend>Player</legend>
+    <fieldset id="fsAudio">
+      <legend>Audio in and out</legend>
       <label class="row" for="plMusic"><span>Music out</span><select id="plMusic"></select></label>
       <label class="check" for="plOut"><input type="checkbox" id="plOut"> Send timecode as sound (LTC)</label>
       <label class="row" for="plOutDev"><span>Timecode out</span><select id="plOutDev"></select></label>
@@ -493,7 +505,7 @@ body.rendering .rail fieldset { opacity: .55; }
       <p class="note" id="plNote" aria-live="polite">For playing straight out of this app. Music goes to the output you choose. Timecode can be sent as sound (LTC) for a desk to follow, or read from an input so the piece follows the desk. Set the rate and the start under Timecode.</p>
     </fieldset>
 
-    <fieldset>
+    <fieldset id="fsOut">
       <legend>Output</legend>
       <label class="row" for="gGain"><span>Brightness</span><input type="range" id="gGain" min="30" max="250" value="100"></label>
       <label class="row" for="gCon"><span>Contrast</span><input type="range" id="gCon" min="50" max="300" value="100"></label>
@@ -507,7 +519,7 @@ body.rendering .rail fieldset { opacity: .55; }
       <p class="note" id="outNote">A clean window with only the picture, for a second screen. Double-click it for full screen.</p>
     </fieldset>
 
-    <fieldset>
+    <fieldset id="fsExport">
       <legend>Export</legend>
       <label class="row" for="range"><span>What</span><select id="range"><option value="all">Whole piece</option><option value="part">This part only</option></select></label>
       <label class="row" for="exFmt"><span>File</span><select id="exFmt"><option value="mp4">MP4, H.264</option></select></label>
@@ -531,9 +543,17 @@ body.rendering .rail fieldset { opacity: .55; }
   <fieldset><legend>Font</legend><div class="kv" id="poolFont"></div><canvas id="poolFontCv" width="600" height="110" style="width:100%;height:auto;background:#000;border:1px solid var(--rule)"></canvas><div class="two"><button type="button" class="plain" id="poolFontPick">Load a font</button><button type="button" class="plain" id="poolFontOff">Remove it</button></div></fieldset>
 </section>
 
+<section class="work" id="viewExport" hidden>
+  <div class="stack" id="exportBox"></div>
+</section>
+<section class="work" id="viewSettings" hidden>
+  <div class="stack" id="setA"></div>
+  <div class="stack" id="setB"></div>
+  <div class="stack" id="setC"></div>
+</section>
 <section class="work two" id="viewVersions" hidden>
   <div class="stack" id="versLeft"></div>
-  <fieldset><legend>History</legend><p class="note" id="versHead" aria-live="polite">Save a version and it shows here.</p><table class="vers"><thead><tr><th>Version</th><th>Saved</th><th>Note</th><th></th></tr></thead><tbody id="versRows"></tbody></table></fieldset>
+  <fieldset><legend>History</legend><p class="note" id="versHead" aria-live="polite">Save a version and it shows here.</p><table class="vers"><thead><tr><th>Version</th><th>By</th><th>Saved</th><th>Note</th><th></th></tr></thead><tbody id="versRows"></tbody></table></fieldset>
 </section>
 
 <script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.2/build/mp4-muxer.js"></script>
@@ -545,7 +565,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 'v0.49.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
+const BUILD = 'v0.50.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
 $('build').textContent = '· ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
