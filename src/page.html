@@ -544,7 +544,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 'v0.47.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
+const BUILD = 'v0.48.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
 $('build').textContent = '· ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -1584,7 +1584,10 @@ function pillarFrame() {
 const PERF = { draw: 0, grade: 0, views: 0, rest: 0, all: 0, layer: [0, 0, 0, 0], field: 0, style: 0 };
 // The preview shows at most 30 pictures a second even when the piece is 50 or 60: the eye does not need more to judge it,
 // and the export always renders every frame.
-const PREVIEW_FPS = () => Math.min(30, S.fps);
+// With the layers on the graphics card a frame costs a millisecond or two (the user's Mac, v0.47.0), so the preview runs at the
+// piece's own rate whenever a frame fits well inside its share, and only falls back to 30 when frames get heavy.
+let pvFast = false;
+const PREVIEW_FPS = () => { const full = 1000 / S.fps; if (PERF.all > full * 0.8) pvFast = false; else if (PERF.all < full * 0.4) pvFast = true; return pvFast ? S.fps : Math.min(30, S.fps); };
 let mainRig = null, hudTick = 0, paintFps = 30, paintAt = 0;
 // what a part is called: its own name, or its number
 const partName = i => (parts[i] && parts[i].name) || 'Part ' + (i + 1);
@@ -1612,7 +1615,7 @@ function paint() {
   }
   const hud = (id, t) => { const el = $(id); if (el.textContent !== t) el.textContent = t; };
   hud('hudTime', tau.toFixed(2) + ' / ' + (Math.round(score.D * 10) / 10) + ' s');
-  hud('hudState', partName(partIdx(tau)) + ' · ' + (ST.lv === 1 ? 'Logo loading ' + Math.round(ST.lp * 100) + ' %' : ST.lv === 2 ? 'Logo up' : 'Logo out'));
+  hud('hudState', partName(partIdx(tau)) + ' · ' + (ST.black ? 'Blackout' : ST.lv === 1 ? 'Logo loading ' + Math.round(ST.lp * 100) + ' %' : ST.lv === 2 ? 'Logo up' : 'Logo out'));      // a black frame says why it is black
   if (++hudTick % 15 === 0 || !S.playing) {
     { const k = pqNow(); hud('hudFps', 'Preview ' + Math.round(paintFps) + ' fps, ' + (k > 0.9 ? 'full size' : k > 0.4 ? 'half size' : 'quarter size'));
       const b = $('pqBtn'), t = 'Preview ' + pqText(); if (b && b.lastChild.textContent !== t) b.lastChild.textContent = t; if (b) b.classList.toggle('low', S.pq === 'auto' ? pscale < 1 : Number(S.pq) < 1);
