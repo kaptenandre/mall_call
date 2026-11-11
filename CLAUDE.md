@@ -177,7 +177,7 @@ Asked for and not done yet, newest first:
    - **Measured on the user's Mac, 2026-11-11, v0.47.0** (their screenshot, card on, playing, 3840 x 768, piece at 60 fps, preview full size): 1 ms a frame, 30 fps (the cap then in force), processor 4%, 801 MB. Build 29 on the same Mac was 41.6 ms and 28 fps at half size. So the card is the fix. The millisecond figure is script time only; what the card itself spends is not in it, and the preview rate is the check on that. They have not sent a figure with the card switched off. `PERF.layer` reads 0 for layers on the card.
    - Since v0.48.0 the preview runs at the piece's own rate when a frame fits well inside its share (`PREVIEW_FPS`, `pvFast`), and falls back to 30 when frames get heavy. Not seen at 60 on the Mac yet.
 2. The user wrote "få med poser.global också" while asking for the layout work. It is not clear what that means; ask.
-3. Icons on the trigger pad, if they want them.
+3. (Done in v0.52.0: every clip button on the palette is a small drawing, with its name in the tip and its key beside it. The drawings and the map from button to drawing are at the end of `src/ui.js`, `PICS`.)
 4. The real room from Vectorworks in the 3D view: waiting for an OBJ export from their collaborator.
 
 ## Next, roughly in order
