@@ -365,7 +365,7 @@ function gpuInit() {
     const progs = { logo: mk(GPU_LOGO), fx: mk(GPU_FX), base: mk(GPU_BASE), type: mk(GPU_ROWS + GPU_TYPE), sym: mk(GPU_ROWS + GPU_SYM) };
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    cv.addEventListener('webglcontextlost', e => { e.preventDefault(); GPU.gl = null; GPU.progs = null; GPU.maskN = -1; Object.assign(GPU.acc, { on: false, w: 0, h: 0, lay: null, sum: null, copy: null, flat: null }); GPU.tex = null; GPU.mt.clear(); GPU.rows = null; });      // comes back by itself on the next frame
+    cv.addEventListener('webglcontextlost', e => { e.preventDefault(); if (GPU.cv !== cv) return; GPU.gl = null; GPU.progs = null; GPU.maskN = -1; Object.assign(GPU.acc, { on: false, w: 0, h: 0, lay: null, sum: null, copy: null, flat: null }); GPU.tex = null; GPU.mt.clear(); GPU.rows = null; });      // comes back by itself on the next frame
     GPU.cv = cv; GPU.gl = gl; GPU.progs = progs; GPU.maskN = -1; GPU.maxT = gl.getParameter(gl.MAX_TEXTURE_SIZE);
     return true;
   } catch (e) { GPU.bad = true; GPU.why = String(e && e.message).slice(0, 300); console.warn('gpu: ' + GPU.why); return false; }      // not an error: the canvas version takes over
@@ -428,8 +428,18 @@ function gpuDraw(u, q, W, H, t, o, sn, gapN) {
    layers the canvas version drew. That is one copy a face in place of one a layer. */
 const GPU_COPY = '#version 300 es\nprecision highp float;uniform sampler2D s;out vec4 o;void main(){o=texelFetch(s,ivec2(gl_FragCoord.xy),0);}';
 const GPU_FLAT = '#version 300 es\nprecision highp float;uniform vec4 c;out vec4 o;void main(){o=c;}';
+// The card can be taken away at any moment: a driver reset, the laptop waking, another program. The browser says so with an
+// event, but that comes late, so a frame asks first. A lost card is dropped on the spot and a new one made at once.
+function gpuLost() {
+  if (!GPU.gl || !GPU.gl.isContextLost()) return false;
+  GPU.gl = null; GPU.progs = null; GPU.maskN = -1; GPU.tex = null; GPU.mt.clear(); GPU.rows = null; GPU.lostN = (GPU.lostN || 0) + 1;
+  Object.assign(GPU.acc, { on: false, open: false, has: false, w: 0, h: 0, lay: null, sum: null, copy: null, flat: null });
+  return true;
+}
+window.__gpuLose = () => { const x = GPU.gl && GPU.gl.getExtension('WEBGL_lose_context'); if (!x) return 'no card'; x.loseContext(); return 'lost'; };      // for checks
 function gpuFrameBegin(W, H) {
   const A = GPU.acc; A.on = false;
+  gpuLost();
   if (!gpuInit()) return false;
   const { gl, cv } = GPU;
   try {
