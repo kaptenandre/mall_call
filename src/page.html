@@ -512,6 +512,7 @@ body.rendering .rail fieldset { opacity: .55; }
       <label class="row" for="range"><span>What</span><select id="range"><option value="all">Whole piece</option><option value="part">This part only</option></select></label>
       <label class="row" for="exFmt"><span>File</span><select id="exFmt"><option value="mp4">MP4, H.264</option></select></label>
       <label class="row" for="exView" id="exViewRow" hidden><span>Picture</span><select id="exView"><option value="flat">The flat frame, for mapping</option><option value="3d">The ring in 3D, as it stands above</option></select></label>
+      <label class="check" for="exGpu"><input type="checkbox" id="exGpu" checked> Render on the graphics card</label>
       <button type="button" class="primary" id="save">Save</button>
       <div class="bar" id="bar" hidden><i id="barFill"></i></div>
       <p class="note" id="saveNote" aria-live="polite">Every frame is rendered once at full size. Without sound the file loops seamlessly; with sound it runs the length of the track and carries the audio. ProRes and HAP also carry the start timecode.</p>
@@ -544,14 +545,14 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 'v0.48.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
+const BUILD = 'v0.49.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
 $('build').textContent = '· ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
 
 const STYLES = ['rods', 'streaks', 'ascii', 'ridge', 'dither'];
 const STYLE_NAMES = { rods: 'LED rods', streaks: 'Light streaks', ascii: 'ASCII', ridge: 'Ridge lines', dither: 'Dither' };
-const S = { laneOff: [false, false, false, false, false, false], laneSolo: [false, false, false, false, false, false], laneLock: [false, false, false, false, false, false], gpu: true, cleanEnds: true, format: 'ring', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.4, size: 0.78, invert: false,
+const S = { exGpu: true, laneOff: [false, false, false, false, false, false], laneSolo: [false, false, false, false, false, false], laneLock: [false, false, false, false, false, false], gpu: true, cleanEnds: true, format: 'ring', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.4, size: 0.78, invert: false,
   loop: 8, fps: 30, playing: true, seed: 1,
   baseAmt: 0.45, baseStyle: 'dither', baseDen: 0.304,
   logoEach: false, outline: false, symAmt: 0.3, pilAmt: 0.4, busy: 0.4, trans: 'cut', transLen: 1, glitch: 0.7, lines: 0.8, lineMode: 1, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxAmt: 0.4, fxStyle: 'rods', fxDen: 0.784,
@@ -1330,6 +1331,8 @@ class Renderer {
     this.b1 = mk(); this.b2 = mk(); this.g1 = this.b1.getContext('2d'); this.g2 = this.b2.getContext('2d');
     this.canBlur = typeof this.g1.filter === 'string';
   }
+  // may this renderer draw on the graphics card: the preview when its switch is on, an export when the export's own switch is
+  card() { return this.gpu === 2 || (!!this.gpu && S.gpu !== false); }
   // LO: options for the base, glitch, logo and type layers, in that order
   draw(t, LO, st) {
     const { cv, g } = this, W = cv.width, H = cv.height;
@@ -1339,7 +1342,7 @@ class Renderer {
     const PN = LO[0].gapN || LO[0].cols;
     pillarGains(st, PN, LO[0]); st.pgK = LO[0].gapN ? 1 / (1 + LO[0].gap) : 1;
     if (st.clean) { st.pm = null; st.pmLogo = null; }       // nothing hides a plain logo, pillar patterns included
-    const card = this.gpu && S.gpu !== false && gpuFrameBegin(W, H);      // the layers the card draws are put together there and come back in one copy
+    const card = this.card() && gpuFrameBegin(W, H);      // the layers the card draws are put together there and come back in one copy
     for (let L = 0; L < 4; L++) {
       if ((L === 1 && laneHidden(1)) || (L === 0 && !st.bn && !st.pl && !st.pf) || (L === 2 && !st.lv && !st.syN) || (L === 3 && !st.tyN)) continue;
       let o = LO[L];
@@ -1353,9 +1356,9 @@ class Renderer {
       // and each pillar is a window onto its own stretch of that picture
       const gN = o.gapN, gk = 1 / (1 + (o.gap || 0)), goff = (1 - gk) / 2, win = u => { const x = u * gN, i = Math.floor(x); return (i + goff + (x - i) * gk) / gN; };
       const wrap = a => gN ? { M: (u, v) => a.M(win(u), v), B: (u, v) => a.B(win(u), v) } : a;
-      if (L === 0) f = this.gpu && S.gpu !== false && gpuBase(q, W, H, Wf, t, o, st, st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style) ? null : wrap(baseField(Wf, H, st));
-      else if (L === 1) f = this.gpu && S.gpu !== false && gpuFx(q, W, H, Wf, t, o, st, st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style) ? null : wrap(fxField(Wf, H, t, o, st));
-      else if (L === 3) f = this.gpu && S.gpu !== false && gpuType(q, W, H, Wf, t, o, st, o.style) ? null : wrap(typeField(Wf, H, o, st));   // words, on their own
+      if (L === 0) f = this.card() && gpuBase(q, W, H, Wf, t, o, st, st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style) ? null : wrap(baseField(Wf, H, st));
+      else if (L === 1) f = this.card() && gpuFx(q, W, H, Wf, t, o, st, st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style) ? null : wrap(fxField(Wf, H, t, o, st));
+      else if (L === 3) f = this.card() && gpuType(q, W, H, Wf, t, o, st, o.style) ? null : wrap(typeField(Wf, H, o, st));   // words, on their own
       else {                                               // the logo and any symbols share a layer
         // a logo in every pillar sits in the pillar itself, not in the picture behind them
         // a clean Show: the logo as it is, standing still, with none of the pose, crop, warp, EQ or tear on it
@@ -1366,7 +1369,7 @@ class Renderer {
         }
         const each = o.logoEach && PN > 1, a = !st.lv ? null : each ? logoField(W, H, t, Object.assign({}, o, { repeats: PN, travel: 0 }), sL) : wrap(logoField(Wf, H, t, o, sL));
         // the logo on the graphics card when it can be; symbols are laid over it, from the card too when it can draw them
-        const sn = st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style, card = this.gpu && S.gpu !== false, onGpu = card && st.lv && gpuLogo(q, W, H, Wf, t, o, sL, each, PN, sn);
+        const sn = st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style, card = this.card(), onGpu = card && st.lv && gpuLogo(q, W, H, Wf, t, o, sL, each, PN, sn);
         const fs = onGpu ? [] : [a];
         if (st.syN && !st.clean) {
           const sg = card && (onGpu || !st.lv);            // never under a logo drawn the old way, which would paint over them
@@ -1508,6 +1511,8 @@ function renderOne(R, st, P, tf, fps, fc) {
   stateAt(score, tf, mo, st);
   R.draw(phase(tw), LO, st);
 }
+// An export may draw on the graphics card too (S.exGpu): the same shaders the preview shows, so the film is what was seen.
+const exCard = x => { const on = S.exGpu !== false ? 2 : false; if (x && x.a) x.a.gpu = x.b.gpu = on; else if (x) x.gpu = on; return x; };
 const mkRig = (cv, st) => ({ cv, g: cv.getContext('2d', { alpha: false }), a: new Renderer(document.createElement('canvas')), b: new Renderer(document.createElement('canvas')), stA: st || newState(), stB: newState() });
 // Both faces of a ring into one frame.
 function drawFaces(rig, tf, fps) {
@@ -1974,6 +1979,7 @@ $('gReset').addEventListener('click', () => { S.gGain = S.gCon = S.gGam = 1; S.g
 function gradePush() { for (const k of ['gGain', 'gCon', 'gGam', 'gBlack']) $(k).value = Math.round(S[k] * 100); gradeSet(); }
 $('exFmt').addEventListener('change', e => { S.exFmt = e.target.value; touch(); });
 $('exView').addEventListener('change', e => { S.exView = e.target.value; touch(); });
+$('exGpu').addEventListener('change', e => { S.exGpu = e.target.checked; touch(); });
 if (window.nativeApp && window.nativeApp.ffCheck) window.nativeApp.ffCheck().then(f => {
   const add = (v, n) => { const o = document.createElement('option'); o.value = v; o.textContent = n; $('exFmt').append(o); };
   if (f && f.prores) { add('prores', 'ProRes 422 HQ, .mov'); add('prores4444', 'ProRes 4444, .mov'); }
@@ -2104,7 +2110,7 @@ async function renderFile() {
   const snd = track ? await pickAudio(track.ab) : null;
   if (document.fonts && document.fonts.ready) await document.fonts.ready;
   const cv = src.cv;
-  const r = S.format === 'ring' && S.faces === 2 ? null : new Renderer(cv), st = newState(), sc = score;
+  const r = S.format === 'ring' && S.faces === 2 ? null : exCard(new Renderer(cv)), st = newState(), sc = score;
   const mo = { target: new Mp4Muxer.ArrayBufferTarget(), video: { codec: pick.mux, width: W, height: H, frameRate: fps }, fastStart: 'in-memory', firstTimestampBehavior: 'offset' };
   if (snd) mo.audio = { codec: snd.mux, numberOfChannels: snd.ch, sampleRate: track.ab.sampleRate };
   const muxer = new Mp4Muxer.Muxer(mo);
@@ -2127,7 +2133,7 @@ async function renderFile() {
       aenc.encode(ad); ad.close(); aPos += len;
     }
   };
-  const two = S.format === 'ring' && S.faces === 2, rig = two ? mkRig(cv) : null;
+  const two = S.format === 'ring' && S.faces === 2, rig = two ? exCard(mkRig(cv)) : null;
   const us = 1e6 / fps, one = i => { const tf = t0 + i / fps; if (two) drawFaces(rig, tf, fps); else renderOne(r, st, PAt(tf, 0), tf, fps); gradeFrame(cv); return tf - t0; };
   sc._i = 0; sc._k = 0;
   try {
@@ -2176,7 +2182,7 @@ async function renderMov() {
   const { W: FW, H: FH } = dims(), fps = S.fps, D = score.D, N = Math.max(1, Math.round((t1 - t0) * fps));
   const src = exSource(FW, FH), W = src.W, H = src.H, cv = src.cv, sc = score;
   if (document.fonts && document.fonts.ready) await document.fonts.ready;
-  const two = S.format === 'ring' && S.faces === 2, rig = two ? mkRig(cv) : null, r = two ? null : new Renderer(cv), st = newState();
+  const two = S.format === 'ring' && S.faces === 2, rig = two ? exCard(mkRig(cv)) : null, r = two ? null : exCard(new Renderer(cv)), st = newState();
   const one = i => { const tf = t0 + i / fps; if (two) drawFaces(rig, tf, fps); else renderOne(r, st, PAt(tf, 0), tf, fps); gradeFrame(cv); };
   // the timecode of the first frame, counted at the file's own frame rate
   const R = TC_RATES[S.tcRate], c = framesToTc(S.tcStart + t0 * R.real + 1e-6, R), tc = tc2(c.h) + ':' + tc2(c.m) + ':' + tc2(c.s) + ':' + tc2(Math.min(fps - 1, Math.floor(c.f * fps / R.fps)));
@@ -2249,7 +2255,7 @@ $('save').addEventListener('click', async () => {
 });
 
 /* ---------- project files (Mac app) ---------- */
-const GLOBAL_KEYS = ['laneOff', 'laneSolo', 'laneLock', 'gpu', 'cleanEnds', 'format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap', 'gGain', 'gCon', 'gGam', 'gBlack', 'pq', 'pil', 'stats'];
+const GLOBAL_KEYS = ['exGpu', 'laneOff', 'laneSolo', 'laneLock', 'gpu', 'cleanEnds', 'format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap', 'gGain', 'gCon', 'gGam', 'gBlack', 'pq', 'pil', 'stats'];
 let loadingProject = false, saveTimer = 0;
 function getProject() {
   savePart();
@@ -2260,7 +2266,7 @@ function pushGlobals() {
   setRadio('format', S.format);
   for (const id of ['shape', 'panels', 'repeats', 'loop', 'fps', 'seed', 'range', 'faces', 'panelsIn', 'panelPx', 'gap']) $(id).value = S[id];
   gradePush(); $('pq').value = S.pq; statsShow(); $('cleanEnds').checked = S.cleanEnds !== false; $('gpu').checked = S.gpu !== false;
-  $('view3d').checked = S.view3d; $('exView').value = S.exView; if ([...$('exFmt').options].some(o => o.value === S.exFmt)) $('exFmt').value = S.exFmt;
+  $('view3d').checked = S.view3d; $('exView').value = S.exView; $('exGpu').checked = S.exGpu !== false; if ([...$('exFmt').options].some(o => o.value === S.exFmt)) $('exFmt').value = S.exFmt;
   $('orbit').checked = S.orbit; $('invert').checked = S.invert; $('outFit').value = S.outFit;
   if (!TC_RATES[S.tcRate]) S.tcRate = '25';
   tcPush(); outSync();
@@ -2335,6 +2341,8 @@ if (window.nativeApp) {
 // Used by the app's own start-up check: one frame, the encoders, and a project round trip.
 window.__typeShot = (mode, age, warp) => { userEv = userEv.filter(e => e.k !== 13); S.typeWarp = warp || 0; tau = 1; trigger('type', null, { mode }); const e = userEv[userEv.length - 1]; e.txt = 'MALL CALL'; e.d = 3; e.size = 0.5; mergeEv(); S.playing = false; tau = 1 + age; paint(); return stage.toDataURL('image/png'); };
 window.__cleanShot = on => { userEv = userEv.filter(e => !e.clean); if (on) { tau = 2; trigger('show', null, { clean: true }); } S.playing = false; tau = 3; paint(); return stage.toDataURL('image/png'); };
+// one frame the way an export draws it (its own rig, the grade on), with the card or without
+window.__exFrame = (t, gpu) => { if (gpu && !GPU.gl) { GPU.force = true; GPU.bad = false; } const d = dims(), cv = document.createElement('canvas'); cv.width = d.W; cv.height = d.H; const was = S.exGpu; S.exGpu = gpu; const n = GPU.used; const two = S.format === 'ring' && S.faces === 2, fps = S.fps; let out = null; for (const tf of [t - 2 / fps, t - 1 / fps, t]) { if (!out) out = two ? exCard(mkRig(cv)) : exCard(new Renderer(cv)); if (two) drawFaces(out, tf, fps); else renderOne(out, newState(), PAt(tf, 0), tf, fps); } gradeFrame(cv); S.exGpu = was; return [cv.toDataURL('image/png'), GPU.used - n]; };
 window.__clip = (t, type, more, d) => { userEv.push(mkEv(t, type, 12345, d || null, more)); mergeEv(); return userEv.length; };      // a clip of the user's, for checks
 window.__frameAt = (t, gpu, set) => { if (gpu && !GPU.gl) { GPU.force = true; GPU.bad = false; } if (set) { Object.assign(S, set); savePart(); rebuildScore(true); } S.gpu = gpu; S.playing = false; tau = t; const n = GPU.used; paint(); return [stage.toDataURL('image/png'), GPU.used - n]; };      // one frame either way, for comparing the two
 window.__selfTest = async () => {
