@@ -65,12 +65,22 @@ ipcMain.on('page-ok', () => clearTimeout(okTimer));
 // Updates: look once at launch without holding the window up for long. A check from the menu loads what it finds at once;
 // one that finishes late waits for Reload With Update, so work in the window is never thrown away unasked.
 let updateWaiting = false;
+// Where the finished app is kept for download. When the app itself has changed (not only its page), the user is told once
+// per launch and sent there: no Terminal, just a new download.
+const APP_URL = 'https://github.com/kaptenandre/mall_call/releases/latest';
+let appTold = false;
+async function tellNewApp() {
+  if (appTold || !update.state().shell || !app.isPackaged || !win || win.isDestroyed()) return;
+  appTold = true;
+  const r = await dialog.showMessageBox(win, { type: 'info', message: 'A newer Mall Call app is ready', detail: 'This one keeps working, but some new things need the new app. Download it, drag it to Applications in place of the old one, and open it. Your projects are not touched.', buttons: ['Download', 'Later'], defaultId: 0, cancelId: 1 });
+  if (r.response === 0) shell.openExternal(APP_URL);
+}
 function loadPage() { updateWaiting = false; buildMenu(); openPage(); }
 async function checkUpdates(reload, quick) {
   const got = await update.check(quick);
   if (got && reload === true) return loadPage();
   if (got) updateWaiting = true;
-  buildMenu();
+  buildMenu(); tellNewApp();
   // found while running: tell the page. It saves the session and asks to be reloaded as soon as it is not rendering.
   if (got && reload === 'ask') send('update-ready');
 }
@@ -113,6 +123,7 @@ function buildMenu() {
       { label: update.status(), enabled: false },
       { label: 'Check Now', click: () => checkUpdates(true) },
       { label: 'Reload With Update', enabled: updateWaiting, click: () => loadPage() },
+      { label: 'Download the New App…', visible: !!update.state().shell, click: () => shell.openExternal(APP_URL) },
       { type: 'separator' },
       { label: 'Follow', enabled: false },
       ...['latest', 'off', ...new Set(['main', ...update.state().branches, update.state().channel].filter(b => b && b !== 'off' && b !== 'latest'))].map(b => ({
@@ -212,7 +223,9 @@ ipcMain.handle('output-place', (event, where) => {
   return true;
 });
 // Export through ffmpeg: ProRes or HAP in a .mov, with the start timecode and the sound. The page sends raw frames.
-const FF_PATHS = ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg', 'ffmpeg'];
+// The downloaded app carries its own ffmpeg (Contents/Resources/ffmpeg), so nobody has to install one. A copy built on
+// the Mac with npm run dist has none and looks where Homebrew puts it.
+const FF_PATHS = [path.join(process.resourcesPath || '', 'ffmpeg'), '/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg', 'ffmpeg'];
 let ffPath = null, ffJob = null;
 function ffDrop() { const job = ffJob; if (!job) return; ffJob = null; try { job.proc.kill('SIGKILL'); } catch (e) {} job.done.then(() => fsp.unlink(job.out).catch(() => {})); }
 const ffFind = async () => {
