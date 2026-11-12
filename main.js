@@ -277,10 +277,22 @@ async function libRoot() {
   const icloud = path.join(app.getPath('home'), 'Library', 'Mobile Documents', 'com~apple~CloudDocs');
   return path.join(fs.existsSync(icloud) ? icloud : app.getPath('documents'), NAME);
 }
+// The versions of a project, as numbers. When two people save at the same moment into a shared folder, both write the same
+// number, and the syncing service keeps one and renames the other ("0005 (Anton's conflicted copy).json", "0005 2.json").
+// Such a copy is a real version that would otherwise never show: it is taken in here under the next free number.
 async function libVersions(dir) {
-  let files = [];
-  try { files = (await fsp.readdir(path.join(dir, 'versions'))).filter(f => /^\d{4}\.json$/.test(f)).sort(); } catch (e) {}
-  return files.map(f => Number(f.slice(0, 4)));
+  const vd = path.join(dir, 'versions');
+  let all = [];
+  try { all = await fsp.readdir(vd); } catch (e) { return []; }
+  const nums = all.filter(f => /^\d{4}\.json$/.test(f)).map(f => Number(f.slice(0, 4))).sort((a, b) => a - b);
+  const strays = [];
+  for (const f of all) if (/^\d{4}\D.*\.json$/i.test(f)) { try { strays.push({ f, at: (await fsp.stat(path.join(vd, f))).mtimeMs }); } catch (e) {} }
+  strays.sort((a, b) => a.at - b.at);
+  for (const s of strays) {
+    const n = (nums.length ? nums[nums.length - 1] : 0) + 1;
+    try { await fsp.rename(path.join(vd, s.f), path.join(vd, String(n).padStart(4, '0') + '.json')); nums.push(n); } catch (e) {}
+  }
+  return nums;
 }
 ipcMain.handle('lib-root', async () => libRoot());
 ipcMain.handle('lib-pick-root', async () => {
@@ -352,8 +364,12 @@ ipcMain.handle('lib-save', async (event, o) => {
     } catch (e) { return { error: 'sound' }; }
   }
   delete pj.soundPath;
-  const v = await libVersions(dir), n = (v.length ? v[v.length - 1] : 0) + 1;
-  await fsp.writeFile(path.join(dir, 'versions', String(n).padStart(4, '0') + '.json'), JSON.stringify(pj), 'utf8');
+  const v = await libVersions(dir);
+  let n = (v.length ? v[v.length - 1] : 0) + 1;
+  for (let tries = 0; ; tries++, n++) {                   // never over a version that is already there, even one that arrived a moment ago
+    try { await fsp.writeFile(path.join(dir, 'versions', String(n).padStart(4, '0') + '.json'), JSON.stringify(pj), { encoding: 'utf8', flag: 'wx' }); break; }
+    catch (e) { if (e.code !== 'EEXIST' || tries > 50) return { error: 'write' }; }
+  }
   return { ok: true, n, name, dir };
 });
 ipcMain.handle('lib-open', async (event, o) => {
