@@ -4,7 +4,9 @@
 const libSay = s => { $('libNoteP').textContent = s; };
 // Who is at this computer: typed once, kept on this computer, and written into every version saved from it, so a project
 // handed from one person to another shows who saved what.
-const libWho = () => { try { return (localStorage.getItem('mallcall-who') || '').trim().slice(0, 40); } catch (e) { return ''; } };
+// The people who work on this piece. The name is picked from this list, not typed, so it is always spelt the same way.
+const LIB_NAMES = ['Anders', 'André', 'Anton', 'Martin', 'Victor'];
+const libWho = () => { try { const n = (localStorage.getItem('mallcall-who') || '').trim(); return LIB_NAMES.includes(n) ? n : ''; } catch (e) { return ''; } };
 // is the library folder one that syncs? Only the path can say.
 const libCloud = p => /Mobile Documents|iCloud/i.test(p) ? 'iCloud Drive' : /Dropbox/i.test(p) ? 'Dropbox' : /Google ?Drive|GoogleDrive/i.test(p) ? 'Google Drive' : /OneDrive/i.test(p) ? 'OneDrive' : '';
 const libWhere = p => { const c = libCloud(p); return 'Projects are kept in ' + p + '. ' + (c ? 'That is in ' + c + ', so every version is in the cloud, and anyone sharing that folder sees the same projects.' : 'That folder is only on this computer. To share projects, press Change folder and pick one inside Dropbox or iCloud Drive that the others share.'); };
@@ -31,7 +33,7 @@ async function libSave(note) {
   const r = await window.nativeApp.libSave({ name, json: JSON.stringify(Object.assign(getProject(), { by: libWho() })), note: note === undefined ? $('libNote').value : note });
   if (!r || !r.ok) { libSay(r && r.error === 'sound' ? 'The sound file could not be copied into the project. Drop it in again and save once more.' : 'That could not be saved. Check the name and the folder.'); return null; }
   $('libNote').value = '';
-  libSay('Saved ' + r.name + ' as version ' + r.n + (libWho() ? ', by ' + libWho() : '') + ', with its logo, font and sound, in ' + r.dir + '.' + (libWho() ? '' : ' Type your name above so others see who saved it.'));
+  libSay('Saved ' + r.name + ' as version ' + r.n + (libWho() ? ', by ' + libWho() : '') + ', with its logo, font and sound, in ' + r.dir + '.' + (libWho() ? '' : ' Choose your name above so the others see who saved it.'));
   await libRefresh(r.name);
   return r;
 }
@@ -49,6 +51,6 @@ if (window.nativeApp && window.nativeApp.libSave) {
   });
   $('libFolder').addEventListener('click', async () => { const p = await window.nativeApp.libPickRoot(); if (p) { libSay(libWhere(p)); libRefresh(); } });
   window.nativeApp.libRoot().then(p => { libSay(libWhere(p)); libRefresh(); }, () => {});
-  $('libWho').value = libWho();
-  $('libWho').addEventListener('change', e => { try { localStorage.setItem('mallcall-who', e.target.value.trim().slice(0, 40)); } catch (x) {} });
+  { const sel = $('libWho'); for (const n of ['', ...LIB_NAMES]) { const o = document.createElement('option'); o.value = n; o.textContent = n || 'Choose who you are'; sel.append(o); } sel.value = libWho(); }
+  $('libWho').addEventListener('change', e => { try { localStorage.setItem('mallcall-who', e.target.value); } catch (x) {} });
 }

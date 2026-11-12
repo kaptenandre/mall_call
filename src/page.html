@@ -486,7 +486,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
     <fieldset id="libBox" hidden>
       <legend>Project library</legend>
-      <label class="row" for="libWho"><span>Your name</span><input type="text" id="libWho" placeholder="Who is saving" maxlength="40" spellcheck="false" autocomplete="off"></label>
+      <label class="row" for="libWho"><span>Your name</span><select id="libWho"></select></label>
       <label class="row" for="libName"><span>Project</span><input type="text" id="libName" placeholder="Name it" spellcheck="false" autocomplete="off"></label>
       <label class="row" for="libNote"><span>Note</span><input type="text" id="libNote" placeholder="What changed" autocomplete="off"></label>
       <button type="button" class="primary" id="libSave">Save a new version</button>
@@ -575,7 +575,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 'v0.54.1';                 // see Versions in CLAUDE.md: before the first show . feature . fix
+const BUILD = 'v0.55.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
 $('build').textContent = '· ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
