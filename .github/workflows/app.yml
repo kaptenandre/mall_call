@@ -1,0 +1,53 @@
+# Builds the Mac app and puts it up for download, so nobody has to use Terminal.
+# Runs when the app itself changes (not for page-only work, which the app fetches by itself), or by hand.
+name: Mac app
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [main.js, preload.js, update.js, assemble.js, package.json, package-lock.json, 'scripts/**', 'icon/**', .github/workflows/app.yml]
+permissions:
+  contents: write
+concurrency:
+  group: mac-app
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: An ffmpeg for each kind of Mac, to carry inside the app
+        run: |
+          mkdir -p ff/arm64 ff/x64
+          for a in arm64 x64; do
+            (mkdir -p ffdl/$a && cd ffdl/$a && npm init -y >/dev/null && npm_config_arch=$a npm install --silent ffmpeg-static@5.2.0)
+            cp ffdl/$a/node_modules/ffmpeg-static/ffmpeg ff/$a/ffmpeg
+            file ff/$a/ffmpeg
+          done
+          ff/arm64/ffmpeg -hide_banner -encoders | grep -E "prores_ks|hap" || true
+      - name: Apple silicon
+        run: MALLCALL_ARCH=arm64 MALLCALL_FFMPEG=$PWD/ff/arm64/ffmpeg npm run dist
+      - name: Intel
+        run: MALLCALL_ARCH=x64 MALLCALL_FFMPEG=$PWD/ff/x64/ffmpeg node scripts/dist.js
+      - name: Check that the Apple silicon app starts
+        run: |
+          "dist/Mall Call-darwin-arm64/Mall Call.app/Contents/MacOS/Mall Call" --smoke | tee smoke.txt
+          grep -q '"errors":\[\]' smoke.txt
+      - name: Zip
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent "dist/Mall Call-darwin-arm64/Mall Call.app" "Mall-Call-Apple-silicon.zip"
+          ditto -c -k --sequesterRsrc --keepParent "dist/Mall Call-darwin-x64/Mall Call.app" "Mall-Call-Intel.zip"
+          ls -la *.zip
+      - name: Put it up for download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(grep -o "const BUILD = '[^']*'" src/page.html | cut -d"'" -f2)
+          TAG="app-${{ github.run_number }}"
+          gh release create "$TAG" Mall-Call-Apple-silicon.zip Mall-Call-Intel.zip --latest --title "Mall Call $VERSION" --notes "Download the one for your Mac, unzip it, and drag Mall Call to Applications. Apple silicon is every Mac from late 2020 on (M1, M2, M3, M4); Intel is the older ones. The first time, macOS asks before it opens an app from outside the App Store: see Install in the README."

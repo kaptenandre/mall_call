@@ -72,7 +72,7 @@ async function check(quick) {
     await fsp.writeFile(path.join(dir, 'index.html.tmp'), page, 'utf8');
     await fsp.rename(path.join(dir, 'index.html.tmp'), path.join(dir, 'index.html'));
     state.sha = sha; state.shell = shell; fresh = true;
-    status = 'Updated to ' + branch + ' (' + short + ')' + (shell ? '. The app itself has changed too: pull and run npm run dist' : '');
+    status = 'Updated to ' + branch + ' (' + short + ')' + (shell ? '. The app itself has changed too: download the new one from the Updates menu' : '');
     await save();
     return true;
   } catch (e) {

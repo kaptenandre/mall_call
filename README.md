@@ -8,7 +8,24 @@ Sound-driven logo animation for LED panels, built in three layers:
 
 Drop in a logo (SVG or PNG) and a sound file. The cut follows the sound; a trigger pad adds moments by hand; the piece can be split into parts with their own look. Exports MP4 with the audio.
 
-## Run it
+## Install
+
+No Terminal needed.
+
+1. Go to [the latest release](https://github.com/kaptenandre/mall_call/releases/latest) and download the file for your Mac: **Apple silicon** for any Mac from late 2020 on (M1, M2, M3, M4), **Intel** for older ones. Not sure? Apple menu, About This Mac: "Chip: Apple" means Apple silicon.
+2. Double-click the zip, then drag **Mall Call** to your Applications folder.
+3. Open it. The first time, macOS stops it because it does not come from the App Store:
+   - Press **Done** on the warning.
+   - Open **System Settings**, **Privacy & Security**, scroll down to "Mall Call was blocked", and press **Open Anyway**.
+   - Open Mall Call again and press **Open**. This is only asked once.
+
+After that the app keeps itself up to date. New work arrives by itself a few minutes after it is made. Now and then the app itself changes; it then says "A newer Mall Call app is ready" with a Download button, and you repeat the three steps.
+
+Exports to ProRes and HAP work out of the box: the downloaded app carries its own ffmpeg.
+
+To share projects, everyone points the library at the same shared Dropbox folder: Versions, Change folder. Then choose your name on that page.
+
+## For developers
 
 Needs Node 20 or newer.
 
@@ -19,9 +36,9 @@ npm run smoke    # start-up check: loads hidden, tests encoders and project file
 npm run dist     # package dist/Mall Call-darwin-arm64/Mall Call.app
 ```
 
-The packaged app updates its own page from this repository at launch. Pick the branch to follow, or switch it off, in the Updates menu. Changes to the app shell (`main.js` and the files beside it) still need a new `npm run dist`.
+The download is built by `.github/workflows/app.yml` whenever the app itself changes on `main` (`main.js`, `preload.js`, `update.js`, `assemble.js`, the scripts), for both kinds of Mac, and published as a release. Page-only work under `src/` needs no new download: the app fetches it.
 
-`npm run dist` signs the app ad hoc so it runs on this Mac. It is not notarised, so it is for your own machines, not for distribution.
+The app is signed ad hoc, not with an Apple Developer ID, and is not notarised. That is why macOS asks the first time. A Developer ID (Apple's paid developer programme) would take that step away.
 
 ## Where things live
 
