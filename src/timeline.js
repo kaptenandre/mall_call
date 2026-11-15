@@ -79,11 +79,14 @@ function undoApply(s) {
   undoing = true;
   try {
     const o = JSON.parse(s), inv = S.invert;
+    const eventsOnly = o.S.seed === S.seed && (track || o.S.loop === S.loop) &&
+      o.parts.length === parts.length &&
+      o.parts.every((p, i) => p.t === parts[i].t && p.P.chaos === parts[i].P.chaos);
     Object.assign(S, o.S);
     parts = o.parts; userEv = o.userEv.map(e => mkEv(e[0], e[1], e[2], e[3], e[4])); auto = o.auto; Object.assign(autoCut, o.autoCut);
     tlSel = null; sel = Math.min(sel, parts.length - 1); loadPart();
     if (S.invert !== inv) { mask = buildMask(logoSrc.img, logoSrc.w, logoSrc.h, S.invert); maskN++; }
-    rebuildScore(); sel = partIdx(tau); loadPart();
+    rebuildScore(eventsOnly); sel = partIdx(tau); loadPart();
     pushGlobals(); pushAll(); syncUI(); tlInsp();
   } finally { undoing = false; undoPending = null; }
 }
@@ -164,7 +167,7 @@ function tlHeads(rows) {
     }
     if (r.kind === 'ev' && CUTS[r.L]) {
       const name = CUTS[r.L];
-      tools.append(btn('Auto', 'The automatic cut on this layer, on or off', () => { autoCut[name] = !autoCut[name]; tlSel = null; rebuildScore(); syncUI(); tlInsp(); }, autoCut[name]),
+      tools.append(btn('Auto', 'The automatic cut on this layer, on or off', () => { autoCut[name] = !autoCut[name]; tlSel = null; rebuildScore(true); syncUI(); tlInsp(); }, autoCut[name]),
         btn('Bake', 'Turn the automatic clips into your own so they can be edited', () => tlBake(r.L)));
     }
     if (r.kind === 'auto') tools.append(btn('×', 'Stop animating this setting', () => { delete auto[r.key]; tlSel = null; syncUI(); tlInsp(); }));
@@ -180,7 +183,7 @@ function tlBake(L) {
   if (!autoCut[name]) return;
   for (const e of autoEv) if (layerOf(e.k) === L) userEv.push(mkEv(e.t, e.type, e.seed, Math.min(e.d, score.D), evMore(e)));
   autoCut[name] = false; tlSel = null;
-  rebuildScore(); syncUI(); tlInsp();
+  rebuildScore(true); syncUI(); tlInsp();
 }
 
 function drawTimeline() {

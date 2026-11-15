@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('nativeApp', {
   saveFile: (name, data) => ipcRenderer.invoke('save-file', name, data),
   saveBegin: name => ipcRenderer.invoke('save-begin', name),
   saveChunk: data => ipcRenderer.invoke('save-chunk', data),
+  saveAt: (data, position) => ipcRenderer.invoke('save-chunk', data, position),
   saveEnd: abort => ipcRenderer.invoke('save-end', abort),
   pickFile: kind => ipcRenderer.invoke('pick-file', kind),
   readFile: filePath => ipcRenderer.invoke('read-file', filePath),

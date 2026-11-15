@@ -7,7 +7,7 @@
    Moved so far: the base, glitch, logo and type layers and the symbols, drawn as Dither (ordered, halftone, lines, noise),
    LED rods or Light streaks, with square, dot or diamond pixels.
    Everything else falls back by itself: gpuLogo and the others return false and the caller draws the old way. */
-const GPU = { acc: { on: false, open: false, has: false, w: 0, h: 0, lay: null, sum: null, copy: null, flat: null, broken: false }, force: false, name: '', cv: null, gl: null, progs: null, bad: false, maskN: -1, tex: null, used: 0, mt: new Map(), mtNew: false, rows: null, rd: null, maxT: 2048 };
+const GPU = { acc: { on: false, open: false, has: false, w: 0, h: 0, storageW: 0, storageH: 0, lay: null, sum: null, copy: null, flat: null, broken: false }, force: false, name: '', cv: null, gl: null, progs: null, bad: false, maskN: -1, tex: null, used: 0, mt: new Map(), mtNew: false, rows: null, rd: null, maxT: 2048 };
 const GPU_VS = '#version 300 es\nin vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
 const GPU_HEAD = `#version 300 es
 precision highp float; precision highp int;
@@ -366,7 +366,7 @@ function gpuInit() {
     const progs = { logo: mk(GPU_LOGO), fx: mk(GPU_FX), base: mk(GPU_BASE), type: mk(GPU_ROWS + GPU_TYPE), sym: mk(GPU_ROWS + GPU_SYM) };
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    cv.addEventListener('webglcontextlost', e => { e.preventDefault(); if (GPU.cv !== cv) return; GPU.gl = null; GPU.progs = null; GPU.maskN = -1; Object.assign(GPU.acc, { on: false, w: 0, h: 0, lay: null, sum: null, copy: null, flat: null }); GPU.tex = null; GPU.mt.clear(); GPU.rows = null; });      // comes back by itself on the next frame
+    cv.addEventListener('webglcontextlost', e => { e.preventDefault(); if (GPU.cv !== cv) return; GPU.gl = null; GPU.progs = null; GPU.maskN = -1; Object.assign(GPU.acc, { on: false, w: 0, h: 0, storageW: 0, storageH: 0, lay: null, sum: null, copy: null, flat: null }); GPU.tex = null; GPU.mt.clear(); GPU.rows = null; });      // comes back by itself on the next frame
     GPU.cv = cv; GPU.gl = gl; GPU.progs = progs; GPU.maskN = -1; GPU.maxT = gl.getParameter(gl.MAX_TEXTURE_SIZE);
     return true;
   } catch (e) { GPU.bad = true; GPU.why = String(e && e.message).slice(0, 300); console.warn('gpu: ' + GPU.why); return false; }      // not an error: the canvas version takes over
@@ -380,7 +380,7 @@ const gpuCan = (sn, o, st) => (sn === 'rods' || (sn === 'dither' && gpuDither(o.
 function gpuUse(kind, W, H) {
   const { gl, cv } = GPU, P = GPU.progs[kind], L = P.loc, at = n => L[n] !== undefined ? L[n] : (L[n] = gl.getUniformLocation(P.pr, n));
   gl.useProgram(P.pr);
-  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  if (!GPU.acc.on && (cv.width !== W || cv.height !== H)) { cv.width = W; cv.height = H; }
   gl.viewport(0, 0, W, H);
   return { gl, at, f1: (n, a) => gl.uniform1f(at(n), a), f2: (n, a, b) => gl.uniform2f(at(n), a, b), i1: (n, a) => gl.uniform1i(at(n), a) };
 }
@@ -434,11 +434,11 @@ const GPU_FLAT = '#version 300 es\nprecision highp float;uniform vec4 c;out vec4
 function gpuLost() {
   if (!GPU.gl || !GPU.gl.isContextLost()) return false;
   GPU.gl = null; GPU.progs = null; GPU.maskN = -1; GPU.tex = null; GPU.mt.clear(); GPU.rows = null; GPU.lostN = (GPU.lostN || 0) + 1;
-  Object.assign(GPU.acc, { on: false, open: false, has: false, w: 0, h: 0, lay: null, sum: null, copy: null, flat: null });
+  Object.assign(GPU.acc, { on: false, open: false, has: false, w: 0, h: 0, storageW: 0, storageH: 0, lay: null, sum: null, copy: null, flat: null });
   return true;
 }
 window.__gpuLose = () => { const x = GPU.gl && GPU.gl.getExtension('WEBGL_lose_context'); if (!x) return 'no card'; x.loseContext(); return 'lost'; };      // for checks
-function gpuFrameBegin(W, H) {
+function gpuFrameBegin(W, H, storageW = W) {
   const A = GPU.acc; A.on = false;
   gpuLost();
   if (!gpuInit()) return false;
@@ -449,14 +449,15 @@ function gpuFrameBegin(W, H) {
       const mk = fs => { const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, GPU_VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs)); gl.bindAttribLocation(pr, 0, 'p'); gl.linkProgram(pr); if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr)); return pr; };
       A.copy = mk(GPU_COPY); A.flat = mk(GPU_FLAT); A.copyS = gl.getUniformLocation(A.copy, 's'); A.flatC = gl.getUniformLocation(A.flat, 'c');
     }
-    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
-    if (A.w !== W || A.h !== H) {
-      const target = old => { if (old) { gl.deleteTexture(old.tex); gl.deleteFramebuffer(old.fb); } const tex = gl.createTexture(), fb = gl.createFramebuffer(); gl.activeTexture(gl.TEXTURE15); gl.bindTexture(gl.TEXTURE_2D, tex); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, W, H); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0); if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('framebuffer'); return { tex, fb }; };
-      A.lay = target(A.lay); A.sum = target(A.sum); A.w = W; A.h = H;
+    if (cv.width !== storageW || cv.height !== H) { cv.width = storageW; cv.height = H; }
+    if (A.storageW !== storageW || A.storageH !== H) {
+      const target = old => { if (old) { gl.deleteTexture(old.tex); gl.deleteFramebuffer(old.fb); } const tex = gl.createTexture(), fb = gl.createFramebuffer(); gl.activeTexture(gl.TEXTURE15); gl.bindTexture(gl.TEXTURE_2D, tex); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, storageW, H); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0); if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('framebuffer'); return { tex, fb }; };
+      A.lay = target(A.lay); A.sum = target(A.sum); A.storageW = storageW; A.storageH = H;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.activeTexture(gl.TEXTURE0);
     }
   } catch (e) { A.broken = true; console.warn('gpu: ' + (e && e.message)); }
   if (A.broken) return false;
+  A.w = W; A.h = H;
   A.on = true; A.open = false; A.has = false;
   return true;
 }
@@ -491,7 +492,7 @@ function gpuLayerToCanvas(q) {
   if (!A.on || !A.open) return;
   A.open = false;
   gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.disable(gl.BLEND); gpuBlit(A.lay.tex);
-  q.globalCompositeOperation = 'source-over'; q.globalAlpha = 1; q.drawImage(GPU.cv, 0, 0);
+  q.globalCompositeOperation = 'source-over'; q.globalAlpha = 1; q.drawImage(GPU.cv, 0, 0, A.w, A.h, 0, 0, A.w, A.h);
 }
 // The end of the frame: everything the card drew, onto the face in one copy.
 function gpuFrameEnd(g) {
@@ -500,7 +501,7 @@ function gpuFrameEnd(g) {
   A.on = false;
   if (!A.has) return;
   gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.disable(gl.BLEND); gpuBlit(A.sum.tex);
-  g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1; g.drawImage(GPU.cv, 0, 0); g.globalCompositeOperation = 'source-over';
+  g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1; g.drawImage(GPU.cv, 0, 0, A.w, A.h, 0, 0, A.w, A.h); g.globalCompositeOperation = 'source-over';
 }
 // The logo layer into the 2D context q. W and H are the layer's size, Wf the width of the field behind the pillars.
 // st is the state to draw from (the plain one when a clean Show is up). Returns false when this frame needs the canvas version.
