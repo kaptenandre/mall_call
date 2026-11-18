@@ -29,6 +29,7 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 - `src/engine.js`: timing engine, no DOM. Sound analysis (`analyze`), hit picking, the score (`buildTrackScore`, `buildLoopScore`), scheduled events (`makeEvents`), and the per-frame state (`stateAt`).
 - `src/timeline.js`: the timeline editor. Rows, clips, keys (`auto`, `PAt`, `setKey`), zoom, snapping, the inspector strip and undo. Inlined at `/*__TIMELINE__*/`.
 - `src/timecode.js`: SMPTE maths, MIDI timecode and LTC encode and decode, no DOM. Inlined at `/*__TIMECODE__*/`. Only the maths is used by the interface so far.
+- `src/logo.js`: the built-in logo as an SVG string (`LOGO_SVG`). Inlined at `/*__LOGO__*/`. `stockLogo()` in the page gives it once read, the plain ring until then.
 - `src/ring.js`: the ring in 3D, plain WebGL with no library so it updates with the page. Inlined at `/*__RING__*/`.
 - `src/ui.js`: the interface pass over the rail: an icon on every section name, explaining notes folded behind an i, sections that shut (remembered), each with an arrow to fold it and a button to stretch it across every column, and Fold all / Open all at the top. Notes with `aria-live` report things and stay in view. Inlined at `/*__UI__*/`. The user wants icons in place of text wherever a picture says it.
 - `src/work.js`: the workspaces (Edit, Media, Versions), the media pool and the version history page. Inlined at `/*__WORK__*/`.
@@ -118,7 +119,7 @@ On Linux (cloud sessions) Electron needs a display and no sandbox: `node scripts
 7. Pixels are controllable: dither type, shape, fill, size per layer.
 8. Panels are 1 x 3. The ring is known since 2026-11-18 (see The real ring under How it works): 22 pillars on each face, 112 x 336 pixels each. The counts are still settings, but `RIG` is the truth.
 9. Interface text is English, short, and never uses em dashes.
-10. The app ships with a placeholder ring. The real logo is dropped in by the user as a file. Do not draw brand logos in code.
+10. The app ships with the real logo built in since v0.61.0 (`src/logo.js`, an SVG from the vector file the user supplied; the user chose this on 2026-11-18 knowing the repository is public). A logo dropped into a project still wins. Do not draw any other brand logo in code, and do not redraw this one by hand: only replace the file with one the user supplies.
 
 ## How it is meant to run at the show
 
