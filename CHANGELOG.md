@@ -4,6 +4,12 @@ Every version of Mall Call, newest first. The version shows in the app's header.
 
 The numbers: the first is 0 until the piece has run at a real show; the middle rises when something asked for is added or changed; the last rises for a fix. Builds 1 to 45 used a running number.
 
+## v0.63.0 (2026-11-18)
+
+- Hero on the palette: one large trefoil in every pillar with everything else out, for the moments the logo has to be plain to see
+- Alone on a plain logo clip: how much of the rest is taken away under it
+- The app's icon is the trefoil, in the same square dither as before (shows after the next app download)
+
 ## v0.62.2 (2026-11-18)
 
 - This version history, a tag and a Releases entry for every version
