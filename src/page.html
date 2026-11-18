@@ -442,16 +442,18 @@ body.rendering .rail fieldset { opacity: .55; }
       <label class="row" for="shape" id="shapeRow" hidden><span>Panel shape</span><select id="shape"><option value="2">1 × 2</option><option value="3" selected>1 × 3</option><option value="4">1 × 4</option></select></label>
       <p class="note" id="fmtNote"></p>
       <div id="ringOpts" class="stack" hidden>
-        <label class="row" for="panels"><span>Panels in ring</span><input type="number" id="panels" min="4" max="240" value="30"></label>
+        <p class="note" id="rigNote" aria-live="polite"></p>
+        <button type="button" id="rigSet" hidden>Set to the real ring</button>
+        <label class="row" for="panels"><span>Panels in ring</span><input type="number" id="panels" min="4" max="240" value="22"></label>
         <label class="row" for="faces"><span>Faces</span><select id="faces"><option value="2">Outside and inside</option><option value="1">Outside only</option></select></label>
-        <label class="row" for="panelsIn" id="panelsInRow"><span>Panels inside</span><input type="number" id="panelsIn" min="4" max="240" value="30"></label>
+        <label class="row" for="panelsIn" id="panelsInRow"><span>Panels inside</span><input type="number" id="panelsIn" min="4" max="240" value="22"></label>
         <label class="row" for="inner" id="innerRow"><span>Inside shows</span><select id="inner"><option value="same">The same</option><option value="mirror">The same, mirrored</option><option value="counter">The same, running the other way</option><option value="late">The same, a moment later</option><option value="own">Its own look</option><option value="off">Nothing</option></select></label>
         <div class="seg" id="faceSeg" role="radiogroup" aria-label="Which face the controls edit" style="grid-template-columns:1fr 1fr">
           <label><input type="radio" name="face" id="faceOut" value="0" checked><span>Edit outside</span></label>
           <label><input type="radio" name="face" id="faceIn" value="1"><span>Edit inside</span></label>
         </div>
-        <label class="row" for="gap"><span>Air between</span><input type="number" id="gap" min="0" max="20" step="0.1" value="0"></label>
-        <label class="row" for="panelPx"><span>Panel pixels</span><input type="number" id="panelPx" min="0" max="512" value="0"></label>
+        <label class="row" for="gap"><span>Air between</span><input type="number" id="gap" min="0" max="20" step="0.01" value="1.36"></label>
+        <label class="row" for="panelPx"><span>Panel pixels</span><input type="number" id="panelPx" min="0" max="512" value="112"></label>
         <label class="check" for="view3d"><input type="checkbox" id="view3d" checked> Show the ring in 3D</label>
         <label class="row" for="repeats"><span>Logos in ring</span><input type="number" id="repeats" min="1" max="12" value="3"></label>
         <label class="check" for="orbit"><input type="checkbox" id="orbit" checked> Logos travel around the ring</label>
@@ -478,7 +480,7 @@ body.rendering .rail fieldset { opacity: .55; }
     <fieldset id="fsPlay">
       <legend>Playback</legend>
       <label class="row" for="loop"><span>Loop length</span><select id="loop"><option value="4">4 s</option><option value="8" selected>8 s</option><option value="16">16 s</option></select></label>
-      <label class="row" for="fps"><span>Frame rate</span><select id="fps"><option value="25">25 fps</option><option value="30" selected>30 fps</option><option value="50">50 fps</option><option value="60">60 fps</option></select></label>
+      <label class="row" for="fps"><span>Frame rate</span><select id="fps"><option value="25">25 fps</option><option value="30">30 fps</option><option value="50" selected>50 fps</option><option value="60">60 fps</option></select></label>
       <label class="row" for="pq"><span>Preview</span><select id="pq"><option value="auto">Full, drops to half if slow</option><option value="1">Always full size</option><option value="0.5">Half size, lighter</option><option value="0.25">Quarter size, lightest</option></select></label>
       <label class="check" for="gpu"><input type="checkbox" id="gpu" checked> Draw on the graphics card</label>
       <button type="button" class="plain" id="play">Pause</button>
@@ -533,7 +535,8 @@ body.rendering .rail fieldset { opacity: .55; }
       <legend>Export</legend>
       <label class="row" for="range"><span>What</span><select id="range"><option value="all">Whole piece</option><option value="part">This part only</option></select></label>
       <label class="row" for="exFmt"><span>File</span><select id="exFmt"><option value="mp4">MP4, H.264</option></select></label>
-      <label class="row" for="exView" id="exViewRow" hidden><span>Picture</span><select id="exView"><option value="flat">The flat frame, for mapping</option><option value="3d">The ring in 3D, as it stands above</option></select></label>
+      <label class="row" for="exView" id="exViewRow" hidden><span>Picture</span><select id="exView"><option value="map">Output 1 as the pixel map, 3840 × 2160</option><option value="mapc">The pixel map only, cropped</option><option value="flat">The flat frame as edited</option><option value="3d">The ring in 3D, as it stands above</option></select></label>
+      <label class="check" for="exFlipIn" id="exFlipInRow"><input type="checkbox" id="exFlipIn" checked> Inside pillars turned to face inwards</label>
       <label class="check" for="exGpu"><input type="checkbox" id="exGpu" checked> Render on the graphics card</label>
       <button type="button" class="primary" id="save">Save</button>
       <div class="bar" id="bar" hidden><i id="barFill"></i></div>
@@ -575,21 +578,27 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 'v0.57.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
+const BUILD = 'v0.58.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
 $('build').textContent = '· ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
 
 const STYLES = ['rods', 'streaks', 'ascii', 'ridge', 'dither'];
 const STYLE_NAMES = { rods: 'LED rods', streaks: 'Light streaks', ascii: 'ASCII', ridge: 'Ridge lines', dither: 'Dither' };
-const S = { markers: [], loopA: -1, loopB: -1, exGpu: true, laneOff: [false, false, false, false, false, false], laneSolo: [false, false, false, false, false, false], laneLock: [false, false, false, false, false, false], gpu: true, cleanEnds: true, format: 'ring', shape: 3, panels: 30, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.4, size: 0.78, invert: false,
-  loop: 8, fps: 30, playing: true, seed: 1,
+// The ring as built, from the video drawings (MallCall - Vanish, rev 1.0, 2026-11-12): 22 pillars on each face, each 1 x 3 m and
+// 112 x 336 pixels (8.9 mm pitch), the outside at a radius of about 8.25 m and the inside about 8.0 m, 50 Hz.
+// One output of 3840 x 2160 carries them all: the inside row at the top left, the outside row under it.
+const RIG = { id: 'vanish-1.0', panels: 22, panelsIn: 22, panelPx: 112, shape: 3, faces: 2, gap: 1.36, fps: 50, sep: 0.25, outW: 3840, outH: 2160 };
+const rigIs = () => S.panels === RIG.panels && S.panelsIn === RIG.panelsIn && S.panelPx === RIG.panelPx && S.shape === RIG.shape && S.faces === RIG.faces && Math.abs(S.gap - RIG.gap) < 0.005;
+const rigApply = () => { for (const k of ['panels', 'panelsIn', 'panelPx', 'shape', 'faces', 'gap', 'fps']) S[k] = RIG[k]; S.rig = RIG.id; if (S.exView === 'flat') S.exView = 'map'; if (S.pil >= S.panels) S.pil = 0; };
+const S = { markers: [], loopA: -1, loopB: -1, exGpu: true, laneOff: [false, false, false, false, false, false], laneSolo: [false, false, false, false, false, false], laneLock: [false, false, false, false, false, false], gpu: true, cleanEnds: true, format: 'ring', shape: 3, panels: 22, repeats: 3, orbit: true, tint: '#ffffff', hot: true, glow: 0.4, size: 0.78, invert: false,
+  loop: 8, fps: 50, playing: true, seed: 1,
   baseAmt: 0.45, baseStyle: 'dither', baseDen: 0.304,
   logoEach: false, outline: false, symAmt: 0.3, pilAmt: 0.4, busy: 0.4, trans: 'cut', transLen: 1, glitch: 0.7, lines: 0.8, lineMode: 1, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxAmt: 0.4, fxStyle: 'rods', fxDen: 0.784,
   logoMode: 0, loader: 0, presence: 0.5, eq: 1, logoStyle: 'dither', logoDen: 0.64, typeStyle: 'dither', typeDen: 0.8, typeWarp: 0,
   chaos: 0.6, trail: 0, mix: false, pshape: 0, pfill: 0.78, dither: 'bayer4', wob: 0.5, wobSize: 0.5, eqAmt: 0.6, ease: 0.85, range: 'all',
   tcRate: '25', tcStart: 0, tcShow: false, outFit: 'contain',
-  faces: 2, panelsIn: 30, panelPx: 0, view3d: true, inner: 'same', exFmt: 'mp4', exView: 'flat', gap: 0,
+  faces: 2, panelsIn: 22, panelPx: 112, view3d: true, inner: 'same', exFmt: 'mp4', exView: 'map', gap: 1.36, rig: 'vanish-1.0', exFlipIn: true,
   gGain: 1, gCon: 1, gGam: 1, gBlack: 0, pq: 'auto', pil: 0, stats: false };
 // The piece can be split into parts. Everything from the three layers down to the look is kept per part; S holds the part being edited.
 const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'logoEach', 'outline', 'symAmt', 'pilAmt', 'busy', 'trans', 'transLen', 'glitch', 'lines', 'lineMode', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxAmt', 'fxStyle', 'fxDen',
@@ -1731,8 +1740,8 @@ function syncUI(quiet) {
   $('hudRes').textContent = W + ' × ' + H + ' · ' + S.fps + ' fps';
   $('fmtNote').textContent = S.format === 'wide' ? 'One 16:9 screen, ' + W + ' × ' + H + '.'
     : S.format === 'panel' ? 'One tall panel, 1 × ' + S.shape + ', ' + W + ' × ' + H + '.'
-    : (S.faces === 2 ? 'Two strips in one frame, ' + W + ' × ' + H + ': the ' + S.panels + ' outside panels on top, the ' + S.panelsIn + ' inside panels under them.' : 'All ' + S.panels + ' panels side by side as one strip, ' + W + ' × ' + H + '.') + ' Each panel is 1 × ' + S.shape + ', ' + pw + ' × ' + (pw * S.shape) + ' pixels. Air between is the gap from one pillar to the next, counted in pillar widths: with it set, the picture runs behind the pillars and each one shows its own stretch. Panel pixels 0 picks a size by itself. The thin lines mark the panel edges and are not in the export. What the inside shows is set per part.';
-  { const two = S.format === 'ring' && S.faces === 2; $('panelsInRow').hidden = $('innerRow').hidden = !two; $('faceSeg').hidden = !two || S.inner !== 'own'; if (face && (!two || S.inner !== 'own')) face = 0; setRadio('face', face); $('inner').value = S.inner; $('ring3d').hidden = $('views').hidden = !(S.format === 'ring' && S.view3d); if (S.pil >= S.panels) S.pil = 0; $('exViewRow').hidden = S.format !== 'ring'; }
+    : (S.faces === 2 ? 'Two strips in one frame, ' + W + ' × ' + H + ': the ' + S.panels + ' outside panels on top, the ' + S.panelsIn + ' inside panels under them. An export as the pixel map puts the inside row on top instead, as the drawings have it.' : 'All ' + S.panels + ' panels side by side as one strip, ' + W + ' × ' + H + '.') + ' Each panel is 1 × ' + S.shape + ', ' + pw + ' × ' + (pw * S.shape) + ' pixels. Air between is the gap from one pillar to the next, counted in pillar widths: with it set, the picture runs behind the pillars and each one shows its own stretch. Panel pixels 0 picks a size by itself. The thin lines mark the panel edges and are not in the export. What the inside shows is set per part.';
+  { const two = S.format === 'ring' && S.faces === 2; $('panelsInRow').hidden = $('innerRow').hidden = !two; $('faceSeg').hidden = !two || S.inner !== 'own'; if (face && (!two || S.inner !== 'own')) face = 0; setRadio('face', face); $('inner').value = S.inner; $('ring3d').hidden = $('views').hidden = !(S.format === 'ring' && S.view3d); if (S.pil >= S.panels) S.pil = 0; $('exViewRow').hidden = S.format !== 'ring'; $('exFlipInRow').hidden = !two || !/^map/.test(S.exView); $('rigSet').hidden = rigIs(); $('rigNote').textContent = rigIs() ? 'Set to the ring as built: 22 pillars on each face, 112 × 336 pixels a pillar, 50 Hz.' : 'These numbers are not the ring as built (22 pillars on each face, 112 × 336 pixels a pillar).'; }
   $('modeNote').textContent = S.logoMode === 0 ? 'The logo builds like a loading screen with a progress bar, lands on a hit, holds, then drops out.'
     : S.logoMode === 1 ? 'The logo stays out and cuts in on some of the hits.' : 'The logo is up the whole time and cuts between poses on the hits.';
   $('loader').disabled = S.logoMode !== 0;
@@ -1994,11 +2003,11 @@ $('tintHex').addEventListener('change', e => {
 });
 $('hot').addEventListener('change', e => { S.hot = e.target.checked; syncUI(); });
 $('shape').addEventListener('change', e => { S.shape = Number(e.target.value); pscale = 1; slowFrames = 0; syncUI(); });
-$('panels').addEventListener('change', e => { S.panels = clampInt(e.target, 4, 240, 30); e.target.value = S.panels; syncUI(); });
+$('panels').addEventListener('change', e => { S.panels = clampInt(e.target, 4, 240, RIG.panels); e.target.value = S.panels; syncUI(); });
 $('repeats').addEventListener('change', e => { S.repeats = clampInt(e.target, 1, 12, 3); e.target.value = S.repeats; syncUI(); });
 $('orbit').addEventListener('change', e => { S.orbit = e.target.checked; syncUI(); });
 $('faces').addEventListener('change', e => { if (face) setFace(0); S.faces = Number(e.target.value); pscale = 1; slowFrames = 0; syncUI(); });
-$('panelsIn').addEventListener('change', e => { S.panelsIn = clampInt(e.target, 4, 240, 30); e.target.value = S.panelsIn; syncUI(); });
+$('panelsIn').addEventListener('change', e => { S.panelsIn = clampInt(e.target, 4, 240, RIG.panelsIn); e.target.value = S.panelsIn; syncUI(); });
 $('panelPx').addEventListener('change', e => { const n = clampInt(e.target, 0, 512, 0); S.panelPx = n < 8 ? 0 : n; e.target.value = S.panelPx; syncUI(); });
 $('gap').addEventListener('change', e => { const n = Number(e.target.value); S.gap = Number.isFinite(n) ? Math.min(20, Math.max(0, Math.round(n * 100) / 100)) : 0; e.target.value = S.gap; syncUI(); });
 $('view3d').addEventListener('change', e => { S.view3d = e.target.checked; syncUI(); });
@@ -2023,7 +2032,9 @@ for (const [id, key, lo] of [['gGain', 'gGain'], ['gCon', 'gCon'], ['gGam', 'gGa
 $('gReset').addEventListener('click', () => { S.gGain = S.gCon = S.gGam = 1; S.gBlack = 0; gradePush(); touch(); if (!S.playing && !busy) paint(); });
 function gradePush() { for (const k of ['gGain', 'gCon', 'gGam', 'gBlack']) $(k).value = Math.round(S[k] * 100); gradeSet(); }
 $('exFmt').addEventListener('change', e => { S.exFmt = e.target.value; touch(); });
-$('exView').addEventListener('change', e => { S.exView = e.target.value; touch(); });
+$('exView').addEventListener('change', e => { S.exView = e.target.value; syncUI(); });
+$('exFlipIn').addEventListener('change', e => { S.exFlipIn = e.target.checked; touch(); });
+$('rigSet').addEventListener('click', () => { rigApply(); pushGlobals(); pscale = 1; rebuildScore(true); syncUI(); });
 $('exGpu').addEventListener('change', e => { S.exGpu = e.target.checked; touch(); });
 if (window.nativeApp && window.nativeApp.ffCheck) window.nativeApp.ffCheck().then(f => {
   const add = (v, n) => { const o = document.createElement('option'); o.value = v; o.textContent = n; $('exFmt').append(o); };
@@ -2174,7 +2185,7 @@ async function renderFile(openStream) {
   if (document.fonts && document.fonts.ready) await document.fonts.ready;
   const cv = src.cv;
   const r = S.format === 'ring' && S.faces === 2 ? null : exCard(new Renderer(cv)), st = newState();
-  const name = exName(whole, W, H, t1 - t0, fps, src.v3) + '.mp4';
+  const name = exName(whole, W, H, t1 - t0, fps, src.tag) + '.mp4';
   const stream = openStream && await openStream(name);
   const mo = { target: stream ? stream.target : new Mp4Muxer.ArrayBufferTarget(), video: { codec: pick.mux, width: W, height: H, frameRate: fps }, fastStart: stream ? false : 'in-memory', firstTimestampBehavior: 'offset' };
   if (snd) mo.audio = { codec: snd.mux, numberOfChannels: snd.ch, sampleRate: track.ab.sampleRate };
@@ -2240,16 +2251,34 @@ async function renderFile(openStream) {
   if (!stream) file.blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
   return file;
 }
-const exName = (whole, W, H, len, fps, v3) => (track ? 'track' : 'loop') + (whole ? '' : '-part' + (sel + 1)) + '-seed' + S.seed + '-' + S.format + (v3 ? '-3d' : '') + '-' + W + 'x' + H + '-' + Math.round(len) + 's-' + fps + 'fps';
+const exName = (whole, W, H, len, fps, v3) => (track ? 'track' : 'loop') + (whole ? '' : '-part' + (sel + 1)) + '-seed' + S.seed + '-' + S.format + (v3 ? '-' + v3 : '') + '-' + W + 'x' + H + '-' + Math.round(len) + 's-' + fps + 'fps';
+// The edited frame (outside strip on top, inside under it) laid out as the pixel map: the inside row first, the outside row
+// under it, both from the top left. Out-1 and In-1 stand at the same place on the ring, so the pillars keep their order.
+// An inside screen is looked at from the other side, so each inside pillar is turned left to right (S.exFlipIn):
+// then the ring shows what the 3D view shows.
+function mapDraw(g, cv, d) {
+  const pw = d.pw, hs = d.Hs;
+  g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.imageSmoothingEnabled = false; g.fillStyle = '#000'; g.fillRect(0, 0, g.canvas.width, g.canvas.height);
+  if (!d.two) { g.drawImage(cv, 0, 0); return; }
+  if (S.exFlipIn !== false) for (let i = 0; i < S.panelsIn; i++) { g.setTransform(-1, 0, 0, 1, (i + 1) * pw, 0); g.drawImage(cv, i * pw, hs, pw, hs, 0, 0, pw, hs); }
+  else g.drawImage(cv, 0, hs, d.Wi, hs, 0, 0, d.Wi, hs);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.drawImage(cv, 0, 0, d.Wo, hs, 0, hs, d.Wo, hs);
+}
 // What an export films: the flat frame, or the ring in 3D as it stands in the preview. cv is always the flat frame.
 function exSource(FW, FH) {
   const cv = document.createElement('canvas'); cv.width = FW; cv.height = FH;
+  if (S.format === 'ring' && /^map/.test(S.exView)) {     // the frame the LED processor is fed: laid out as the pixel map in the drawings
+    const d = dims(), crop = S.exView === 'mapc' || d.W > RIG.outW || d.H > RIG.outH, out = document.createElement('canvas'), g = out.getContext('2d');
+    out.width = crop ? d.W : RIG.outW; out.height = crop ? d.H : RIG.outH;
+    return { cv, W: out.width, H: out.height, v3: false, sep: true, tag: 'map', shot: () => { mapDraw(g, cv, d); return out; } };
+  }
   if (!(S.format === 'ring' && S.exView === '3d')) return { cv, W: FW, H: FH, v3: false, shot: () => cv };
   const c3 = document.createElement('canvas'); c3.width = 1920; c3.height = 1080;
   const r3 = ringMake(c3);
   if (!r3) throw new Error('gl');
   const yaw0 = ringCam.yaw; let n = 0;                   // with Turn on, the film turns too, at the same pace, starting where the view stands
-  return { cv, W: 1920, H: 1080, v3: true, shot: () => { if (ringTurn) ringCam.yaw = yaw0 + n++ / S.fps * RING_TURN; ringDraw(r3, c3, cv, 1920, 1080); return c3; } };
+  return { cv, W: 1920, H: 1080, v3: true, sep: true, tag: '3d', shot: () => { if (ringTurn) ringCam.yaw = yaw0 + n++ / S.fps * RING_TURN; ringDraw(r3, c3, cv, 1920, 1080); return c3; } };
 }
 // ProRes or HAP through ffmpeg in the Mac app: every frame goes over as raw pixels, the app adds the sound and the start timecode.
 async function renderMov() {
@@ -2261,17 +2290,17 @@ async function renderMov() {
   const one = i => { const tf = t0 + i / fps; if (two) drawFaces(rig, tf, fps); else renderOne(r, st, PAt(tf, 0), tf, fps); gradeFrame(cv); };
   // the timecode of the first frame, counted at the file's own frame rate
   const R = TC_RATES[S.tcRate], c = framesToTc(S.tcStart + t0 * R.real + 1e-6, R), tc = tc2(c.h) + ':' + tc2(c.m) + ':' + tc2(c.s) + ':' + tc2(Math.min(fps - 1, Math.floor(c.f * fps / R.fps)));
-  const name = exName(whole, W, H, t1 - t0, fps, src.v3) + '-' + S.exFmt + '.mov';
+  const name = exName(whole, W, H, t1 - t0, fps, src.tag) + '-' + S.exFmt + '.mov';
   const go = await window.nativeApp.ffStart({ w: W, h: H, fps, codec: S.exFmt, timecode: tc, audioPath: track ? soundPath : '', t0, dur: t1 - t0, name });
   if (!go || !go.ok) throw new Error(go && go.error || 'ffmpeg');
-  const rb = src.v3 ? document.createElement('canvas') : cv, rg = rb.getContext('2d', src.v3 ? { willReadFrequently: true } : undefined);
-  if (src.v3) { rb.width = W; rb.height = H; }
+  const rb = src.sep ? document.createElement('canvas') : cv, rg = rb.getContext('2d', src.sep ? { willReadFrequently: true } : undefined);
+  if (src.sep) { rb.width = W; rb.height = H; }
   try {
     if (score.cyclic && whole && PAt(D - 0.01).trail > 0.01) for (let i = Math.max(0, N - Math.round(fps * 0.8)); i < N; i++) one(i);
     for (let i = 0; i < N; i++) {
       if (stop) throw new Error('stop');
       one(i);
-      if (src.v3) rg.drawImage(src.shot(), 0, 0);
+      if (src.sep) rg.drawImage(src.shot(), 0, 0);
       if (!(await window.nativeApp.ffFrame(rg.getImageData(0, 0, W, H).data.buffer))) throw new Error('ffmpeg');
       if (i % 3 === 0) { $('barFill').style.width = (100 * (i + 1) / N).toFixed(1) + '%'; say('Rendering frame ' + (i + 1) + ' of ' + N + '.'); await new Promise(res => setTimeout(res, 0)); }
     }
@@ -2380,7 +2409,7 @@ $('save').addEventListener('click', async () => {
 });
 
 /* ---------- project files (Mac app) ---------- */
-const GLOBAL_KEYS = ['markers', 'loopA', 'loopB', 'exGpu', 'laneOff', 'laneSolo', 'laneLock', 'gpu', 'cleanEnds', 'format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'gap', 'gGain', 'gCon', 'gGam', 'gBlack', 'pq', 'pil', 'stats'];
+const GLOBAL_KEYS = ['markers', 'loopA', 'loopB', 'exGpu', 'laneOff', 'laneSolo', 'laneLock', 'gpu', 'cleanEnds', 'format', 'shape', 'panels', 'repeats', 'orbit', 'loop', 'fps', 'seed', 'invert', 'range', 'tcRate', 'tcStart', 'tcShow', 'outFit', 'faces', 'panelsIn', 'panelPx', 'view3d', 'exFmt', 'exView', 'exFlipIn', 'rig', 'gap', 'gGain', 'gCon', 'gGam', 'gBlack', 'pq', 'pil', 'stats'];
 let loadingProject = false, saveTimer = 0;
 function getProject() {
   savePart();
@@ -2391,7 +2420,7 @@ function pushGlobals() {
   setRadio('format', S.format);
   for (const id of ['shape', 'panels', 'repeats', 'loop', 'fps', 'seed', 'range', 'faces', 'panelsIn', 'panelPx', 'gap']) $(id).value = S[id];
   gradePush(); $('pq').value = S.pq; statsShow(); $('cleanEnds').checked = S.cleanEnds !== false; $('gpu').checked = S.gpu !== false;
-  $('view3d').checked = S.view3d; $('exView').value = S.exView; $('exGpu').checked = S.exGpu !== false; if ([...$('exFmt').options].some(o => o.value === S.exFmt)) $('exFmt').value = S.exFmt;
+  $('view3d').checked = S.view3d; if (![...$('exView').options].some(o => o.value === S.exView)) S.exView = 'map'; $('exView').value = S.exView; $('exFlipIn').checked = S.exFlipIn !== false; $('exGpu').checked = S.exGpu !== false; if ([...$('exFmt').options].some(o => o.value === S.exFmt)) $('exFmt').value = S.exFmt;
   $('orbit').checked = S.orbit; $('invert').checked = S.invert; $('outFit').value = S.outFit;
   if (!TC_RATES[S.tcRate]) S.tcRate = '25';
   tcPush(); outSync();
@@ -2410,6 +2439,7 @@ async function applyProject(pj) {
     if (!Array.isArray(pj.S.markers)) S.markers = [];       // a project from before markers has none, not the last project's
     S.markers = S.markers.filter(m => m && isFinite(m.t)).map(m => ({ t: Number(m.t), name: String(m.name || '').slice(0, 24) }));
     if (!(pj.S.loopB > pj.S.loopA)) { S.loopA = S.loopB = -1; }
+    if (pj.S.rig !== RIG.id) rigApply();                   // made before the drawings came: its guessed ring gives way to the real one
     S.format = 'ring';                                    // the piece is always the ring now; older projects made for a flat screen open on it
     pushGlobals(); undoReset(); tlSel = null; auto = {}; autoCut.base = autoCut.fx = autoCut.logo = autoCut.pil = autoCut.sym = true;
     if (!pj.soundPath && track) { audio.removeAttribute('src'); track = null; soundPath = ''; resetParts(); }
@@ -2585,7 +2615,7 @@ symBank();
 window.__exportTest = async (fmt, ringView) => {
   const set = (id, v) => { $(id).value = v; $(id).dispatchEvent(new Event('change')); };
   set('loop', '4'); $('tcStart').value = '01:00:00:00'; $('tcStart').dispatchEvent(new Event('change'));
-  if (ringView) { set('faces', '2'); set('panelsIn', '24'); set('exView', ringView); }
+  if (ringView) { set('faces', '2'); if (ringView === '3d') set('panelsIn', '24'); set('exView', ringView); }
   else set('exView', 'flat');                             // whatever the last session left chosen
   if (![...$('exFmt').options].some(o => o.value === fmt)) return { failed: 'format ' + fmt + ' is not offered' };
   set('exFmt', fmt);

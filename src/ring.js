@@ -40,7 +40,7 @@ function ringMake(cv) {
 function ringDraw(r, cv, src, w, h) {
   const gl = r.gl, d = dims();
   if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
-  const air = 1 + S.gap, Ro = S.panels * air / TAU, two = d.two, Ri = two && S.panelsIn !== S.panels ? S.panelsIn * air / TAU : Ro - 0.12, H = S.shape;
+  const air = 1 + S.gap, Ro = S.panels * air / TAU, two = d.two, Ri = two && S.panelsIn !== S.panels ? S.panelsIn * air / TAU : Ro - RIG.sep, H = S.shape;      // a pillar is a metre wide, so these are metres: the two faces stand a quarter of a metre apart
   const dist = (ringCam.dist || 2.6) * Ro, cp = Math.cos(ringCam.pitch), ex = dist * cp * Math.sin(ringCam.yaw), ey = dist * Math.sin(ringCam.pitch), ez = dist * cp * Math.cos(ringCam.yaw);
   const fl = 1 / Math.hypot(ex, ey, ez), fx = -ex * fl, fy = -ey * fl, fz = -ez * fl;
   let sx = -fz, sz = fx; const sl = 1 / Math.max(1e-6, Math.hypot(sx, sz)); sx *= sl; sz *= sl;
