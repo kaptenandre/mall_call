@@ -388,6 +388,7 @@ body.rendering .rail fieldset { opacity: .55; }
       <p class="note" id="modeNote"></p>
       <label class="row" for="loader"><span>Loader fills</span><select id="loader"><option value="0">Bottom up</option><option value="1">In blocks</option><option value="2">Line by line</option></select></label>
       <label class="row" for="presence"><span>How much</span><input type="range" id="presence" min="0" max="100" value="50"></label>
+      <label class="row" for="logoSteady" title="How still the logo holds its size, place and shape. At the top it only cuts in and out."><span>Steady</span><input type="range" id="logoSteady" min="0" max="100" value="60"></label>
       <div class="rowv"><span>EQ on the logo</span>
         <div class="seg four" role="radiogroup" aria-label="EQ on the logo">
           <label><input type="radio" name="eq" id="eqOff" value="0"><span>Off</span></label>
@@ -579,7 +580,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 'v0.61.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
+const BUILD = 'v0.62.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
 $('build').textContent = '· ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -596,14 +597,14 @@ const S = { markers: [], loopA: -1, loopB: -1, exGpu: true, laneOff: [false, fal
   loop: 8, fps: 50, playing: true, seed: 1,
   baseAmt: 0.45, baseStyle: 'dither', baseDen: 0.304,
   logoEach: false, outline: false, symAmt: 0.3, pilAmt: 0.4, busy: 0.4, trans: 'cut', transLen: 1, glitch: 0.7, lines: 0.8, lineMode: 1, chase: 0.4, bgLo: 0.6, bgMid: 0.5, bgHi: 0.6, fxAmt: 0.4, fxStyle: 'rods', fxDen: 0.784,
-  logoMode: 0, loader: 0, presence: 0.5, eq: 1, logoStyle: 'dither', logoDen: 0.64, typeStyle: 'dither', typeDen: 0.8, typeWarp: 0,
+  logoMode: 0, loader: 0, presence: 0.5, logoSteady: 0.6, eq: 1, logoStyle: 'dither', logoDen: 0.64, typeStyle: 'dither', typeDen: 0.8, typeWarp: 0,
   chaos: 0.6, trail: 0, mix: false, pshape: 0, pfill: 0.78, dither: 'bayer4', wob: 0.5, wobSize: 0.5, eqAmt: 0.6, ease: 0.85, range: 'all',
   tcRate: '25', tcStart: 0, tcShow: false, outFit: 'contain',
   readIn: true, faces: 2, panelsIn: 22, panelPx: 112, view3d: true, inner: 'same', exFmt: 'mp4', exView: 'map', gap: 1.36, rig: 'vanish-1.0', exFlipIn: true,
   gGain: 1, gCon: 1, gGam: 1, gBlack: 0, pq: 'auto', pil: 0, stats: false };
 // The piece can be split into parts. Everything from the three layers down to the look is kept per part; S holds the part being edited.
 const PART_KEYS = ['tint', 'hot', 'glow', 'size', 'baseAmt', 'baseStyle', 'baseDen', 'logoEach', 'outline', 'symAmt', 'pilAmt', 'busy', 'trans', 'transLen', 'glitch', 'lines', 'lineMode', 'chase', 'bgLo', 'bgMid', 'bgHi', 'fxAmt', 'fxStyle', 'fxDen',
-  'logoMode', 'loader', 'presence', 'eq', 'logoStyle', 'logoDen', 'typeStyle', 'typeDen', 'typeWarp', 'chaos', 'trail', 'mix', 'pshape', 'pfill', 'dither', 'wob', 'wobSize', 'eqAmt', 'ease', 'inner'];
+  'logoMode', 'loader', 'presence', 'logoSteady', 'eq', 'logoStyle', 'logoDen', 'typeStyle', 'typeDen', 'typeWarp', 'chaos', 'trail', 'mix', 'pshape', 'pfill', 'dither', 'wob', 'wobSize', 'eqAmt', 'ease', 'inner'];
 const snap = () => { const o = {}; for (const k of PART_KEYS) o[k] = S[k]; return o; };
 let parts = [{ t: 0, P: snap() }], sel = 0, loopPart = false;
 const partIdx = t => { let i = 0; while (i + 1 < parts.length && parts[i + 1].t <= t) i++; return i; };
@@ -1411,7 +1412,7 @@ class Renderer {
       if ((L === 1 && laneHidden(1)) || (L === 0 && !st.bn && !st.pl && !st.pf) || (L === 2 && !st.lv && !st.syN) || (L === 3 && !st.tyN)) continue;
       let o = LO[L];
       o.va = st.va; o.vb = st.vb; o.amb = L === 1 && !o.quiet ? 1 : 0;      // a glitch layer with everything at nought is black, not faintly lit
-      if (L === 2 && st.dens !== 1) o.density = Math.min(1.2, (lerp(22, 96, o.density) * st.dens - 22) / 74);
+      if (L === 2 && st.dens !== 1) o.density = Math.min(1.2, (lerp(22, 96, o.density) * lerp(st.dens, 1, o.steady || 0) - 22) / 74);
       const lc = this.lay[L], q = this.lg[L];
       if (lc.width !== W || lc.height !== H) { lc.width = W; lc.height = H; }
       q.globalCompositeOperation = 'source-over'; q.globalAlpha = 1; q.fillStyle = '#000'; q.fillRect(0, 0, W, H);
@@ -1433,6 +1434,11 @@ class Renderer {
           sL = Object.assign(Object.create(st), { s: e.big || 1, kx: 1, ox: 0, oy: 0, rot: 0, sk: 0, tx: 1, ty: 1, eq: 0, x0: 0, x1: 1, y0: 0, y1: 1, hide: false, gI: 0, inv: false, lv: 2, crush: 0, nSl: 0, tearA: st.tearA * life * 0.5, dropA: st.dropA * life * 0.5 });
           o = Object.assign({}, o, { wobB: 0, travel: 0, outline: false, pshape: 0, pfill: 1, style: 'dither', dither: 'bayer4', solid: 1 - 0.5 * life, density: (H / cell - 20) / 70, logoEach: o.logoEach || !!e.each });
           cleanReveal(e, st.clAge, sL, o, st, PN, H);
+        } else if (o.steady > 0.01 && st.lv) {
+          // Steady: the poses the logo cuts between are pulled toward the plain one, so it stops jumping in size, place and shape.
+          // Past the middle it also stops multiplying. The cuts themselves, the tear and the wrong frames stay.
+          const k = o.steady, m = (a, b) => a + (b - a) * k;
+          sL = Object.assign(Object.create(st), { s: m(st.s, 1), kx: m(st.kx, 1), ox: m(st.ox, 0), oy: m(st.oy, 0), rot: m(st.rot, 0), sk: m(st.sk, 0), tx: k > 0.5 ? 1 : st.tx, ty: k > 0.5 ? 1 : st.ty, x0: m(st.x0, 0), x1: m(st.x1, 1), y0: m(st.y0, 0), y1: m(st.y1, 1) });
         }
         const flipOnly = a => flip && a ? { M: (u, v) => a.M(1 - u, v), B: (u, v) => a.B(1 - u, v) } : a;      // what sits in the pillars themselves has no window to go through
         const each = o.logoEach && PN > 1, a = !st.lv ? null : each ? flipOnly(logoField(W, H, t, Object.assign({}, o, { repeats: PN, travel: 0 }), sL)) : wrap(logoField(Wf, H, t, o, sL));
@@ -1517,7 +1523,7 @@ function layerOpts(fps, P) {
     repeats: ring ? S.repeats : 1, travel: ring && S.orbit ? 1 : 0, fan: S.format === 'wide', trail: P.trail, fps,
     pshape: P.pshape, pfill: P.pfill, dither: P.dither, loader: P.loader, va: 0.3, vb: 0.7, amb: 0,
     logoEach: !!P.logoEach, outline: !!P.outline, wobA: P.wob * 2, wobB: Math.max(0, P.wob - 0.5) * 0.05, wobF: Math.pow(4, 0.5 - P.wobSize), eqAmt: P.eqAmt, ease: P.ease, tw: 0,
-    quiet: !(P.glitch > 0.02 || P.lines > 0.02 || P.chase > 0.02 || P.bgLo > 0.02 || P.bgMid > 0.02 || P.bgHi > 0.02) });
+    steady: P.logoSteady === undefined ? 0.6 : P.logoSteady, quiet: !(P.glitch > 0.02 || P.lines > 0.02 || P.chase > 0.02 || P.bgLo > 0.02 || P.bgMid > 0.02 || P.bgHi > 0.02) });
   // words are a layer of their own: their own style and pixel size, and only as much of the glitch as Warp lets in
   const ty = mk(P.typeStyle || 'dither', P.typeDen === undefined ? 0.8 : P.typeDen); ty.tyWarp = P.typeWarp || 0;
   return [mk(P.baseStyle, P.baseDen), mk(P.fxStyle, P.fxDen), mk(P.logoStyle, P.logoDen), ty];
@@ -1995,10 +2001,10 @@ const clampInt = (el, lo, hi, d) => { const n = Math.round(Number(el.value)); re
 const px2den = v => 1 - 1.2 * v, den2px = d => (1 - d) / 1.2;
 // id, state key, value from 0..1 slider position, and back; rebuild = the schedule depends on it
 const RANGES = [['baseAmt', 'baseAmt', 1], ['basePx', 'baseDen', 0, px2den, den2px], ['glitch', 'glitch'], ['lines', 'lines'], ['chase', 'chase'], ['bgLo', 'bgLo'], ['bgMid', 'bgMid'], ['bgHi', 'bgHi'], ['fxAmt', 'fxAmt', 1],
-  ['fxPx', 'fxDen', 0, px2den, den2px], ['wob', 'wob'], ['wobSize', 'wobSize'], ['eqAmt', 'eqAmt'], ['ease', 'ease'], ['presence', 'presence', 1], ['pilAmt', 'pilAmt', 1], ['symAmt', 'symAmt', 1], ['busy', 'busy', 1], ['logoPx', 'logoDen', 0, px2den, den2px], ['typePx', 'typeDen', 0, px2den, den2px], ['typeWarp', 'typeWarp'], ['size', 'size'], ['chaos', 'chaos', 1], ['trail', 'trail'], ['pfill', 'pfill'], ['glow', 'glow']];
+  ['fxPx', 'fxDen', 0, px2den, den2px], ['wob', 'wob'], ['wobSize', 'wobSize'], ['eqAmt', 'eqAmt'], ['ease', 'ease'], ['presence', 'presence', 1], ['logoSteady', 'logoSteady'], ['pilAmt', 'pilAmt', 1], ['symAmt', 'symAmt', 1], ['busy', 'busy', 1], ['logoPx', 'logoDen', 0, px2den, den2px], ['typePx', 'typeDen', 0, px2den, den2px], ['typeWarp', 'typeWarp'], ['size', 'size'], ['chaos', 'chaos', 1], ['trail', 'trail'], ['pfill', 'pfill'], ['glow', 'glow']];
 let chaosT = 0;                          // on a long piece Chaos redoes the whole score, so it waits until the slider rests
 for (const [id, key, rebuild, to] of RANGES) $(id).addEventListener('input', e => { const v = e.target.value / 100, x = to ? to(v) : v; if (auto[key] && auto[key].length) setKey(key, tau, x); else S[key] = x; if (rebuild) { if (key === 'chaos' && score.D > 120) { clearTimeout(chaosT); chaosT = setTimeout(() => { rebuildScore(); syncUI(); }, 200); } else rebuildScore(key !== 'chaos'); } syncUI(); });      // only Chaos changes the score itself
-function pushRanges() { for (const [id, key, , , back] of RANGES) $(id).value = Math.round((back ? back(S[key]) : S[key]) * 100); }
+function pushRanges() { for (const [id, key, , , back] of RANGES) { const v = S[key] === undefined && key === 'logoSteady' ? 0.6 : S[key]; $(id).value = Math.round((back ? back(v) : v) * 100); } }      // a part from before Steady gets its default
 for (const id of ['baseStyle', 'fxStyle', 'logoStyle', 'typeStyle']) {
   for (const s of STYLES) { const o = document.createElement('option'); o.value = s; o.textContent = STYLE_NAMES[s]; $(id).append(o); }
   $(id).value = S[id];
