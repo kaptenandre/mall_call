@@ -1,7 +1,7 @@
 // Checks for the parts with no DOM: automation curves and timecode. Run with: npm test
 const fs = require('fs'), path = require('path'), assert = require('assert');
 const src = ['src/engine.js', 'src/timecode.js'].map(f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8')).join('\n');
-const M = new Function(src + '\nreturn { autoVal, TC_RATES, tcToFrames, framesToTc, tcString, parseTc, mtcQuarter, mtcFull, MtcReader, ltcEncode, LtcDecoder, ltcRate, buildLoopScore, buildTrackScore, analyze, makeStructure, makeEvents, EV };')();
+const M = new Function(src + '\nreturn { autoVal, TC_RATES, tcToFrames, framesToTc, tcString, parseTc, mtcQuarter, mtcFull, MtcReader, ltcEncode, LtcDecoder, ltcRate, buildLoopScore, buildTrackScore, analyze, makeStructure, makeEvents, newState, stateAt, EV };')();
 let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
 
 // automation
@@ -89,5 +89,22 @@ for (const r of Object.keys(M.TC_RATES)) {
   ok(se.length >= 1 && se.every(e => e.step && e.d >= 0.8 && e.t + e.d <= sc.D), 'symbols are placed by the automatic cut: ' + se.length);
   ok(M.makeEvents(sc, { base: 0.45, fx: 0.3, mode: 0, presence: 0.5 }, 0, sc.D, 0).every(e => e.type !== 'sym' && e.type !== 'pillar'), 'and not without being asked');
   console.log('structure: ' + (Date.now() - t0) + ' ms, ' + ev.length + ' clips: ' + Object.keys(M.EV).map(k => k + ' ' + of(k).length).filter(x => !x.endsWith(' 0')).join(', '));
+}
+// The delayed inside face must keep its own place in the shared score.
+{
+  const cfg = { chaos: 0.6, glitch: 0.8, lines: 0.5, lineMode: 1, chase: 0, tw: 0, bgLo: 0, bgMid: 0, bgHi: 0 };
+  const first = M.buildLoopScore(12, 7, cfg.chaos), next = M.buildLoopScore(12, 23, cfg.chaos);
+  const outside = M.newState(), inside = M.newState();
+  for (const [score, time] of [[first, 11.8], [first, 11.9], [first, 0.1], [first, 4], [first, 1], [next, 1]]) {
+    const insideTime = (time - 0.24 + score.D) % score.D;
+    M.stateAt(score, time, cfg, outside);
+    M.stateAt(score, insideTime, cfg, inside);
+    const fresh = M.newState();
+    M.stateAt(score, insideTime, cfg, fresh);
+    ok(inside.stepIndex === fresh.stepIndex && inside.moveIndex === fresh.moveIndex &&
+       inside.s === fresh.s && inside.rot === fresh.rot &&
+       score.steps[outside.stepIndex] <= time && time < score.steps[outside.stepIndex + 1],
+    'independent face positions after a seek, wrap or score change');
+  }
 }
 console.log('TEST ok, ' + n + ' checks');

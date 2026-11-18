@@ -46,9 +46,9 @@ function createWindow() {
     w.on('page-title-updated', e => e.preventDefault());
     w.on('closed', () => { if (outWin === w) outWin = null; });
   });
-  win.on('closed', () => { win = null; if (outWin && !outWin.isDestroyed()) outWin.close(); });
+  win.on('closed', () => { win = null; void saveDrop().catch(console.error); if (outWin && !outWin.isDestroyed()) outWin.close(); });
   if (SMOKE) smoke();
-  win.webContents.on('did-start-navigation', (e, url, inPlace, main) => { if (main && !inPlace) ffDrop(); });      // a reload in the middle of an export must not leave ffmpeg holding the job
+  win.webContents.on('did-start-navigation', (e, url, inPlace, main) => { if (main && !inPlace) { ffDrop(); void saveDrop().catch(console.error); } });      // a reload in the middle of an export must not leave ffmpeg holding the job
   if (SMOKE) win.loadFile(path.join(__dirname, 'app', 'index.html')); else openPage();
   setTitle();
 }
@@ -143,27 +143,74 @@ ipcMain.handle('save-file', async (event, name, data) => {
   return true;
 });
 // A large file is written piece by piece: a whole film in one message is more than the bridge will carry.
-let saveJob = null;
-const saveDrop = async () => { const j = saveJob; saveJob = null; if (j) { try { await j.fd.close(); } catch (e) {} await fsp.unlink(j.path).catch(() => {}); } };
+let saveJob = null, saveGeneration = 0;
+const saveDrop = async () => {
+  saveGeneration++;
+  const job = saveJob;
+  saveJob = null;
+  if (!job) return;
+  try { await job.fd.close(); } finally { await fsp.rm(job.temp, { recursive: true, force: true }); }
+};
 ipcMain.handle('save-begin', async (event, name) => {
-  await saveDrop();
+  if (saveJob) return { error: 'A save is already in progress.' };
+  const generation = saveGeneration;
   let out = process.env.MALLCALL_FF_OUT || null;
   if (!out) {
     const r = await dialog.showSaveDialog(win, { defaultPath: path.join(lastDir || app.getPath('movies'), String(name)) });
     if (r.canceled || !r.filePath) return { declined: true };
-    out = r.filePath; lastDir = path.dirname(out);
+    out = r.filePath;
   }
-  try { saveJob = { fd: await fsp.open(out, 'w'), path: out, n: 0 }; return { ok: true }; } catch (e) { return { error: String(e && e.message) }; }
+  let temp;
+  try {
+    temp = await fsp.mkdtemp(path.join(path.dirname(out), '.mallcall-export-'));
+    const file = path.join(temp, 'movie');
+    const fd = await fsp.open(file, 'wx');
+    if (saveJob || generation !== saveGeneration || event.sender.isDestroyed()) {
+      await fd.close();
+      throw new Error('The save was interrupted.');
+    }
+    saveJob = { fd, path: out, file, temp, n: 0, writing: false, sender: event.sender };
+    lastDir = path.dirname(out);
+    return { ok: true };
+  } catch (e) {
+    if (temp) await fsp.rm(temp, { recursive: true, force: true }).catch(() => {});
+    return { error: e.message };
+  }
 });
-ipcMain.handle('save-chunk', async (event, data) => {
-  if (!saveJob) return { error: 'no file open' };
-  try { const b = Buffer.from(data); await saveJob.fd.write(b); saveJob.n += b.length; return { ok: true }; } catch (e) { const m = String(e && e.message); await saveDrop(); return { error: m }; }
+ipcMain.handle('save-chunk', async (event, data, position) => {
+  const job = saveJob;
+  if (!job || job.sender !== event.sender || job.writing) return { error: 'No file available to write.' };
+  const offset = position === undefined ? job.n : position;
+  if (!(data instanceof ArrayBuffer) || !Number.isSafeInteger(offset) || offset < 0 ||
+      data.byteLength > 16 * 1024 * 1024 || !Number.isSafeInteger(offset + data.byteLength)) {
+    return { error: 'Invalid file chunk.' };
+  }
+  job.writing = true;
+  try {
+    const bytes = Buffer.from(data);
+    for (let written = 0; written < bytes.length;) {
+      const { bytesWritten } = await job.fd.write(bytes, written, bytes.length - written, offset + written);
+      if (!bytesWritten) throw new Error('The file write stopped.');
+      written += bytesWritten;
+    }
+    job.n = Math.max(job.n, offset + bytes.length);
+    return { ok: true };
+  } catch (e) {
+    return { error: e.message };
+  } finally { job.writing = false; }
 });
 ipcMain.handle('save-end', async (event, abort) => {
-  if (!saveJob) return { error: 'no file open' };
+  const job = saveJob;
+  if (!job || job.sender !== event.sender || job.writing) return { error: 'No file available to close.' };
   if (abort) { await saveDrop(); return { ok: true }; }
-  const j = saveJob; saveJob = null;
-  try { await j.fd.close(); return { ok: true, path: j.path, bytes: j.n }; } catch (e) { return { error: String(e && e.message) }; }
+  saveJob = null;
+  try {
+    await job.fd.close();
+    await fsp.rename(job.file, job.path);
+    return { ok: true, path: job.path, bytes: job.n };
+  } catch (e) {
+    return { error: e.message };
+  } finally { await fsp.rm(job.temp, { recursive: true, force: true }).catch(() => {}); }
 });
 ipcMain.handle('pick-file', async (event, kind) => {
   const filters = kind === 'logo'

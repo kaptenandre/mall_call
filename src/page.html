@@ -575,7 +575,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 'v0.56.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
+const BUILD = 'v0.57.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
 $('build').textContent = '· ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -1364,7 +1364,7 @@ class Renderer {
   // may this renderer draw on the graphics card: the preview when its switch is on, an export when the export's own switch is
   card() { return this.gpu === 2 || (!!this.gpu && S.gpu !== false); }
   // LO: options for the base, glitch, logo and type layers, in that order
-  draw(t, LO, st) {
+  draw(t, LO, st, storageW) {
     const { cv, g } = this, W = cv.width, H = cv.height;
     g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
     if (st.black || st.gain < 0.01) { this.fbOk = false; return; }
@@ -1372,7 +1372,7 @@ class Renderer {
     const PN = LO[0].gapN || LO[0].cols;
     pillarGains(st, PN, LO[0]); st.pgK = LO[0].gapN ? 1 / (1 + LO[0].gap) : 1;
     if (st.clean) { st.pm = null; st.pmLogo = null; }       // nothing hides a plain logo, pillar patterns included
-    const card = this.card() && gpuFrameBegin(W, H);      // the layers the card draws are put together there and come back in one copy
+    const card = this.card() && gpuFrameBegin(W, H, storageW);      // the layers the card draws are put together there and come back in one copy
     for (let L = 0; L < 4; L++) {
       if ((L === 1 && laneHidden(1)) || (L === 0 && !st.bn && !st.pl && !st.pf) || (L === 2 && !st.lv && !st.syN) || (L === 3 && !st.tyN)) continue;
       let o = LO[L];
@@ -1535,14 +1535,14 @@ function sizeStage() {
 // One face of the piece into a renderer. face is undefined when the format has a single face.
 // counter: this face runs the other way round the ring. Base and glitch are read right to left and the logos travel
 // backwards, while the logo itself and any words stay the right way round.
-function renderOne(R, st, P, tf, fps, fc, counter) {
+function renderOne(R, st, P, tf, fps, fc, counter, storageW) {
   const tw = warp(tf, P), LO = layerOpts(fps, P), mo = motion(P, tw);
   LO[1].tw = tw; mo.face = fc;
   if (counter) { LO[0].flipU = LO[1].flipU = true; LO[2].travel = -LO[2].travel; }
   if (S.format === 'ring' && S.gap > 0) for (const o of LO) { o.gap = S.gap; o.gapN = fc ? S.panelsIn : S.panels; }
   { const cols = S.format === 'ring' ? (fc ? S.panelsIn : S.panels) : S.format === 'wide' ? 16 : 1; for (const o of LO) o.cols = cols; }      // how many pillars a Pillar clip plays across
   stateAt(score, tf, mo, st);
-  R.draw(phase(tw), LO, st);
+  R.draw(phase(tw), LO, st, storageW);
 }
 // An export may draw on the graphics card too (S.exGpu): the same shaders the preview shows, so the film is what was seen.
 const exCard = x => { const on = S.exGpu !== false ? 2 : false; if (x && x.a) x.a.gpu = x.b.gpu = on; else if (x) x.gpu = on; return x; };
@@ -1558,13 +1558,14 @@ function drawFaces(rig, tf, fps) {
   // so that a move seems to pass from the outside of the ring to the inside.
   const lag = mode === 'late' ? 0.24 : 0, tin = !lag ? tf : score.cyclic ? (tf - lag + score.D) % score.D : Math.max(0, tf - lag);
   const own = mode === 'own' || mode === 'counter' || mode === 'late' || wi !== wo || userEv.some(e => e.face && tf >= e.t && tf < e.t + Math.max(e.d, 0.05)), turns = rig === mainRig && S.playing && own && PERF.all > 1000 / PREVIEW_FPS() && rig.b.cv.width === wi;
+  const storageW = mode === 'off' ? wo : Math.max(wo, wi);
   rig.turn = turns ? !rig.turn : false;
-  size(rig.a.cv, wo, hs); if (!turns || rig.turn) renderOne(rig.a, rig.stA, P, tf, fps, 0);
+  size(rig.a.cv, wo, hs); if (!turns || rig.turn) renderOne(rig.a, rig.stA, P, tf, fps, 0, false, storageW);
   g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.fillStyle = '#000'; g.fillRect(0, 0, rig.cv.width, rig.cv.height);
   g.drawImage(rig.a.cv, 0, 0);
   if (mode === 'off') return;
   let src = rig.a.cv;
-  if (own) { size(rig.b.cv, wi, hs); if (!turns || !rig.turn) renderOne(rig.b, rig.stB, mode === 'own' ? PAt(tf, 1) : lag ? PAt(tin, 0) : P, tin, fps, 1, mode === 'counter'); src = rig.b.cv; }   // only drawn twice when the faces really differ
+  if (own) { size(rig.b.cv, wi, hs); if (!turns || !rig.turn) renderOne(rig.b, rig.stB, mode === 'own' ? PAt(tf, 1) : lag ? PAt(tin, 0) : P, tin, fps, 1, mode === 'counter', storageW); src = rig.b.cv; }   // only drawn twice when the faces really differ
   if (mode === 'mirror') { g.save(); g.translate(wi, hs); g.scale(-1, 1); g.drawImage(src, 0, 0, wi, hs); g.restore(); }
   else g.drawImage(src, 0, hs, wi, hs);
 }
@@ -1970,16 +1971,16 @@ function setTint(hex, fromPreset) {
 }
 const radios = (name, fn) => document.querySelectorAll('input[name=' + name + ']').forEach(r => r.addEventListener('change', () => { if (r.checked) fn(r.value); }));
 const setRadio = (name, v) => document.querySelectorAll('input[name=' + name + ']').forEach(r => { r.checked = r.value === String(v); });
-radios('format', v => { S.format = v; pscale = 1; slowFrames = 0; rebuildScore(); syncUI(); });
+radios('format', v => { S.format = v; pscale = 1; slowFrames = 0; rebuildScore(true); syncUI(); });
 radios('tint', v => setTint(v, true));
 radios('eq', v => { S.eq = Number(v); syncUI(); });
-radios('logoMode', v => { S.logoMode = Number(v); rebuildScore(); syncUI(); });
+radios('logoMode', v => { S.logoMode = Number(v); rebuildScore(true); syncUI(); });
 radios('pshape', v => { S.pshape = Number(v); syncUI(); });
 $('invert').addEventListener('change', e => { S.invert = e.target.checked; mask = buildMask(logoSrc.img, logoSrc.w, logoSrc.h, S.invert); maskN++; syncUI(); });
 $('loader').addEventListener('change', e => { S.loader = Number(e.target.value); syncUI(); });
 $('partName').addEventListener('input', e => { const v = e.target.value.trim(); if (v) parts[sel].name = v; else delete parts[sel].name; partsSig = ''; tlChanged(); });
-$('trans').addEventListener('change', e => { S.trans = e.target.value; rebuildScore(); syncUI(); });
-$('transLen').addEventListener('change', e => { const n = Number(e.target.value); S.transLen = Number.isFinite(n) ? Math.min(6, Math.max(0.2, n)) : 1; e.target.value = S.transLen; rebuildScore(); syncUI(); });
+$('trans').addEventListener('change', e => { S.trans = e.target.value; rebuildScore(true); syncUI(); });
+$('transLen').addEventListener('change', e => { const n = Number(e.target.value); S.transLen = Number.isFinite(n) ? Math.min(6, Math.max(0.2, n)) : 1; e.target.value = S.transLen; rebuildScore(true); syncUI(); });
 $('lineMode').addEventListener('change', e => { S.lineMode = Number(e.target.value); syncUI(); });
 $('dither').addEventListener('change', e => { S.dither = e.target.value; syncUI(); });
 $('mix').addEventListener('change', e => { S.mix = e.target.checked; syncUI(); });
@@ -2090,7 +2091,7 @@ $('blank').addEventListener('click', () => {
   const hush = P => { if (P) Object.assign(P, { glitch: 0, lines: 0, chase: 0, bgLo: 0, bgMid: 0, bgHi: 0, baseAmt: 0, fxAmt: 0, pilAmt: 0, symAmt: 0, trans: 'cut' }); };
   for (const p of parts) { hush(p.P); hush(p.Q); }
   autoCut.base = autoCut.fx = autoCut.logo = autoCut.pil = autoCut.sym = false; S.cleanEnds = false;
-  loadPart(); pushAll(); rebuildScore(); syncUI();
+  loadPart(); pushAll(); rebuildScore(true); syncUI();
   partSay('Blank slate. Nothing plays by itself now: drag clips from the palette onto the timeline to build it up. Auto on a lane brings its automatic cut back.');
 });
 $('copyAll').addEventListener('click', () => { if (face) setFace(0); savePart(); for (const p of parts) { p.P = snap(); if (parts[sel].Q) p.Q = Object.assign({}, parts[sel].Q); else delete p.Q; } rebuildScore(); syncUI(); partSay('All ' + parts.length + ' parts now share the settings of part ' + (sel + 1) + '.'); });
@@ -2162,7 +2163,7 @@ async function pickAudio(ab) {
   }
   return null;
 }
-async function renderFile() {
+async function renderFile(openStream) {
   const whole = S.range !== 'part' || parts.length === 1, t0 = whole ? 0 : parts[sel].t, t1 = whole ? score.D : partEnd(sel);
   const { W: FW, H: FH } = dims(), fps = S.fps, D = score.D, N = Math.max(1, Math.round((t1 - t0) * fps));
   const src = exSource(FW, FH), W = src.W, H = src.H;
@@ -2172,18 +2173,26 @@ async function renderFile() {
   const snd = track ? await pickAudio(track.ab) : null;
   if (document.fonts && document.fonts.ready) await document.fonts.ready;
   const cv = src.cv;
-  const r = S.format === 'ring' && S.faces === 2 ? null : exCard(new Renderer(cv)), st = newState(), sc = score;
-  const mo = { target: new Mp4Muxer.ArrayBufferTarget(), video: { codec: pick.mux, width: W, height: H, frameRate: fps }, fastStart: 'in-memory', firstTimestampBehavior: 'offset' };
+  const r = S.format === 'ring' && S.faces === 2 ? null : exCard(new Renderer(cv)), st = newState();
+  const name = exName(whole, W, H, t1 - t0, fps, src.v3) + '.mp4';
+  const stream = openStream && await openStream(name);
+  const mo = { target: stream ? stream.target : new Mp4Muxer.ArrayBufferTarget(), video: { codec: pick.mux, width: W, height: H, frameRate: fps }, fastStart: stream ? false : 'in-memory', firstTimestampBehavior: 'offset' };
   if (snd) mo.audio = { codec: snd.mux, numberOfChannels: snd.ch, sampleRate: track.ab.sampleRate };
   const muxer = new Mp4Muxer.Muxer(mo);
   let failed = null;
-  const enc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: e => { failed = e; } });
+  const enc = new VideoEncoder({
+    output: (chunk, meta) => { if (!failed) { try { muxer.addVideoChunk(chunk, meta); } catch (e) { failed = e; } } },
+    error: e => { failed = e; }
+  });
   enc.configure({ codec: pick.codec, width: W, height: H, bitrate, framerate: fps, latencyMode: 'quality' });
   let aenc = null, aPos = 0, aFrom = 0, aTotal = 0, chans = null, sr = 0;
   if (snd) {
     const ab = track.ab; sr = ab.sampleRate; aFrom = aPos = Math.min(ab.length, Math.round(t0 * sr)); aTotal = Math.min(ab.length, Math.round(t1 * sr));
     chans = []; for (let c = 0; c < snd.ch; c++) chans.push(ab.getChannelData(c));
-    aenc = new AudioEncoder({ output: (chunk, meta) => muxer.addAudioChunk(chunk, meta), error: e => { failed = e; } });
+    aenc = new AudioEncoder({
+      output: (chunk, meta) => { if (!failed) { try { muxer.addAudioChunk(chunk, meta); } catch (e) { failed = e; } } },
+      error: e => { failed = e; }
+    });
     aenc.configure({ codec: snd.codec, sampleRate: sr, numberOfChannels: snd.ch, bitrate: 192000 });
   }
   const feed = sec => {
@@ -2197,10 +2206,9 @@ async function renderFile() {
   };
   const two = S.format === 'ring' && S.faces === 2, rig = two ? exCard(mkRig(cv)) : null;
   const us = 1e6 / fps, one = i => { const tf = t0 + i / fps; if (two) drawFaces(rig, tf, fps); else renderOne(r, st, PAt(tf, 0), tf, fps); gradeFrame(cv); return tf - t0; };
-  sc._i = 0; sc._k = 0;
   try {
     // a loop with trails has to start with the tail of its own ending already on screen
-    if (sc.cyclic && whole && PAt(D - 0.01).trail > 0.01) for (let i = Math.max(0, N - Math.round(fps * 0.8)); i < N; i++) one(i);
+    if (score.cyclic && whole && PAt(D - 0.01).trail > 0.01) for (let i = Math.max(0, N - Math.round(fps * 0.8)); i < N; i++) one(i);
     for (let i = 0; i < N; i++) {
       if (failed) throw failed;
       if (stop) throw new Error('stop');
@@ -2209,11 +2217,15 @@ async function renderFile() {
       enc.encode(vf, { keyFrame: i % fps === 0 });
       vf.close();
       if (aenc) feed(tf + 0.5);
-      if (enc.encodeQueueSize > 2 || i % 3 === 0) {
+      if (enc.encodeQueueSize > 2 || (aenc && aenc.encodeQueueSize > 8) || i % 3 === 0) {
         $('barFill').style.width = (100 * (i + 1) / N).toFixed(1) + '%';
         say('Rendering frame ' + (i + 1) + ' of ' + N + '.');
         await new Promise(res => setTimeout(res, 0));
-        while (enc.encodeQueueSize > 4) await new Promise(res => setTimeout(res, 4));
+        while (!failed && !stop && (enc.encodeQueueSize > 4 || (aenc && aenc.encodeQueueSize > 8))) {
+          if (stream) await stream.drain();
+          await new Promise(res => setTimeout(res, 4));
+        }
+        if (stream) await stream.drain();
       }
     }
     if (aenc) { feed(t1 - t0 + 1); await aenc.flush(); aenc.close(); }
@@ -2224,8 +2236,9 @@ async function renderFile() {
   }
   if (failed) throw failed;
   muxer.finalize();
-  return { blob: new Blob([muxer.target.buffer], { type: 'video/mp4' }), silent: !!track && !snd, opus: !!snd && snd.mux === 'opus',
-    name: exName(whole, W, H, t1 - t0, fps, src.v3) + '.mp4' };
+  const file = { name, silent: !!track && !snd, opus: !!snd && snd.mux === 'opus' };
+  if (!stream) file.blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
+  return file;
 }
 const exName = (whole, W, H, len, fps, v3) => (track ? 'track' : 'loop') + (whole ? '' : '-part' + (sel + 1)) + '-seed' + S.seed + '-' + S.format + (v3 ? '-3d' : '') + '-' + W + 'x' + H + '-' + Math.round(len) + 's-' + fps + 'fps';
 // What an export films: the flat frame, or the ring in 3D as it stands in the preview. cv is always the flat frame.
@@ -2242,7 +2255,7 @@ function exSource(FW, FH) {
 async function renderMov() {
   const whole = S.range !== 'part' || parts.length === 1, t0 = whole ? 0 : parts[sel].t, t1 = whole ? score.D : partEnd(sel);
   const { W: FW, H: FH } = dims(), fps = S.fps, D = score.D, N = Math.max(1, Math.round((t1 - t0) * fps));
-  const src = exSource(FW, FH), W = src.W, H = src.H, cv = src.cv, sc = score;
+  const src = exSource(FW, FH), W = src.W, H = src.H, cv = src.cv;
   if (document.fonts && document.fonts.ready) await document.fonts.ready;
   const two = S.format === 'ring' && S.faces === 2, rig = two ? exCard(mkRig(cv)) : null, r = two ? null : exCard(new Renderer(cv)), st = newState();
   const one = i => { const tf = t0 + i / fps; if (two) drawFaces(rig, tf, fps); else renderOne(r, st, PAt(tf, 0), tf, fps); gradeFrame(cv); };
@@ -2253,9 +2266,8 @@ async function renderMov() {
   if (!go || !go.ok) throw new Error(go && go.error || 'ffmpeg');
   const rb = src.v3 ? document.createElement('canvas') : cv, rg = rb.getContext('2d', src.v3 ? { willReadFrequently: true } : undefined);
   if (src.v3) { rb.width = W; rb.height = H; }
-  sc._i = 0; sc._k = 0;
   try {
-    if (sc.cyclic && whole && PAt(D - 0.01).trail > 0.01) for (let i = Math.max(0, N - Math.round(fps * 0.8)); i < N; i++) one(i);
+    if (score.cyclic && whole && PAt(D - 0.01).trail > 0.01) for (let i = Math.max(0, N - Math.round(fps * 0.8)); i < N; i++) one(i);
     for (let i = 0; i < N; i++) {
       if (stop) throw new Error('stop');
       one(i);
@@ -2267,6 +2279,49 @@ async function renderMov() {
   const end = await window.nativeApp.ffEnd(false);
   if (!end || !end.ok) throw new Error('ffmpeg');
   return { path: end.path, tc, sound: go.sound };
+}
+async function renderMp4ToDisk() {
+  const native = window.nativeApp;
+  const pending = [];
+  let opened = false, pendingBytes = 0, overflow = false;
+  const drain = async () => {
+    while (pending.length || overflow) {
+      if (overflow) throw new Error('The MP4 writer could not keep up.');
+      if (stop) throw new Error('stop');
+      const { data, position } = pending.shift();
+      const result = await native.saveAt(data, position);
+      if (!result.ok) throw new Error(result.error || 'The file could not be written.');
+      pendingBytes -= data.byteLength;
+    }
+  };
+  try {
+    const file = await renderFile(async name => {
+      const result = await native.saveBegin(name);
+      if (result.declined) throw new Error('declined');
+      if (!result.ok) throw new Error(result.error || 'The file could not be opened.');
+      opened = true;
+      return {
+        target: new Mp4Muxer.StreamTarget({ chunked: true, chunkSize: 1024 * 1024,
+          onData: (data, position) => {
+            if (overflow || pendingBytes + data.byteLength > 32 * 1024 * 1024) { overflow = true; return; }
+            pendingBytes += data.byteLength;
+            pending.push({ data: data.slice().buffer, position });
+          } }),
+        drain
+      };
+    });
+    await drain();
+    if (stop) throw new Error('stop');
+    const result = await native.saveEnd(false);
+    if (!result.ok) throw new Error(result.error || 'The file could not be closed.');
+    opened = false;
+    return { ...file, path: result.path };
+  } catch (e) {
+    if (['stop', 'declined', 'codec', 'gl'].includes(e.message)) throw e;
+    throw new Error('The MP4 could not be saved. ' + e.message, { cause: e });
+  } finally {
+    if (opened) await native.saveEnd(true).catch(() => {});
+  }
 }
 async function offer(file, downloads) {
   const tail = file.silent ? ' This browser could not encode the sound, so the file is picture only.'
@@ -2300,19 +2355,27 @@ $('save').addEventListener('click', async () => {
       finally { busy = false; document.body.classList.remove('rendering'); btn.textContent = 'Save'; $('bar').hidden = true; last = performance.now(); if (track && wasPlaying) setPlaying(true); updateReload(); }
       return;
     }
+    const streaming = !!(window.nativeApp && window.nativeApp.saveAt);
     const key = renderKey();
-    if (!rendered || rendered.key !== key) {
+    if (streaming || !rendered || rendered.key !== key) {
       rendered = null;
       const wasPlaying = S.playing;
       if (track) audio.pause();
       busy = true; stop = false; document.body.classList.add('rendering'); btn.textContent = 'Stop rendering'; $('bar').hidden = false; $('barFill').style.width = '0%';
-      try { rendered = await renderFile(); rendered.key = key; }
+      try {
+        if (streaming) {
+          const file = await renderMp4ToDisk();
+          say('Saved ' + file.path + '.' + (file.silent ? ' This browser could not encode the sound, so the film is silent.' : file.opus ? ' The sound uses Opus.' : ''));
+          return;
+        }
+        rendered = await renderFile(); rendered.key = key;
+      }
       finally { busy = false; document.body.classList.remove('rendering'); btn.textContent = 'Save'; $('bar').hidden = true; last = performance.now(); if (track && wasPlaying) setPlaying(true); updateReload(); }
     }
     await offer(rendered, downloads);
   } catch (e) {
     const m = e && e.message;
-    say(m === 'stop' ? 'Render stopped.' : m === 'declined' ? 'Not saved.' : m === 'noffmpeg' ? 'ffmpeg was not found on this computer. Install it with Homebrew: brew install ffmpeg.' : m === 'gl' ? 'The 3D view could not be drawn for the film.' : m === 'ffmpeg' ? 'ffmpeg stopped before the film was finished.' : m === 'codec' ? 'This browser has no video encoder for this size. Try Chrome, or a smaller format.' : 'The render stopped before it finished. Try again, or try a shorter piece.');
+    say(m === 'stop' ? 'Render stopped.' : m === 'declined' ? 'Not saved.' : m === 'noffmpeg' ? 'ffmpeg was not found on this computer. Install it with Homebrew: brew install ffmpeg.' : m === 'gl' ? 'The 3D view could not be drawn for the film.' : m === 'ffmpeg' ? 'ffmpeg stopped before the film was finished.' : m === 'codec' ? 'This browser has no video encoder for this size. Try Chrome, or a smaller format.' : m && m.startsWith('The MP4 could not be saved.') ? m : 'The render stopped before it finished. Try again, or try a shorter piece.');
   }
 });
 

@@ -500,7 +500,7 @@ function prog(x, seed) {
 
 function newState() {
   const sl = []; for (let i = 0; i < 6; i++) sl.push({ a: 0, b: 0, d: 0 });
-  return { s: 1, ox: 0, oy: 0, rot: 0, kx: 1, sk: 0, y0: 0, y1: 1, x0: 0, x1: 1, slabX: 0, slabW: 0, gain: 1, flash: 0, pulse: 0,
+  return { score: null, stepIndex: 0, moveIndex: 0, s: 1, ox: 0, oy: 0, rot: 0, kx: 1, sk: 0, y0: 0, y1: 1, x0: 0, x1: 1, slabX: 0, slabW: 0, gain: 1, flash: 0, pulse: 0,
     inv: false, black: false, crush: 0, rods: 0, hide: false, seed: 0, nSl: 0, sl, eq: 0, eqv: new Float32Array(NB), eqLay: 0,
     tx: 1, ty: 1, dens: 1, va: 0.3, vb: 0.7, tearA: 0, tearF: 3, tearP: 0, dropA: 0, dropF: 4, dropP: 0, gI: 0, gx: 0, gy: 0,
     bLo: 0, bMid: 0, bHi: 0, loK: 0, miK: 0, hiK: 0, fbx: 0, fby: 0,
@@ -516,13 +516,17 @@ function newState() {
 const GW = [0.2, 0.2, 0.22, 0.07, 0.12, 0.1, 0.14, 0.12, 0.12];
 function stateAt(sc, tau, cfg, st) {
   const sd = sc.seed, ch = cfg.chaos, D = sc.D;
+  if (st.score !== sc) {
+    st.score = sc;
+    st.stepIndex = st.moveIndex = 0;
+  }
   st.tau = tau;
   // which hold of the glitch clock we are in, and how far through it
   const sp = sc.steps;
-  let k = sc._k | 0;
+  let k = st.stepIndex;
   if (k >= sp.length - 1 || sp[k] > tau) k = 0;
   while (k + 2 < sp.length && sp[k + 1] <= tau) k++;
-  sc._k = k;
+  st.stepIndex = k;
   const ph = clamp01((tau - sp[k]) / (sp[k + 1] - sp[k])), settle = (1 - ph) * (1 - ph);
   const hp = Math.max(0, tau / sc.hop), h0 = Math.min(sc.nh - 1, hp | 0), h1 = Math.min(sc.nh - 1, h0 + 1), hf = hp - (hp | 0);
   const cv = a => a[h0] + (a[h1] - a[h0]) * hf;
@@ -571,10 +575,10 @@ function stateAt(sc, tau, cfg, st) {
     if (hs < 0.2 * Gv) te = sp[k]; else if (hs < 0.32 * Gv) te = Math.max(0, tau - 0.08 - 0.25 * hash(k, sd, 71));
   }
   const mv = sc.moves;
-  let i = sc._i | 0;
+  let i = st.moveIndex;
   if (i >= mv.length || mv[i].t > te) i = 0;
   while (i + 1 < mv.length && mv[i + 1].t <= te) i++;
-  sc._i = i;
+  st.moveIndex = i;
   const m = mv[i], dtm = te - m.t, A = m.from, B = m.to;
   st.mi = m.i; st.dtm = Math.max(0, tau - m.t);          // which hit we are after, and how long ago it was: pillar patterns key off these
   // the logo never glides: it cuts to its next pose through two or three wrong frames
