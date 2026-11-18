@@ -484,7 +484,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
     <fieldset id="fsPlay">
       <legend>Playback</legend>
-      <label class="row" for="loop"><span>Loop length</span><select id="loop"><option value="4">4 s</option><option value="8" selected>8 s</option><option value="16">16 s</option></select></label>
+      <label class="row" for="loop"><span>Loop length</span><select id="loop"><option value="4">4 s</option><option value="8" selected>8 s</option><option value="16">16 s</option><option value="60">1 min</option><option value="300">5 min</option><option value="480">8 min</option><option value="600">10 min</option></select></label>
       <label class="row" for="fps"><span>Frame rate</span><select id="fps"><option value="25">25 fps</option><option value="30">30 fps</option><option value="50" selected>50 fps</option><option value="60">60 fps</option></select></label>
       <label class="row" for="pq"><span>Preview</span><select id="pq"><option value="auto">Full, drops to half if slow</option><option value="1">Always full size</option><option value="0.5">Half size, lighter</option><option value="0.25">Quarter size, lightest</option></select></label>
       <label class="check" for="gpu"><input type="checkbox" id="gpu" checked> Draw on the graphics card</label>
@@ -583,7 +583,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 'v0.63.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
+const BUILD = 'v0.64.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
 $('build').textContent = '· ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -1069,8 +1069,55 @@ async function loadFont(file) {
 // stack (the line repeated in rows that slide against each other), stretch (snaps to a new width and height on every hit),
 // wave (the letters ride a stepped wave).
 // The rows are worked out here for both the canvas version (typeField) and the one on the graphics card (gpuType).
+// A line of the loader's small print: one mask as wide as the ring, with one short text standing in the middle of each pillar's
+// stretch. Kept with the word masks, so the same line is drawn once and the old ones are let go the same way.
+function bootMask(name, w, h, px, toks) {
+  const key = 'boot|' + name + '|' + w + '|' + h + '|' + toks.join('\u00a6');
+  let m = typeMasks.get(key);
+  if (m) return m;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d', { willReadFrequently: true }), n = toks.length;
+  g.font = '500 ' + px + 'px "DM Mono", ui-monospace, monospace'; g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  for (let i = 0; i < n; i++) if (toks[i]) g.fillText(toks[i], (i + 0.5) * w / n, h / 2 + 0.5);
+  const d = g.getImageData(0, 0, w, h).data, data = new Float32Array(w * h);
+  for (let i = 0; i < data.length; i++) data[i] = d[i * 4 + 3] / 255;
+  m = { w, h, data, adv: [0, 1], blur: null };
+  typeBytes += data.length * 4;
+  for (const [k, old] of typeMasks) { if (typeBytes < 48e6) break; typeBytes -= old.data.length * 4 + (old.blur ? old.blur.length * 4 : 0); typeMasks.delete(k); }
+  typeMasks.set(key, m);
+  return m;
+}
+const BOOT_LOG = ['CHK LED 112X336', 'LINK HELIOS OK', 'SYNC 50 HZ', 'LOAD SCORE', 'DECODE LOGO', 'MAP PIXELS', 'TC 25 FPS', 'READ HITS #', 'BASS BAND OK', 'MID BAND OK', 'HIGH BAND OK', 'PILLAR ONLINE', 'CACHE # MB', 'VERIFY #', 'ALIGN RING', 'WARM UP', 'GLITCH CLOCK', 'SEED #', 'PARTS OK', 'WAIT FOR DESK'];
+// The long loader's small print, a column of it in every pillar: which pillar it is, the name, the time left, a log that moves on
+// at each pillar's own uneven pace, how far the load has come, a bar, numbers that keep changing, and the clip's own words.
+function bootRows(rows, W, H, o, st) {
+  const e = st.clE, age = st.clAge, N = Math.max(1, o.gapN || o.cols || 1), inside = !!o.flipU, sd = e.seed | 0, k = H / 336;
+  const p = bootProg(age / Math.max(0.1, e.d), sd), left = Math.max(0, e.d - age), done = p >= 0.9995;
+  const Wm = Math.max(2, Math.min(8192, Math.round(W))), pil = c => inside ? N - 1 - c : c;      // the inside is read turned round, so its cells run the other way
+  const own = String(e.txt || '').toUpperCase().split(/\s*\|\s*/).filter(Boolean);
+  const num = (a, b, n) => String(Math.floor(hash(a, b, sd + 272) * Math.pow(10, n))).padStart(n, '0');
+  const line = (name, y, px, gain, tok) => {
+    const fp = Math.max(5, Math.round(px * k)), hm = Math.max(6, Math.round(fp * 1.5)), toks = [];
+    for (let c = 0; c < N; c++) toks.push(tok(pil(c), c));
+    rows.push({ m: bootMask(name, Wm, hm, fp, toks), hT: hm / H, wT: 1, left: 0, top: y / 336 - hm / H / 2, tile: 0, gain, cut: 2, cur: -1, roll: 0, tear: 0, ph: 0, sc: null, wv: null });
+  };
+  const mm = Math.floor(Math.ceil(left) / 60), ss = Math.ceil(left) % 60;
+  line('id', 12, 9, 1, i => (inside ? 'IN-' : 'OUT-') + String(i + 1).padStart(2, '0'));
+  line('name', 25, 9, 1, () => 'MALL CALL');
+  line('cd', 38, 9, 1, () => done ? 'READY' : 'T-' + String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0'));
+  for (let j = 0; j < 4; j++) line('log' + j, 58 + j * 12, 8, 1, i => {       // the newest at the bottom, brighter
+    const at = Math.floor(age * (0.12 + 0.26 * hash(i, sd, 273)) + 9 * hash(i, sd, 274)) - (3 - j);
+    return at < 0 || (done && j === 3) ? (done && j === 3 ? 'ALL SYSTEMS GO' : '') : BOOT_LOG[Math.floor(hash(i, at, sd + 275) * BOOT_LOG.length)].replace('#', num(i, at, 3));
+  });
+  line('pct', 232, 11, 1, () => 'LOAD ' + (p * 100).toFixed(1) + '%');
+  line('bar', 246, 9, 1, () => { const n = Math.round(p * 12); return '[' + '#'.repeat(n) + '.'.repeat(12 - n) + ']'; });
+  line('hex', 260, 8, 1, i => { const s = Math.floor(age * (3 + 5 * hash(i, sd, 276))); return [0, 1, 2].map(q => Math.floor(hash(i * 3 + q, s, sd + 277) * 65536).toString(16).toUpperCase().padStart(4, '0')).join(' '); });
+  line('blk', 272, 8, 1, i => 'BLK ' + String(Math.min(9000, Math.floor(p * 9000 + 40 * hash(i, Math.floor(age * 2), sd + 278)))).padStart(4, '0') + '/9000');
+  if (own.length) line('own', 294, 9, 1, i => own[(i + Math.floor(age / 2.6)) % own.length]);
+}
 function typeRows(W, H, o, st) {
   const rows = [], asp = H / W;
+  if (st.clean && st.clE && st.clE.boot) bootRows(rows, W, H, o, st);
   for (let i = 0; i < st.tyN; i++) {
     const e = st.tyE[i], x = st.tyX[i], age = st.tyA[i], mode = e.mode, sd = e.seed;
     let text = String(e.txt || '').trim(); if (e.caps !== false) text = text.toUpperCase();
@@ -1370,7 +1417,7 @@ DRAW.dither = (g, W, H, t, o, M) => {
     const v = (oy + (r + 0.5) * unit) / H, rev = diff && (r & 1) === 1;
     for (let k = 0; k < cols; k++) {
       const c = rev ? cols - 1 - k : k;
-      const u = (ox + (c + 0.5) * unit) / W, m = M(u, v);
+      const u = (ox + (c + 0.5) * unit) / W, m0 = M(u, v), m = o.hard ? (m0 >= o.hard ? 1 : 0) : m0;      // hard: on or off, nothing between, for print too small to dither
       const f1 = lerp(0.5 + 0.5 * Math.sin(TAU * (v * fq - dir * t * c2 + 0.18 * Math.sin(TAU * (u * 1.5 + t * c1)))), 1, o.solid || 0);      // solid: a plain logo is lit evenly, without the wave that runs through the style
       const f2 = 0.5 + 0.5 * Math.sin(TAU * (u + v * 0.6 + t * c1));
       const val = m * (0.4 + 0.6 * f1) + amb * (1 - m) * 0.17 * f2 * f2, I = m > 0.5 ? 0.5 + 0.5 * f1 : 0.3 + 0.5 * m;
@@ -1413,7 +1460,7 @@ class Renderer {
     const card = this.card() && gpuFrameBegin(W, H, storageW);      // the layers the card draws are put together there and come back in one copy
     for (let L = 0; L < 4; L++) {
       if (L < 2 && st.clean && st.clE && st.clE.solo > 0.99) continue;      // a logo that has the frame to itself: nothing behind it
-      if ((L === 1 && laneHidden(1)) || (L === 0 && !st.bn && !st.pl && !st.pf) || (L === 2 && !st.lv && !st.syN) || (L === 3 && !st.tyN)) continue;
+      if ((L === 1 && laneHidden(1)) || (L === 0 && !st.bn && !st.pl && !st.pf) || (L === 2 && !st.lv && !st.syN) || (L === 3 && !st.tyN && !(st.clean && st.clE && st.clE.boot))) continue;
       let o = LO[L];
       o.va = st.va; o.vb = st.vb; o.amb = L === 1 && !o.quiet ? 1 : 0;      // a glitch layer with everything at nought is black, not faintly lit
       if (L === 2 && st.dens !== 1) o.density = Math.min(1.2, (lerp(22, 96, o.density) * lerp(st.dens, 1, o.steady || 0) - 22) / 74);
@@ -1427,6 +1474,7 @@ class Renderer {
       const flip = !!o.flipU, wrap = a => gN ? { M: (u, v) => a.M(win(flip ? 1 - u : u), v), B: (u, v) => a.B(win(flip ? 1 - u : u), v) } : flip ? { M: (u, v) => a.M(1 - u, v), B: (u, v) => a.B(1 - u, v) } : a;
       if (L === 0) f = this.card() && gpuBase(q, W, H, Wf, t, o, st, st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style) ? null : wrap(baseField(Wf, H, st));
       else if (L === 1) f = this.card() && gpuFx(q, W, H, Wf, t, o, st, st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style) ? null : wrap(fxField(Wf, H, t, o, st));
+      else if (L === 3 && st.clean && st.clE && st.clE.boot) { o = Object.assign({}, o, { style: 'dither', dither: 'bayer4', pshape: 0, pfill: 1, solid: 1, hard: 0.42, tyWarp: 0, density: (H / (this.card() ? 1 : 2) - 20) / 70 }); f = this.card() && gpuType(q, W, H, Wf, t, o, st, 'dither') ? null : wrap(typeField(Wf, H, o, st)); }      // the loader's small print needs cells as fine as the screens
       else if (L === 3) f = this.card() && gpuType(q, W, H, Wf, t, o, st, o.style) ? null : wrap(typeField(Wf, H, o, st));   // words, on their own
       else {                                               // the logo and any symbols share a layer
         // a logo in every pillar sits in the pillar itself, not in the picture behind them
@@ -1437,7 +1485,8 @@ class Renderer {
           const e = st.clE || {}, life = e.life === undefined ? 0.15 : e.life, cell = this.card() ? 1 : 2;
           sL = Object.assign(Object.create(st), { s: e.big || 1, kx: 1, ox: 0, oy: 0, rot: 0, sk: 0, tx: 1, ty: 1, eq: 0, x0: 0, x1: 1, y0: 0, y1: 1, hide: false, gI: 0, inv: false, lv: 2, crush: 0, nSl: 0, tearA: st.tearA * life * 0.5, dropA: st.dropA * life * 0.5 });
           o = Object.assign({}, o, { wobB: 0, travel: 0, outline: false, pshape: 0, pfill: 1, style: 'dither', dither: 'bayer4', solid: 1 - 0.5 * life, density: (H / cell - 20) / 70, logoEach: o.logoEach || !!e.each });
-          cleanReveal(e, st.clAge, sL, o, st, PN, H);
+          if (e.boot) { sL.lv = 1; sL.lp = bootProg(st.clAge / Math.max(0.1, e.d), e.seed | 0); sL.lseed = e.seed | 0; sL.gI = 0.16; sL.gx = 0; sL.gy = 0; o.loader = 0; }      // the long loader: filling from the bottom, the whole shape faint behind it
+          else cleanReveal(e, st.clAge, sL, o, st, PN, H);
         } else if (o.steady > 0.01 && st.lv) {
           // Steady: the poses the logo cuts between are pulled toward the plain one, so it stops jumping in size, place and shape.
           // Past the middle it also stops multiplying. The cuts themselves, the tear and the wrong frames stay.
@@ -1825,7 +1874,7 @@ function seek(x) {
 const PAD = [
   ['Base', [['sweep', 'Sweep', '1'], ['strobe', 'Strobe', '2'], ['flood', 'Flood', '3'], ['blackout', 'Blackout', '4'], ['orbit', 'Orbit', '5'], ['spokes', 'Spokes', '6'], ['meet', 'Meet', '7']]],
   ['Glitch', [['glitch', 'Glitch', 'Q'], ['chase', 'Chase', 'W'], ['lines', 'Lines', 'E'], ['sparks', 'Sparks', 'R'], ['bars', 'Bars', 'T'], ['blocks', 'Blocks', 'Y']]],
-  ['Logo', [['load', 'Loader', 'A'], ['show', 'Show', 'S'], ['hide', 'Hide', 'D'], ['show', 'Clean', 'I', { fx: 'clean', clean: true, rv: 'scan' }], ['show', 'Hero', ',', { fx: 'hero', clean: true, rv: 'resolve', rl: 0.8, each: true, big: 1.2, life: 0, solo: 1 }]]],
+  ['Logo', [['load', 'Loader', 'A'], ['show', 'Show', 'S'], ['hide', 'Hide', 'D'], ['show', 'Clean', 'I', { fx: 'clean', clean: true, rv: 'scan' }], ['show', 'Loading', '.', { fx: 'boot', clean: true, boot: true, each: true, big: 1, life: 0, solo: 1 }], ['show', 'Hero', ',', { fx: 'hero', clean: true, rv: 'resolve', rl: 0.8, each: true, big: 1.2, life: 0, solo: 1 }]]],
   ['Type', [['type', 'Words', 'F'], ['type', 'Ticker', 'V', { fx: 'band', mode: 'band', size: 0.1, y: 0.9, txt: 'MALL CALL', trk: 0.08 }], ['type', 'Stack', 'B', { fx: 'stack', mode: 'stack', size: 0.36 }], ['type', 'Stretch', 'N', { fx: 'stretch', mode: 'stretch' }], ['type', 'Bump', '8', { fx: 'bump', mode: 'bump' }], ['type', 'Spin', '9', { fx: 'spin', mode: 'spin' }], ['type', 'Flip', '0', { fx: 'flip', mode: 'flip' }], ['type', 'Drop', 'U', { fx: 'drop', mode: 'drop' }]]],
   ['Pillars', [['pillar', 'Chase', 'G', { fx: 'chase' }], ['pillar', 'Spin', 'H', { fx: 'spin', pm: 'light' }], ['pillar', 'Pop', 'J', { fx: 'pop' }], ['pillar', 'Build', 'K', { fx: 'build' }], ['pillar', 'VU', 'L', { fx: 'vu', pm: 'light' }], ['pillar', 'Alt', 'Z', { fx: 'alt' }], ['pillar', 'Wave', 'X', { fx: 'wave' }], ['pillar', 'Frames', 'C', { fx: 'chase', pm: 'frame', wd: 0.4 }], ['pillar', 'Echo', 'M', { fx: 'echo', pm: 'light', wd: 0.6 }]]],
   ['Symbols', [['sym', 'Symbols', 'O', { fx: 'walk', step: true }], ['sym', 'In pillars', 'P', { fx: 'each', step: true, each: true, echo: 0, size: 0.8, dl: 0.5 }]]]
@@ -1836,7 +1885,7 @@ const DRAG_TYPE = 'application/x-mallcall';
 function dragOut(el, what) { el.draggable = true; el.addEventListener('dragstart', e => { e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(what)); e.dataTransfer.effectAllowed = 'copy'; }); }
 function trigger(type, btn, more) {
   if (S.laneLock[layerOf(EV[type])]) { $('trigNote').textContent = 'That lane is locked. Unlock it on the timeline to add clips to it.'; return; }
-  userEv.push(mkEv(tau, type, Math.floor(Math.random() * 1e6), null, more));
+  userEv.push(mkEv(tau, type, Math.floor(Math.random() * 1e6), more && more.boot ? Math.max(10, score.D - tau) : null, more));      // a long loader runs to the end of the piece
   mergeEv();
   const n = userEv.length;
   $('trigNote').textContent = n + (n === 1 ? ' clip' : ' clips') + ' of your own on the timeline. They play back at the same moment every time and go into the export.';
