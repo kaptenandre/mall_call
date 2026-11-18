@@ -18,7 +18,9 @@ Raise the version in `BUILD` in `src/page.html` with every push. It shows in the
 - The middle rises by one when a push adds or changes something the user asked for, and the last goes back to 0.
 - The last rises by one for a push that only fixes or tidies.
 
-Builds 1 to 45 used a running number; v0.47.0 follows build 45. Others push too (Anton's v0.57.0), so read `BUILD` on `main` before choosing the next number.
+Builds 1 to 45 used a running number; v0.47.0 follows build 45.
+
+**The version history is kept in three places, all from the same number** (v0.62.2; the user, 2026-11-18: "fix version history on git", after 45 merges that all read "Merge pull request ... from kaptenandre/claude/..."). With every version: add a section at the top of `CHANGELOG.md` (`## v0.63.0 (date)` and plain lines of what changed, written for the five users, not for developers), and give the merge commit the version as its title (`commit_title` on the merge: `v0.63.0: what changed`). `.github/workflows/versions.yml` then runs `.github/versions.js` on every push to `main`: it finds the commit where each version first shows in `BUILD`, and makes a tag and a Releases entry for any that is missing, with the notes from `CHANGELOG.md`. Those entries are never marked latest, because `releases/latest` must stay the newest app download (`app.yml`, tags `app-N`). The script lives under `.github/` and not `scripts/` so that changing it does not start an app build. Others push too (Anton's v0.57.0), so read `BUILD` on `main` before choosing the next number.
 
 Run `npm run smoke` and `npm test` after every change. A clean smoke run has `"errors":[]`, `"roundTrip":true`, `"restored":true`, `"timeline":true`, `"type":true`, `"ltcLoop":true`, `"grade":true`, `"review":true`, `"library":true`, `"h264":true`.
 

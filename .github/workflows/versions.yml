@@ -1,0 +1,26 @@
+name: Versions
+
+# A tag and a Releases entry for every version, so the history can be read on GitHub.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: versions
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tag every version and list it under Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/versions.js
