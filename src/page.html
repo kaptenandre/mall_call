@@ -578,7 +578,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 'v0.58.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
+const BUILD = 'v0.59.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
 $('build').textContent = '· ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -711,6 +711,25 @@ function mkDisp(st, W, H, amt, o) {
     for (let i = 0; i < n; i++) { const s = st.sl[i]; if (v >= s.a && v < s.b) { u += s.d * amt; break; } }
     DU = u; DV = v;
   };
+}
+// A plain logo coming forward (a clean Show's rv, over its rl seconds). Each one only sets what the logo layer already reads,
+// so the card and the canvas draw it alike. Everything goes out fast and settles, and the stepped ones cut, never glide.
+const REVEAL_NAMES = { cut: 'Cut in', scan: 'Scan open, up and down', open: 'Open from the middle', wipe: 'Scanner across', lock: 'Lock on', slices: 'Slices fall in', resolve: 'Resolve', pillars: 'Pillar by pillar' };
+function cleanReveal(e, age, sL, o, st, PN, H) {
+  const rv = e.rv || 'cut', len = e.rl || 0.8;
+  if (rv === 'cut' || !(age < len)) return;
+  const x = Math.max(0, age / len), k = 1 - Math.pow(1 - x, 3), sd = e.seed | 0;
+  if (rv === 'scan') { sL.y0 = 0.5 - 0.5 * k; sL.y1 = 0.5 + 0.5 * k; }                 // two lit lines part and leave the logo between them
+  else if (rv === 'open') { sL.x0 = 0.5 - 0.5 * k; sL.x1 = 0.5 + 0.5 * k; }
+  else if (rv === 'wipe') { if (hash(sd, 3, 261) < 0.5) sL.x1 = k; else sL.x0 = 1 - k; }
+  else if (rv === 'lock') { const q = Math.ceil((1 - k) * 6) / 6; sL.gI = 0.4 + 0.6 * q; sL.gx = q * 0.3 * (hash(sd, 3, 262) < 0.5 ? -1 : 1); sL.gy = q * 0.08 * (hash(sd, 4, 262) - 0.5); sL.y0 = 0.5 - 0.5 * Math.min(1, k * 1.6); sL.y1 = 1 - sL.y0; }   // a double steps home in six cuts
+  else if (rv === 'slices') {                               // bands knocked sideways, each cutting home at its own moment
+    const n = 6, sl = [];
+    for (let i = 0; i < n; i++) if (k < 0.12 + 0.82 * hash(i, sd, 263)) sl.push({ a: i / n, b: (i + 1) / n, d: (hash(i, sd, 264) - 0.5) * 0.5 / Math.max(1, o.repeats) });
+    sL.sl = sl; sL.nSl = sl.length;
+  }
+  else if (rv === 'resolve') { const px = x < 0.22 ? 28 : x < 0.44 ? 14 : x < 0.66 ? 7 : x < 0.85 ? 3 : 0; if (px) { o.density = (H / px - 20) / 70; o.pfill = 0.8; } }   // big pixels to small, in cuts
+  else if (rv === 'pillars' && PN > 1) { const m = new Float32Array(PN); for (let i = 0; i < PN; i++) m[i] = hash(i, sd, 265) < k * 1.02 ? 1 : 0; st.pmLogo = m; }
 }
 // how many pillars a pillar is from the one a pattern starts at, going the short way round
 const i0d = (i, N, sd) => { const d = Math.abs(i - Math.floor(hash(sd, 5, 251) * N)); return Math.min(d, N - d); };
@@ -1342,7 +1361,7 @@ DRAW.dither = (g, W, H, t, o, M) => {
     for (let k = 0; k < cols; k++) {
       const c = rev ? cols - 1 - k : k;
       const u = (ox + (c + 0.5) * unit) / W, m = M(u, v);
-      const f1 = 0.5 + 0.5 * Math.sin(TAU * (v * fq - dir * t * c2 + 0.18 * Math.sin(TAU * (u * 1.5 + t * c1))));
+      const f1 = lerp(0.5 + 0.5 * Math.sin(TAU * (v * fq - dir * t * c2 + 0.18 * Math.sin(TAU * (u * 1.5 + t * c1)))), 1, o.solid || 0);      // solid: a plain logo is lit evenly, without the wave that runs through the style
       const f2 = 0.5 + 0.5 * Math.sin(TAU * (u + v * 0.6 + t * c1));
       const val = m * (0.4 + 0.6 * f1) + amb * (1 - m) * 0.17 * f2 * f2, I = m > 0.5 ? 0.5 + 0.5 * f1 : 0.3 + 0.5 * m;
       const px = ox + c * unit + unit / 2, py = oy + r * unit + unit / 2;
@@ -1403,12 +1422,15 @@ class Renderer {
         // a clean Show: the logo as it is, standing still, with none of the pose, crop, warp, EQ or tear on it
         let sL = st;
         if (st.clean) {
-          sL = Object.assign(Object.create(st), { s: 1, kx: 1, ox: 0, oy: 0, rot: 0, sk: 0, tx: 1, ty: 1, eq: 0, x0: 0, x1: 1, y0: 0, y1: 1, hide: false, gI: 0, inv: false, lv: 2, crush: 0, nSl: 0, tearA: 0, dropA: 0 });
-          o = Object.assign({}, o, { wobA: 0, wobB: 0, travel: 0, outline: false, density: Math.max(o.density, 0.8) });
+          // as fine as the screens are: one cell a LED on the card, two without it, where every cell is worked out in script
+          const e = st.clE || {}, life = e.life === undefined ? 0.15 : e.life, cell = this.card() ? 1 : 2;
+          sL = Object.assign(Object.create(st), { s: e.big || 1, kx: 1, ox: 0, oy: 0, rot: 0, sk: 0, tx: 1, ty: 1, eq: 0, x0: 0, x1: 1, y0: 0, y1: 1, hide: false, gI: 0, inv: false, lv: 2, crush: 0, nSl: 0, tearA: st.tearA * life * 0.5, dropA: st.dropA * life * 0.5 });
+          o = Object.assign({}, o, { wobB: 0, travel: 0, outline: false, pshape: 0, pfill: 1, style: 'dither', dither: 'bayer4', solid: 1 - 0.5 * life, density: (H / cell - 20) / 70, logoEach: o.logoEach || !!e.each });
+          cleanReveal(e, st.clAge, sL, o, st, PN, H);
         }
         const each = o.logoEach && PN > 1, a = !st.lv ? null : each ? logoField(W, H, t, Object.assign({}, o, { repeats: PN, travel: 0 }), sL) : wrap(logoField(Wf, H, t, o, sL));
         // the logo on the graphics card when it can be; symbols are laid over it, from the card too when it can draw them
-        const sn = st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style, card = this.card(), onGpu = card && st.lv && gpuLogo(q, W, H, Wf, t, o, sL, each, PN, sn);
+        const sn = st.clean ? 'dither' : st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style, card = this.card(), onGpu = card && st.lv && gpuLogo(q, W, H, Wf, t, o, sL, each, PN, sn);
         const fs = onGpu ? [] : [a];
         if (st.syN && !st.clean) {
           const sg = card && (onGpu || !st.lv);            // never under a logo drawn the old way, which would paint over them
@@ -1427,7 +1449,7 @@ class Renderer {
         let d = q;
         if (over) gpuLayerToCanvas(q);
         if (over) { const c = this.tmp || (this.tmp = document.createElement('canvas')); if (c.width !== W || c.height !== H) { c.width = W; c.height = H; } d = this.tq || (this.tq = c.getContext('2d', { alpha: false })); d.globalCompositeOperation = 'source-over'; d.globalAlpha = 1; d.fillStyle = '#000'; d.fillRect(0, 0, W, H); }
-        litBegin(); DRAW[L < 3 && st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style](d, W, H, t, o, f.M, f.B); litEnd(d);
+        litBegin(); DRAW[L === 2 && st.clean ? 'dither' : L < 3 && st.sty[L] >= 0 ? STYLES[st.sty[L]] : o.style](d, W, H, t, o, f.M, f.B); litEnd(d);
         if (over) { q.globalCompositeOperation = 'lighten'; q.globalAlpha = 1; q.drawImage(this.tmp, 0, 0); q.globalCompositeOperation = 'source-over'; }      // the cells line up, so the brighter of the two is what one drawing would give
       }
       PERF.layer[L] += (performance.now() - tl0 - PERF.layer[L]) * 0.15;
@@ -1779,7 +1801,7 @@ function seek(x) {
 const PAD = [
   ['Base', [['sweep', 'Sweep', '1'], ['strobe', 'Strobe', '2'], ['flood', 'Flood', '3'], ['blackout', 'Blackout', '4'], ['orbit', 'Orbit', '5'], ['spokes', 'Spokes', '6'], ['meet', 'Meet', '7']]],
   ['Glitch', [['glitch', 'Glitch', 'Q'], ['chase', 'Chase', 'W'], ['lines', 'Lines', 'E'], ['sparks', 'Sparks', 'R'], ['bars', 'Bars', 'T'], ['blocks', 'Blocks', 'Y']]],
-  ['Logo', [['load', 'Loader', 'A'], ['show', 'Show', 'S'], ['hide', 'Hide', 'D'], ['show', 'Clean', 'I', { fx: 'clean', clean: true }]]],
+  ['Logo', [['load', 'Loader', 'A'], ['show', 'Show', 'S'], ['hide', 'Hide', 'D'], ['show', 'Clean', 'I', { fx: 'clean', clean: true, rv: 'scan' }]]],
   ['Type', [['type', 'Words', 'F'], ['type', 'Ticker', 'V', { fx: 'band', mode: 'band', size: 0.1, y: 0.9, txt: 'MALL CALL', trk: 0.08 }], ['type', 'Stack', 'B', { fx: 'stack', mode: 'stack', size: 0.36 }], ['type', 'Stretch', 'N', { fx: 'stretch', mode: 'stretch' }], ['type', 'Bump', '8', { fx: 'bump', mode: 'bump' }], ['type', 'Spin', '9', { fx: 'spin', mode: 'spin' }], ['type', 'Flip', '0', { fx: 'flip', mode: 'flip' }], ['type', 'Drop', 'U', { fx: 'drop', mode: 'drop' }]]],
   ['Pillars', [['pillar', 'Chase', 'G', { fx: 'chase' }], ['pillar', 'Spin', 'H', { fx: 'spin', pm: 'light' }], ['pillar', 'Pop', 'J', { fx: 'pop' }], ['pillar', 'Build', 'K', { fx: 'build' }], ['pillar', 'VU', 'L', { fx: 'vu', pm: 'light' }], ['pillar', 'Alt', 'Z', { fx: 'alt' }], ['pillar', 'Wave', 'X', { fx: 'wave' }], ['pillar', 'Frames', 'C', { fx: 'chase', pm: 'frame', wd: 0.4 }], ['pillar', 'Echo', 'M', { fx: 'echo', pm: 'light', wd: 0.6 }]]],
   ['Symbols', [['sym', 'Symbols', 'O', { fx: 'walk', step: true }], ['sym', 'In pillars', 'P', { fx: 'each', step: true, each: true, echo: 0, size: 0.8, dl: 0.5 }]]]
@@ -2457,7 +2479,7 @@ async function applyProject(pj) {
     if (!missing) {
       parts = pj.parts.filter(p => p.t < score.D).map(p => { const o = { t: p.t, P: Object.assign(snap(), { typeStyle: 'dither', typeDen: 0.8, typeWarp: 0, fxAmt: 0, lineMode: 0, inner: 'same', pilAmt: 0, symAmt: 0, busy: 0.7, trans: 'cut', transLen: 1 }, p.P) }; if (p.Q) o.Q = Object.assign({}, o.P, p.Q, { inner: 'own' }); if (p.name) o.name = String(p.name).slice(0, 24); return o; });      // a project from before Auto clips keeps its cut
       if (!parts.length || parts[0].t !== 0) parts.unshift({ t: 0, P: snap() });
-      userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d, e.type === 'type' ? { txt: String(e.txt || ''), mode: String(e.mode || 'slam'), size: Number(e.size) || 0.5, y: e.y === undefined ? 0.5 : Number(e.y) || 0, font: ['mono', 'own'].includes(e.font) ? e.font : 'sans', x: e.x === undefined ? 0.5 : Number(e.x) || 0, caps: e.caps !== false, trk: Number(e.trk) || 0, out: e.out === 'same' ? 'same' : 'cut', ol: !!e.ol, face: e.face | 0 } : e.type === 'sym' ? { sy: String(e.sy || 'x'), step: !!e.step, echo: Math.max(0, Math.min(8, e.echo | 0)), ex: Number(e.ex) || 0, ey: Number(e.ey) || 0, size: Number(e.size) || 0.6, x: e.x === undefined ? 0.5 : Number(e.x) || 0, y: e.y === undefined ? 0.5 : Number(e.y) || 0, each: !!e.each, dl: Number(e.dl) || 0, face: e.face | 0 } : e.type === 'pillar' ? { fx: PILLAR_FX.includes(e.fx) ? e.fx : 'chase', pm: ['light', 'frame'].includes(e.pm) ? e.pm : 'mask', on: ['logo', 'glitch'].includes(e.on) ? e.on : 'all', sp: Number(e.sp) || 1, wd: Number(e.wd) || 0.25, face: e.face | 0 } : { face: e.face | 0, clean: !!e.clean }));
+      userEv = (pj.userEv || []).filter(e => e.type in EV).map(e => mkEv(e.t, e.type, e.seed, e.d, e.type === 'type' ? { txt: String(e.txt || ''), mode: String(e.mode || 'slam'), size: Number(e.size) || 0.5, y: e.y === undefined ? 0.5 : Number(e.y) || 0, font: ['mono', 'own'].includes(e.font) ? e.font : 'sans', x: e.x === undefined ? 0.5 : Number(e.x) || 0, caps: e.caps !== false, trk: Number(e.trk) || 0, out: e.out === 'same' ? 'same' : 'cut', ol: !!e.ol, face: e.face | 0 } : e.type === 'sym' ? { sy: String(e.sy || 'x'), step: !!e.step, echo: Math.max(0, Math.min(8, e.echo | 0)), ex: Number(e.ex) || 0, ey: Number(e.ey) || 0, size: Number(e.size) || 0.6, x: e.x === undefined ? 0.5 : Number(e.x) || 0, y: e.y === undefined ? 0.5 : Number(e.y) || 0, each: !!e.each, dl: Number(e.dl) || 0, face: e.face | 0 } : e.type === 'pillar' ? { fx: PILLAR_FX.includes(e.fx) ? e.fx : 'chase', pm: ['light', 'frame'].includes(e.pm) ? e.pm : 'mask', on: ['logo', 'glitch'].includes(e.on) ? e.on : 'all', sp: Number(e.sp) || 1, wd: Number(e.wd) || 0.25, face: e.face | 0 } : e.clean ? Object.assign({ face: e.face | 0 }, cleanMore(e)) : { face: e.face | 0 }));
       for (const [k] of AKEYS) if (pj.auto && Array.isArray(pj.auto[k])) auto[k] = pj.auto[k].filter(q => q.t <= score.D).map(q => ({ t: Number(q.t) || 0, v: Number(q.v) || 0, c: q.c | 0 })).sort((a, b) => a.t - b.t);
       if (pj.autoCut) { autoCut.base = pj.autoCut.base !== false; autoCut.fx = pj.autoCut.fx !== false; autoCut.logo = pj.autoCut.logo !== false; autoCut.pil = pj.autoCut.pil !== false; autoCut.sym = pj.autoCut.sym !== false; }
     } else $('soundNote').textContent = 'The sound for this project was not found at ' + missing + '. Drop it in again and reopen the project.';
@@ -2498,7 +2520,7 @@ if (window.nativeApp) {
 }
 // Used by the app's own start-up check: one frame, the encoders, and a project round trip.
 window.__typeShot = (mode, age, warp) => { userEv = userEv.filter(e => e.k !== 13); S.typeWarp = warp || 0; tau = 1; trigger('type', null, { mode }); const e = userEv[userEv.length - 1]; e.txt = 'MALL CALL'; e.d = 3; e.size = 0.5; mergeEv(); S.playing = false; tau = 1 + age; paint(); return stage.toDataURL('image/png'); };
-window.__cleanShot = on => { userEv = userEv.filter(e => !e.clean); if (on) { tau = 2; trigger('show', null, { clean: true }); } S.playing = false; tau = 3; paint(); return stage.toDataURL('image/png'); };
+window.__cleanShot = (on, more, age) => { userEv = userEv.filter(e => !e.clean); if (on) { tau = 2; trigger('show', null, Object.assign({ clean: true }, more)); } S.playing = false; tau = 2 + (age === undefined ? 1 : age); paint(); return stage.toDataURL('image/png'); };
 // one frame the way an export draws it (its own rig, the grade on), with the card or without
 window.__exFrame = (t, gpu) => { if (gpu && !GPU.gl) { GPU.force = true; GPU.bad = false; } const d = dims(), cv = document.createElement('canvas'); cv.width = d.W; cv.height = d.H; const was = S.exGpu; S.exGpu = gpu; const n = GPU.used; const two = S.format === 'ring' && S.faces === 2, fps = S.fps; let out = null; for (const tf of [t - 2 / fps, t - 1 / fps, t]) { if (!out) out = two ? exCard(mkRig(cv)) : exCard(new Renderer(cv)); if (two) drawFaces(out, tf, fps); else renderOne(out, newState(), PAt(tf, 0), tf, fps); } gradeFrame(cv); S.exGpu = was; return [cv.toDataURL('image/png'), GPU.used - n]; };
 window.__tl = () => ({ clips: userEv.map(e => [e.type, +e.t.toFixed(2)]), picked: tlGroup().length, sel: tlSel ? tlSel.kind : null, markers: S.markers, loop: [S.loopA, S.loopB], tau: +tau.toFixed(2) });      // the timeline's state, for checks
