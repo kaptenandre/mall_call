@@ -65,7 +65,7 @@ function versTable(name, list) {
   // Export has a page of its own, and Settings gathers what is set once and left: the ring, playback, timecode, sound devices and the output window.
   // The boxes are moved, not copied, so everything that drives them goes on working.
   $('exportBox').append($('fsExport')); $('setA').append($('fsAudio'), $('fsTc')); $('setB').append($('fsPlay'), $('fsOut')); $('setC').append($('fsRing'));
-  $('fsLook').append($('innerRow'), $('faceSeg'));         // what the inside shows, and which face is being edited, are part of the look and stay at hand
+  $('fsLook').append($('innerRow'), $('readInRow'), $('faceSeg'));         // what the inside shows, and which face is being edited, are part of the look and stay at hand
   for (const id of ['fsExport', 'fsAudio', 'fsTc', 'fsPlay', 'fsOut', 'fsRing']) $(id).classList.remove('shut');      // a page of its own has room for them open
   // the library box lives on the Versions page
   const lib = $('libBox');
