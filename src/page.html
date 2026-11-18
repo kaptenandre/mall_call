@@ -579,7 +579,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 'v0.60.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
+const BUILD = 'v0.61.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
 $('build').textContent = '· ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -691,6 +691,11 @@ function sample(arr, m, u, v) {
   const a = arr[ya * m.w + xa], b = arr[ya * m.w + xb], c = arr[yb * m.w + xa], d = arr[yb * m.w + xb];
   return (a + (b - a) * fx) * (1 - fy) + (c + (d - c) * fx) * fy;
 }
+/*__LOGO__*/
+// The built-in logo, once it has been read; until then, and if it cannot be, the plain ring stands in.
+let stockLogoSrc = null;
+const stockLogo = () => stockLogoSrc || placeholder();
+const STOCK_NOTE = () => stockLogoSrc ? 'Showing the built-in logo. Drop in a file to use another one in this project.' : 'Showing a placeholder ring. Only the shape is used, so a one-colour logo on a transparent background works best.';
 function placeholder() {
   const c = document.createElement('canvas'); c.width = c.height = 512;
   const g = c.getContext('2d');
@@ -2478,7 +2483,7 @@ async function applyProject(pj) {
     else if (fontFile) { if (fontFace) document.fonts.delete(fontFace); fontFace = null; fontFile = null; delete TYPE_FONTS.own; { typeMasks.clear(); typeBytes = 0; } }      // the last project's font does not carry over
     logoPool = (Array.isArray(pj.pool) ? pj.pool : []).filter(q => q && q.dataUrl).map(q => ({ name: String(q.name || 'logo'), dataUrl: q.dataUrl }));
     if (pj.logo && pj.logo.dataUrl) { const blob = await (await fetch(pj.logo.dataUrl)).blob(); await loadLogo(new File([blob], pj.logo.name, { type: blob.type })); }
-    else { logoSrc = placeholder(); logoFile = null; mask = buildMask(logoSrc.img, logoSrc.w, logoSrc.h, S.invert); maskN++; $('logoNote').textContent = 'Showing a placeholder ring. Only the shape is used, so a one-colour logo on a transparent background works best.'; }      // nor does its logo
+    else { logoSrc = stockLogo(); logoFile = null; mask = buildMask(logoSrc.img, logoSrc.w, logoSrc.h, S.invert); maskN++; $('logoNote').textContent = STOCK_NOTE(); }      // nor does its logo
     const missing = '';
     if (soundFile) await loadSound(new File([soundFile.data], soundFile.name), true, pj.soundPath);
     if (!track) { soundPath = ''; rebuildScore(); }
@@ -2656,6 +2661,16 @@ window.__exportTest = async (fmt, ringView) => {
 
 /* ---------- start ---------- */
 logoSrc = placeholder();
+{ // the built-in logo takes the ring's place as soon as it is read, unless the project has brought its own by then
+  const im = new Image();
+  im.onload = () => {
+    stockLogoSrc = { img: im, w: im.naturalWidth || 432, h: im.naturalHeight || 316 };
+    if (logoFile) return;
+    logoSrc = stockLogoSrc; mask = buildMask(logoSrc.img, logoSrc.w, logoSrc.h, S.invert); maskN++; $('logoNote').textContent = STOCK_NOTE();
+    if (!S.playing && !busy) paint();
+  };
+  im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(LOGO_SVG);
+}
 mask = buildMask(logoSrc.img, logoSrc.w, logoSrc.h, false);
 rebuildScore();
 if (matchMedia('(prefers-reduced-motion: reduce)').matches) { S.playing = false; tau = 3.6; }
