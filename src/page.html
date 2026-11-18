@@ -583,7 +583,7 @@ body.rendering .rail fieldset { opacity: .55; }
 
 const $ = id => document.getElementById(id);
 // Raised by hand with every push, so anyone can see at a glance which version of the page is running.
-const BUILD = 'v0.62.2';                 // see Versions in CLAUDE.md: before the first show . feature . fix
+const BUILD = 'v0.63.0';                 // see Versions in CLAUDE.md: before the first show . feature . fix
 $('build').textContent = '· ' + BUILD;
 const rnd = (i, k) => hash(i, k, 7);
 const cyc = (n, o) => Math.max(1, Math.round(n * o.k));
@@ -1412,6 +1412,7 @@ class Renderer {
     if (st.clean) { st.pm = null; st.pmLogo = null; }       // nothing hides a plain logo, pillar patterns included
     const card = this.card() && gpuFrameBegin(W, H, storageW);      // the layers the card draws are put together there and come back in one copy
     for (let L = 0; L < 4; L++) {
+      if (L < 2 && st.clean && st.clE && st.clE.solo > 0.99) continue;      // a logo that has the frame to itself: nothing behind it
       if ((L === 1 && laneHidden(1)) || (L === 0 && !st.bn && !st.pl && !st.pf) || (L === 2 && !st.lv && !st.syN) || (L === 3 && !st.tyN)) continue;
       let o = LO[L];
       o.va = st.va; o.vb = st.vb; o.amb = L === 1 && !o.quiet ? 1 : 0;      // a glitch layer with everything at nought is black, not faintly lit
@@ -1824,7 +1825,7 @@ function seek(x) {
 const PAD = [
   ['Base', [['sweep', 'Sweep', '1'], ['strobe', 'Strobe', '2'], ['flood', 'Flood', '3'], ['blackout', 'Blackout', '4'], ['orbit', 'Orbit', '5'], ['spokes', 'Spokes', '6'], ['meet', 'Meet', '7']]],
   ['Glitch', [['glitch', 'Glitch', 'Q'], ['chase', 'Chase', 'W'], ['lines', 'Lines', 'E'], ['sparks', 'Sparks', 'R'], ['bars', 'Bars', 'T'], ['blocks', 'Blocks', 'Y']]],
-  ['Logo', [['load', 'Loader', 'A'], ['show', 'Show', 'S'], ['hide', 'Hide', 'D'], ['show', 'Clean', 'I', { fx: 'clean', clean: true, rv: 'scan' }]]],
+  ['Logo', [['load', 'Loader', 'A'], ['show', 'Show', 'S'], ['hide', 'Hide', 'D'], ['show', 'Clean', 'I', { fx: 'clean', clean: true, rv: 'scan' }], ['show', 'Hero', ',', { fx: 'hero', clean: true, rv: 'resolve', rl: 0.8, each: true, big: 1.2, life: 0, solo: 1 }]]],
   ['Type', [['type', 'Words', 'F'], ['type', 'Ticker', 'V', { fx: 'band', mode: 'band', size: 0.1, y: 0.9, txt: 'MALL CALL', trk: 0.08 }], ['type', 'Stack', 'B', { fx: 'stack', mode: 'stack', size: 0.36 }], ['type', 'Stretch', 'N', { fx: 'stretch', mode: 'stretch' }], ['type', 'Bump', '8', { fx: 'bump', mode: 'bump' }], ['type', 'Spin', '9', { fx: 'spin', mode: 'spin' }], ['type', 'Flip', '0', { fx: 'flip', mode: 'flip' }], ['type', 'Drop', 'U', { fx: 'drop', mode: 'drop' }]]],
   ['Pillars', [['pillar', 'Chase', 'G', { fx: 'chase' }], ['pillar', 'Spin', 'H', { fx: 'spin', pm: 'light' }], ['pillar', 'Pop', 'J', { fx: 'pop' }], ['pillar', 'Build', 'K', { fx: 'build' }], ['pillar', 'VU', 'L', { fx: 'vu', pm: 'light' }], ['pillar', 'Alt', 'Z', { fx: 'alt' }], ['pillar', 'Wave', 'X', { fx: 'wave' }], ['pillar', 'Frames', 'C', { fx: 'chase', pm: 'frame', wd: 0.4 }], ['pillar', 'Echo', 'M', { fx: 'echo', pm: 'light', wd: 0.6 }]]],
   ['Symbols', [['sym', 'Symbols', 'O', { fx: 'walk', step: true }], ['sym', 'In pillars', 'P', { fx: 'each', step: true, each: true, echo: 0, size: 0.8, dl: 0.5 }]]]

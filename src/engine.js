@@ -320,7 +320,7 @@ const PIL_NEW = { fx: 'chase', pm: 'mask', sp: 1, wd: 0.25, on: 'all' };
 const SYM_NEW = { sy: 'x', step: true, echo: 3, ex: 0.05, ey: -0.05, size: 0.6, x: 0.5, y: 0.5, each: false, dl: 0 };
 // How a plain logo comes forward. cut is the two wrong frames every logo cut goes through; the rest build it over e.rl seconds.
 const REVEALS = ['cut', 'scan', 'open', 'wipe', 'lock', 'slices', 'resolve', 'pillars'];
-const cleanMore = m => ({ clean: true, rv: REVEALS.includes(m.rv) ? m.rv : 'cut', rl: Math.min(4, Math.max(0.15, Number(m.rl) || 0.8)), life: m.life === undefined || !isFinite(m.life) ? 0.15 : Math.min(1, Math.max(0, Number(m.life))), big: Math.min(2, Math.max(0.3, Number(m.big) || 1)), each: !!m.each });
+const cleanMore = m => ({ clean: true, rv: REVEALS.includes(m.rv) ? m.rv : 'cut', rl: Math.min(4, Math.max(0.15, Number(m.rl) || 0.8)), life: m.life === undefined || !isFinite(m.life) ? 0.15 : Math.min(1, Math.max(0, Number(m.life))), big: Math.min(2, Math.max(0.3, Number(m.big) || 1)), each: !!m.each, solo: Math.min(1, Math.max(0, Number(m.solo) || 0)) });
 const evMore = e => e.k === 18 ? { sy: e.sy, step: !!e.step, echo: e.echo | 0, ex: e.ex, ey: e.ey, size: e.size, x: e.x, y: e.y, each: !!e.each, dl: e.dl, face: e.face | 0 } : e.k === 13 ? { txt: e.txt, mode: e.mode, size: e.size, y: e.y, font: e.font, x: e.x, caps: e.caps, trk: e.trk, out: e.out, ol: !!e.ol, face: e.face | 0 } : e.k === 17 ? { fx: e.fx, pm: e.pm, sp: e.sp, wd: e.wd, on: e.on, face: e.face | 0 } : e.face || e.clean ? Object.assign(e.face ? { face: e.face } : {}, e.clean ? cleanMore(e) : {}) : null;
 const mkEv = (t, type, seed, d, more) => { const e = { t, type, k: EV[type], seed: seed | 0, d: d === undefined || d === null ? EVD[type] : d }; if (more && more.mode === 'band' && (d === undefined || d === null)) e.d = 8; if (more && more.face) e.face = more.face | 0; if (more && more.clean && e.k === 11) { Object.assign(e, cleanMore(more)); if (d === undefined || d === null) e.d = 4; } return e.k === 13 ? Object.assign(e, TYPE_NEW, more) : e.k === 17 ? Object.assign(e, PIL_NEW, more) : e.k === 18 ? Object.assign(e, SYM_NEW, more) : e; };
 
@@ -696,7 +696,7 @@ function stateAt(sc, tau, cfg, st) {
   st.loK = sc.loIdx[h0] + sec * 131; st.miK = sc.miIdx[h0] + sec * 57; st.hiK = k;
   // the glitch layer steps back while the logo is up
   st.fxGain = 1 - 0.4 * (st.lv === 2 ? 1 : st.lv === 1 ? 0.4 : 0);
-  if (st.tyN || st.clean) st.fxGain *= st.clean ? 0.25 : 0.4;                           // words and big base moments get the frame to themselves
+  if (st.tyN || st.clean) st.fxGain *= st.clean ? 0.25 * (1 - (clE.solo || 0)) : 0.4;                           // words and big base moments get the frame to themselves
   if (st.bn) st.fxGain *= 0.6;
   // trails smear along a direction that changes with every cut
   const fa = TAU * hash(m.i, sd, 76);
