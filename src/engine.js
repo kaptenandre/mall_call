@@ -320,9 +320,19 @@ const PIL_NEW = { fx: 'chase', pm: 'mask', sp: 1, wd: 0.25, on: 'all' };
 const SYM_NEW = { sy: 'x', step: true, echo: 3, ex: 0.05, ey: -0.05, size: 0.6, x: 0.5, y: 0.5, each: false, dl: 0 };
 // How a plain logo comes forward. cut is the two wrong frames every logo cut goes through; the rest build it over e.rl seconds.
 const REVEALS = ['cut', 'scan', 'open', 'wipe', 'lock', 'slices', 'resolve', 'pillars'];
-const cleanMore = m => ({ clean: true, rv: REVEALS.includes(m.rv) ? m.rv : 'cut', rl: Math.min(4, Math.max(0.15, Number(m.rl) || 0.8)), life: m.life === undefined || !isFinite(m.life) ? 0.15 : Math.min(1, Math.max(0, Number(m.life))), big: Math.min(2, Math.max(0.3, Number(m.big) || 1)), each: !!m.each, solo: Math.min(1, Math.max(0, Number(m.solo) || 0)) });
+const cleanMore = m => ({ clean: true, rv: REVEALS.includes(m.rv) ? m.rv : 'cut', rl: Math.min(4, Math.max(0.15, Number(m.rl) || 0.8)), life: m.life === undefined || !isFinite(m.life) ? 0.15 : Math.min(1, Math.max(0, Number(m.life))), big: Math.min(2, Math.max(0.3, Number(m.big) || 1)), each: !!m.each, solo: Math.min(1, Math.max(0, Number(m.solo) || 0)), boot: !!m.boot, txt: m.boot ? String(m.txt === undefined ? 'MALL CALL|STAND BY|LOADING THE PIECE' : m.txt).slice(0, 240) : undefined });
+// How far a long loader has come, 0 to 1, for x from 0 to 1 through its clip. It never runs at one speed: a few dozen surges
+// of different sizes, each going out fast and settling, with stalls between them. It is full a little before the clip ends.
+function bootProg(x, sd) {
+  x = clamp01(x / 0.97);
+  const n = 28, tw = [], vw = []; let T = 0, V = 0;
+  for (let i = 0; i < n; i++) { tw[i] = 0.3 + hash(i, sd, 270); vw[i] = 0.15 + Math.pow(hash(i, sd, 271), 3) * 2; T += tw[i]; V += vw[i]; }
+  let a = 0, b = 0;
+  for (let i = 0; i < n; i++) { const dt = tw[i] / T, dv = vw[i] / V; if (x <= a + dt || i === n - 1) return Math.min(1, b + dv * (1 - Math.pow(1 - clamp01((x - a) / dt), 3))); a += dt; b += dv; }
+  return 1;
+}
 const evMore = e => e.k === 18 ? { sy: e.sy, step: !!e.step, echo: e.echo | 0, ex: e.ex, ey: e.ey, size: e.size, x: e.x, y: e.y, each: !!e.each, dl: e.dl, face: e.face | 0 } : e.k === 13 ? { txt: e.txt, mode: e.mode, size: e.size, y: e.y, font: e.font, x: e.x, caps: e.caps, trk: e.trk, out: e.out, ol: !!e.ol, face: e.face | 0 } : e.k === 17 ? { fx: e.fx, pm: e.pm, sp: e.sp, wd: e.wd, on: e.on, face: e.face | 0 } : e.face || e.clean ? Object.assign(e.face ? { face: e.face } : {}, e.clean ? cleanMore(e) : {}) : null;
-const mkEv = (t, type, seed, d, more) => { const e = { t, type, k: EV[type], seed: seed | 0, d: d === undefined || d === null ? EVD[type] : d }; if (more && more.mode === 'band' && (d === undefined || d === null)) e.d = 8; if (more && more.face) e.face = more.face | 0; if (more && more.clean && e.k === 11) { Object.assign(e, cleanMore(more)); if (d === undefined || d === null) e.d = 4; } return e.k === 13 ? Object.assign(e, TYPE_NEW, more) : e.k === 17 ? Object.assign(e, PIL_NEW, more) : e.k === 18 ? Object.assign(e, SYM_NEW, more) : e; };
+const mkEv = (t, type, seed, d, more) => { const e = { t, type, k: EV[type], seed: seed | 0, d: d === undefined || d === null ? EVD[type] : d }; if (more && more.mode === 'band' && (d === undefined || d === null)) e.d = 8; if (more && more.face) e.face = more.face | 0; if (more && more.clean && e.k === 11) { Object.assign(e, cleanMore(more)); if (e.boot && (d === undefined || d === null)) e.d = 60; if (d === undefined || d === null) e.d = 4; } return e.k === 13 ? Object.assign(e, TYPE_NEW, more) : e.k === 17 ? Object.assign(e, PIL_NEW, more) : e.k === 18 ? Object.assign(e, SYM_NEW, more) : e; };
 
 // The shape of the piece, read off the score once: where it drops, the builds that lead into drops, the quiet stretches,
 // and the moments each band of the spectrum jumps. The automatic cut hangs its clips on these.
@@ -568,7 +578,7 @@ function stateAt(sc, tau, cfg, st) {
     else if (lg.k === 11 && lgAge < lg.d) { st.lv = 2; st.lsince = lgAge; }
   }
   // the logo plain and steady, after the two wrong frames every cut goes through
-  st.clean = clAge < 1e8 && (clAge > 0.07 || (clE.rv && clE.rv !== 'cut'));      // a reveal is its own way in
+  st.clean = clAge < 1e8 && (clAge > 0.07 || clE.boot || (clE.rv && clE.rv !== 'cut'));      // a reveal is its own way in
   st.clE = clE; st.clAge = clAge;
   if (clAge < 1e8) { st.lv = 2; st.lp = 1; st.lsince = clAge; }
   const Gv = Math.min(1, Math.max(cv(sc.G) * cfg.glitch * 1.6, gX));

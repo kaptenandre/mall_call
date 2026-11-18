@@ -342,7 +342,7 @@ function tlNudge(dt) {
 function tlInsp() {
   const box = $('tlInsp'), s = tlSel;
   const many = tlGroup().length;
-  const sig = !s ? 'none' : s.kind === 'marker' ? 'marker' : many > 1 ? 'many' + many : s.kind === 'ev' ? 'ev' + userEv.includes(s.e) + layerOf(s.e.k) + (s.e.clean ? 'c' : '') : 'key' + s.key;
+  const sig = !s ? 'none' : s.kind === 'marker' ? 'marker' : many > 1 ? 'many' + many : s.kind === 'ev' ? 'ev' + userEv.includes(s.e) + layerOf(s.e.k) + (s.e.clean ? 'c' : '') + (s.e.boot ? 'b' : '') : 'key' + s.key;
   const num = (id, v) => { const el = $(id); if (el && document.activeElement !== el) el.value = v; };
   if (sig !== tlInspSig) {
     tlInspSig = sig; box.textContent = '';
@@ -398,6 +398,7 @@ function tlInsp() {
           field('over', input('inRl', 'number', '0.1', el => { tlSel.e.rl = Math.min(4, Math.max(0.15, Number(el.value) || 0.8)); }));
           field('Life', input('inLife', 'number', '5', el => { tlSel.e.life = Math.min(1, Math.max(0, (Number(el.value) || 0) / 100)); }));
           { const el = document.createElement('input'); el.type = 'checkbox'; el.id = 'inCEach'; el.checked = !!s.e.each; el.addEventListener('change', () => { tlSel.e.each = el.checked; tlChanged(); }); field('One in every pillar', el); }
+          if (s.e.boot) field('Words', input('inBootTxt', 'text', '', el => { tlSel.e.txt = String(el.value).slice(0, 240); }));
           field('Alone', input('inSolo', 'number', '10', el => { tlSel.e.solo = Math.min(1, Math.max(0, (Number(el.value) || 0) / 100)); }));
           field('Size', input('inBig', 'number', '5', el => { tlSel.e.big = Math.min(2, Math.max(0.3, (Number(el.value) || 100) / 100)); }));
         }
@@ -423,7 +424,7 @@ function tlInsp() {
   if (s.kind === 'ev') {
     if ($('inAuto')) $('inAuto').textContent = 'Automatic ' + s.e.type + ' at ' + s.e.t.toFixed(2) + ' s, ' + tcAt(s.e.t) + '. Press Bake on the lane to edit the automatic clips, or Auto to switch them off.';
     else { num('inType', s.e.type); num('inTxt', s.e.txt); num('inMode', s.e.mode); num('inSize', Math.round(s.e.size * 100)); num('inY', Math.round(s.e.y * 100)); num('inFont', s.e.font); num('inX', Math.round((s.e.x === undefined ? 0.5 : s.e.x) * 100)); num('inTrk', Math.round((s.e.trk || 0) * 100)); num('inOut', s.e.out || 'cut'); if ($('inCaps')) $('inCaps').checked = s.e.caps !== false; if (s.e.k === 18) { num('inSy', s.e.sy); $('inStep').checked = !!s.e.step; num('inEcho', s.e.echo | 0); num('inEx', Math.round((s.e.ex || 0) * 100)); num('inEy', Math.round(-(s.e.ey || 0) * 100)); $('inEach').checked = !!s.e.each; num('inDl', Math.round((s.e.dl || 0) * 100)); $('inSy').disabled = !!s.e.step; }
-      num('inRv', s.e.rv || 'cut'); num('inRl', (s.e.rl || 0.8).toFixed(1)); num('inLife', Math.round((s.e.life === undefined ? 0.15 : s.e.life) * 100)); num('inBig', Math.round((s.e.big || 1) * 100)); num('inSolo', Math.round((s.e.solo || 0) * 100)); num('inFx', s.e.fx); num('inOn', s.e.on || 'all'); if ($('inOl')) $('inOl').checked = !!s.e.ol; num('inPm', s.e.pm); num('inSp', Math.round((s.e.sp || 1) * 100)); num('inWd', Math.round((s.e.wd || 0.25) * 100)); num('inStart', s.e.t.toFixed(2)); num('inLen', s.e.d.toFixed(2)); num('inSeed', s.e.seed); num('inFace', s.e.face | 0); $('inLen').disabled = s.e.k === 12; $('inTc').textContent = tcAt(s.e.t); }
+      num('inRv', s.e.rv || 'cut'); num('inRl', (s.e.rl || 0.8).toFixed(1)); num('inLife', Math.round((s.e.life === undefined ? 0.15 : s.e.life) * 100)); num('inBig', Math.round((s.e.big || 1) * 100)); num('inSolo', Math.round((s.e.solo || 0) * 100)); num('inBootTxt', s.e.txt || ''); num('inFx', s.e.fx); num('inOn', s.e.on || 'all'); if ($('inOl')) $('inOl').checked = !!s.e.ol; num('inPm', s.e.pm); num('inSp', Math.round((s.e.sp || 1) * 100)); num('inWd', Math.round((s.e.wd || 0.25) * 100)); num('inStart', s.e.t.toFixed(2)); num('inLen', s.e.d.toFixed(2)); num('inSeed', s.e.seed); num('inFace', s.e.face | 0); $('inLen').disabled = s.e.k === 12; $('inTc').textContent = tcAt(s.e.t); }
   } else { num('inStart', s.k.t.toFixed(2)); num('inVal', Math.round(aRange(s.key).back(s.k.v) * 100)); num('inCurve', s.k.c); $('inTc').textContent = tcAt(s.k.t); }
 }
 

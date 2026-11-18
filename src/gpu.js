@@ -15,7 +15,7 @@ uniform sampler2D uMask;
 uniform vec2 uRes, uCell, uCtr, uRot, uL, uY, uX, uTh, uBar, uG, uPlane, uCrush, uO, uCR, uMw;
 uniform vec3 uTint, uCore, uSl[8];
 uniform float uR, uTY, uShift, uSk, uEqK, uLp, uBy, uGI, uTA, uTF, uTP, uDA, uDF, uDP, uGapN, uGoff, uGk;
-uniform float uHM, uLw, uUnit, uS, uT, uC1, uC2, uC3, uFq, uDir, uAmb, uSolid, uBay[64], uPy, uPx, uDw, uDh, uEase, uEqv[24];
+uniform float uHM, uLw, uUnit, uS, uT, uC1, uC2, uC3, uFq, uDir, uAmb, uSolid, uHard, uBay[64], uPy, uPx, uDw, uDh, uEase, uEqv[24];
 uniform int uEq, uLay, uLt, uLs, uNSl, uStyle, uMode, uBn;
 uniform bool uHide, uLoading, uOutline, uInv;
 out vec4 outC;
@@ -285,6 +285,7 @@ void main() {
       float cov = uMode == 3 ? 1. : cover(x, y, cx, cy, uS, uS);
       if (cov <= 0.) continue;
       float u = cx / uRes.x, v = cy / uRes.y, m = M(u, v);
+      if (uHard > 0.) m = m >= uHard ? 1. : 0.;
       float f1 = mix(.5 + .5 * sin(TAU * (v * uFq - uDir * uT * uC2 + .18 * sin(TAU * (u * 1.5 + uT * uC1)))), 1., uSolid);
       float f2 = .5 + .5 * sin(TAU * (u + v * .6 + uT * uC1));
       float val = m * (.4 + .6 * f1) + uAmb * (1. - m) * .17 * f2 * f2;
@@ -406,7 +407,7 @@ function gpuDraw(u, q, W, H, t, o, sn, gapN) {
     i1('uStyle', 2); f2('uCR', n, Math.max(16, Math.round(H / (unit * 0.55)))); f1('uPx', W / n); f1('uLw', Math.max(1, Math.min(W, H) / 600));
   } else if (sn === 'dither') {
     const unit = Math.min(W, H) / lerp(20, 90, o.density), cols = Math.ceil(W / unit), rows = Math.ceil(H / unit), bm = BAYER[mode];
-    i1('uStyle', 0); i1('uMode', gpuDither(mode)); f1('uUnit', unit); f2('uCR', cols, rows); f2('uO', (W - cols * unit) / 2, (H - rows * unit) / 2); f1('uS', Math.max(1, unit * o.pfill)); f1('uFq', 0.8 + 1.4 * o.va); f1('uSolid', o.solid || 0);
+    i1('uStyle', 0); i1('uMode', gpuDither(mode)); f1('uUnit', unit); f2('uCR', cols, rows); f2('uO', (W - cols * unit) / 2, (H - rows * unit) / 2); f1('uS', Math.max(1, unit * o.pfill)); f1('uFq', 0.8 + 1.4 * o.va); f1('uSolid', o.solid || 0); f1('uHard', o.hard || 0);
     const z = Math.max(1, unit * o.pfill) * (mode === 'halftone' ? 1.25 : 1), near = SHAPE || mode === 'halftone' ? 1 : 0, ext = !near ? 1e9 : SHAPE === 0 ? z / 2 + 1 : SHAPE === 1 ? Math.max(0.6, z / 2) : z * 0.6;
     f2('uNb', near, near); f2('uExt', ext, ext);
     if (bm) { const b = new Float32Array(64); b.set(bm); gl.uniform1fv(at('uBay[0]'), b); i1('uBn', Math.sqrt(bm.length)); } else i1('uBn', 2);

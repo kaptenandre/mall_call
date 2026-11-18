@@ -4,6 +4,11 @@ Every version of Mall Call, newest first. The version shows in the app's header.
 
 The numbers: the first is 0 until the piece has run at a real show; the middle rises when something asked for is added or changed; the last rises for a fix. Builds 1 to 45 used a running number.
 
+## v0.64.0 (2026-11-18)
+
+- Loading on the palette: a long loader for before the piece. The trefoil fills from the bottom over the whole clip, with small print in every pillar: the pillar's name, MALL CALL, the time left, a log, the per cent, numbers that keep changing and your own words
+- Loop lengths of 1, 5, 8 and 10 minutes, so a loader can be made without a sound file
+
 ## v0.63.0 (2026-11-18)
 
 - Hero on the palette: one large trefoil in every pillar with everything else out, for the moments the logo has to be plain to see
